@@ -1,7 +1,7 @@
 import { api } from "@/convex/_generated/api";
 import { SEO } from "@/components/SEO";
 import { ContentCard, TYPE_LABELS } from "@/components/ContentCard";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -131,6 +131,7 @@ export default function SearchPage() {
                   {results.authors.map((a) => (
                     <div key={a._id} className="flex items-center gap-3 rounded-xl border bg-card p-3">
                       <Avatar className="size-10">
+                        {a.image && <AvatarImage src={a.image} alt={a.name} loading="lazy" />}
                         <AvatarFallback className="bg-accent text-accent-foreground">
                           {a.name.charAt(0)}
                         </AvatarFallback>
@@ -152,6 +153,7 @@ export default function SearchPage() {
                   {results.narrators.map((n) => (
                     <div key={n._id} className="flex items-center gap-3 rounded-xl border bg-card p-3">
                       <Avatar className="size-10">
+                        {n.image && <AvatarImage src={n.image} alt={n.name} loading="lazy" />}
                         <AvatarFallback className="bg-secondary">
                           <UserRound className="size-4 text-muted-foreground" />
                         </AvatarFallback>

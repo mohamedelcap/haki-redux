@@ -64,34 +64,34 @@ function hash(str: string): number {
 }
 
 const AUTHORS = [
-  { name: "نجيب محفوظ", nameEn: "Naguib Mahfouz" },
-  { name: "أحمد خالد مصطفى", nameEn: "Ahmed Khaled Mostafa" },
-  { name: "غادة عبد العال", nameEn: "Ghada Abdel Aal" },
-  { name: "إيهاب ملاوي", nameEn: "Ehab Malawi" },
-  { name: "منال الشريف", nameEn: "Manal Al-Sharif" },
-  { name: "سعود السنعوسي", nameEn: "Saud Alsanosi" },
-  { name: "أحمد المراغي", nameEn: "Ahmed El-Maraaghy" },
-  { name: "ريم الكمالي", nameEn: "Reem Al-Kamali" },
-  { name: "إبراهيم نصر الله", nameEn: "Ibrahim Nasrallah" },
-  { name: "ياسمين الخاتم", nameEn: "Yasmin Al-Khatib" },
+  { name: "نجيب محفوظ", nameEn: "Naguib Mahfouz", image: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop&crop=faces&q=80" },
+  { name: "أحمد خالد مصطفى", nameEn: "Ahmed Khaled Mostafa", image: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200&h=200&fit=crop&crop=faces&q=80" },
+  { name: "غادة عبد العال", nameEn: "Ghada Abdel Aal", image: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200&h=200&fit=crop&crop=faces&q=80" },
+  { name: "إيهاب ملاوي", nameEn: "Ehab Malawi", image: "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=200&h=200&fit=crop&crop=faces&q=80" },
+  { name: "منال الشريف", nameEn: "Manal Al-Sharif", image: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=200&h=200&fit=crop&crop=faces&q=80" },
+  { name: "سعود السنعوسي", nameEn: "Saud Alsanosi", image: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200&h=200&fit=crop&crop=faces&q=80" },
+  { name: "أحمد المراغي", nameEn: "Ahmed El-Maraaghy", image: "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=200&h=200&fit=crop&crop=faces&q=80" },
+  { name: "ريم الكمالي", nameEn: "Reem Al-Kamali", image: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=200&h=200&fit=crop&crop=faces&q=80" },
+  { name: "إبراهيم نصر الله", nameEn: "Ibrahim Nasrallah", image: "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=200&h=200&fit=crop&crop=faces&q=80" },
+  { name: "ياسمين الخاتم", nameEn: "Yasmin Al-Khatib", image: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&h=200&fit=crop&crop=faces&q=80" },
 ];
 
 const NARRATORS = [
-  { name: "عمر الهاشمي", nameEn: "Omar Al-Hashimi" },
-  { name: "سلمى الأيوبي", nameEn: "Salma Al-Ayoubi" },
-  { name: "خالد الجابري", nameEn: "Khaled Al-Jabri" },
-  { name: "نورة الشامسي", nameEn: "Noura Al-Shamsi" },
-  { name: "ياسر الشريف", nameEn: "Yasser Al-Sharif" },
-  { name: "هالة عياد", nameEn: "Hala Ayad" },
-  { name: "مصطفى سعد", nameEn: "Mostafa Saad" },
-  { name: "ليان المطيري", nameEn: "Layan Al-Mutairi" },
+  { name: "عمر الهاشمي", nameEn: "Omar Al-Hashimi", image: "https://images.unsplash.com/photo-1560250097-0b93528c311a?w=200&h=200&fit=crop&crop=faces&q=80" },
+  { name: "سلمى الأيوبي", nameEn: "Salma Al-Ayoubi", image: "https://images.unsplash.com/photo-1580489944761-15a19d654956?w=200&h=200&fit=crop&crop=faces&q=80" },
+  { name: "خالد الجابري", nameEn: "Khaled Al-Jabri", image: "https://images.unsplash.com/photo-1633332755192-727a05c4013d?w=200&h=200&fit=crop&crop=faces&q=80" },
+  { name: "نورة الشامسي", nameEn: "Noura Al-Shamsi", image: "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=200&h=200&fit=crop&crop=faces&q=80" },
+  { name: "ياسر الشريف", nameEn: "Yasser Al-Sharif", image: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&h=200&fit=crop&crop=faces&q=80" },
+  { name: "هالة عياد", nameEn: "Hala Ayad", image: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=200&h=200&fit=crop&crop=faces&q=80" },
+  { name: "مصطفى سعد", nameEn: "Mostafa Saad", image: "https://images.unsplash.com/photo-1521119989659-a83eee488004?w=200&h=200&fit=crop&crop=faces&q=80" },
+  { name: "ليان المطيري", nameEn: "Layan Al-Mutairi", image: "https://images.unsplash.com/photo-1500917293891-ef795e70e1f6?w=200&h=200&fit=crop&crop=faces&q=80" },
 ];
 
 const PUBLISHERS = [
-  { name: "دار الساقي", nameEn: "Saqi Books" },
-  { name: "دار التنوير", nameEn: "Dar Al Tanweer" },
-  { name: "منشورات حكي", nameEn: "HAKI Publishing" },
-  { name: "دار الشروق", nameEn: "Dar Al Shorouk" },
+  { name: "دار الساقي", nameEn: "Saqi Books", logo: "https://images.unsplash.com/photo-1481627834876-b7833e8f5570?w=100&h=100&fit=crop&q=80" },
+  { name: "دار التنوير", nameEn: "Dar Al Tanweer", logo: "https://images.unsplash.com/photo-1524578271613-d550eacf6090?w=100&h=100&fit=crop&q=80" },
+  { name: "منشورات حكي", nameEn: "HAKI Publishing", logo: "https://images.unsplash.com/photo-1512820790803-83ca734da794?w=100&h=100&fit=crop&q=80" },
+  { name: "دار الشروق", nameEn: "Dar Al Shorouk", logo: "https://images.unsplash.com/photo-1543002588-bfa74002ed7e?w=100&h=100&fit=crop&q=80" },
 ];
 
 const CATEGORIES = [
@@ -155,6 +155,60 @@ const CONTENTS: ContentSeed[] = [
   { title: "البودكاست العكسي", slug: "bodcast-alaksi", description: "نقاشات ساخرة وغير مكتملة عن كل ما يحدث في عالم الثقافة والفن، بحضور ضيوف مفاجئين.", contentType: "podcast", author: "ياسر الشريف", narrator: "ياسر الشريف", categorySlugs: ["cinema", "business"], episodes: 18, minutes: 840, daysAgo: 4, isNew: true },
   { title: "حكايات ما أحلوها", slug: "hikayat-ma-ahlawha", description: "بودكاست قصصي يروي حكايات عالمية بلمسة عربية للأطفال والكبار معاً.", contentType: "podcast", author: "ليان المطيري", narrator: "ليان المطيري", categorySlugs: ["novels", "health"], episodes: 30, minutes: 750, daysAgo: 8 },
   { title: "مجلة معرفة العدد 5", slug: "magazine-marifa-5", description: "مجلة علمية شهرية تبسط أحدث الأبحاث في الطب والفضاء والتكنولوجيا.", contentType: "magazine", author: "فريق تحرير معرفة", narrator: "مصطفى سعد", publisher: "منشورات حكي", categorySlugs: ["science"], episodes: 4, minutes: 140, daysAgo: 14, isNew: true },
+];
+
+/**
+ * Real photo covers per title (Unsplash CDN, no API key needed).
+ * Keyed by slug so every work gets a thematically matching cover.
+ */
+const COVER_MAP: Record<string, string> = {
+  // كتب صوتية
+  "awlad-haretina": "https://images.unsplash.com/photo-1544947950-fa07a98d237f?w=480&h=720&fit=crop&q=80",
+  "ard-alyaqin": "https://images.unsplash.com/photo-1512820790803-83ca734da794?w=480&h=720&fit=crop&q=80",
+  "ana-we-hykat-we-amira": "https://images.unsplash.com/photo-1495446815901-a7297e633e8d?w=480&h=720&fit=crop&q=80",
+  "fatoora-rooh": "https://images.unsplash.com/photo-1524578271613-d550eacf6090?w=480&h=720&fit=crop&q=80",
+  "rawaeh-alqahira": "https://images.unsplash.com/photo-1550399105-c4db5fb85c18?w=480&h=720&fit=crop&q=80",
+  "qamar-ala-alasateh": "https://images.unsplash.com/photo-1519682337058-a94d519337bc?w=480&h=720&fit=crop&q=80",
+  // دراما صوتية
+  "sirr-alfarasha": "https://images.unsplash.com/photo-1478720568477-152d9b164e26?w=480&h=720&fit=crop&q=80",
+  "usbatalshayateen": "https://images.unsplash.com/photo-1519791883288-dc8bd696e667?w=480&h=720&fit=crop&q=80",
+  "hamsat-alnidwa": "https://images.unsplash.com/photo-1509266272358-7701da638078?w=480&h=720&fit=crop&q=80",
+  "laabat-alurush": "https://images.unsplash.com/photo-1507842217343-583bb7270b66?w=480&h=720&fit=crop&q=80",
+  // مايكرو دراما
+  "layla-fi-oyounha": "https://images.unsplash.com/photo-1526243741027-444d633d7365?w=480&h=720&fit=crop&q=80",
+  "mansour-tiktok": "https://images.unsplash.com/photo-1532012197267-da84d127e765?w=480&h=720&fit=crop&q=80",
+  "shaqqa-404": "https://images.unsplash.com/photo-1503095396549-807759245b35?w=480&h=720&fit=crop&q=80",
+  // بودكاست
+  "haki-masmoo3": "https://images.unsplash.com/photo-1478737270239-2f02b77fc618?w=480&h=720&fit=crop&q=80",
+  "qahwat-alsabah": "https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=480&h=720&fit=crop&q=80",
+  "bodcast-alaksi": "https://images.unsplash.com/photo-1590602847861-f357a9332bbc?w=480&h=720&fit=crop&q=80",
+  "hikayat-ma-ahlawha": "https://images.unsplash.com/photo-1503676260728-1c00da094a0b?w=480&h=720&fit=crop&q=80",
+  // مجلات
+  "magazine-thaqafat-12": "https://images.unsplash.com/photo-1495020689067-958852a7765e?w=480&h=720&fit=crop&q=80",
+  "magazine-al-sard-30": "https://images.unsplash.com/photo-1528735602780-2552fd46c7af?w=480&h=720&fit=crop&q=80",
+  "magazine-marifa-5": "https://images.unsplash.com/photo-1532094349884-543bc11b234d?w=480&h=720&fit=crop&q=80",
+  // كتب إلكترونية
+  "kayfa-tanmu-adatik": "https://images.unsplash.com/photo-1552674605-db6ffd4facb5?w=480&h=720&fit=crop&q=80",
+  "fan-allamabala": "https://images.unsplash.com/photo-1516280440614-37939bbacd81?w=480&h=720&fit=crop&q=80",
+  "tareekh-alam-alsirri": "https://images.unsplash.com/photo-1526243741027-444d633d7365?w=480&h=720&fit=crop&q=80",
+  "aql-almilyarder": "https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?w=480&h=720&fit=crop&q=80",
+};
+
+/** Fallback cover for any content without a dedicated image. */
+const FALLBACK_COVER = "https://images.unsplash.com/photo-1543002588-bfa74002ed7e?w=480&h=720&fit=crop&q=80";
+
+/** Challenge card images. */
+const CHALLENGE_IMAGES = [
+  "https://images.unsplash.com/photo-1461896836934-ffe607ba8211?w=800&h=400&fit=crop&q=80",
+  "https://images.unsplash.com/photo-1517649763962-0c623066013b?w=800&h=400&fit=crop&q=80",
+  "https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=800&h=400&fit=crop&q=80",
+  "https://images.unsplash.com/photo-1598488035139-bdbb2231ce04?w=800&h=400&fit=crop&q=80",
+];
+
+/** Live stream poster images. */
+const STREAM_IMAGES = [
+  "https://images.unsplash.com/photo-1475721027785-f74eccf877e2?w=900&h=500&fit=crop&q=80",
+  "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=900&h=500&fit=crop&q=80",
 ];
 
 const PLANS = [
@@ -355,6 +409,7 @@ export const seedAll = mutation({
         name: a.name,
         nameEn: a.nameEn,
         bio: `كاتب ومؤلف يُعد ${a.name} من الأسماء البارزة في المشهد الثقافي العربي المعاصر.`,
+        image: a.image,
       });
       authorIds.set(a.name, id);
     }
@@ -374,6 +429,7 @@ export const seedAll = mutation({
         name: n.name,
         nameEn: n.nameEn,
         bio: `راوٍ صوتي معروف بأسلوب أداء ساحر يمنح النص حياة جديدة.`,
+        image: n.image,
       });
       narratorIds.set(n.name, id);
     }
@@ -393,6 +449,7 @@ export const seedAll = mutation({
         name: p.name,
         nameEn: p.nameEn,
         bio: `${p.name} — دار نشر عربية تُصدر أفضل ما في الأدب والفكر.`,
+        logo: p.logo,
       });
       publisherIds.set(p.name, id);
     }
@@ -421,8 +478,8 @@ export const seedAll = mutation({
     let created = 0;
     for (const c of CONTENTS) {
       const h = hash(c.slug);
-      const paletteIdx = h % 6;
-      const coverImage = makeCoverDataUri(c.title, paletteIdx);
+      // Real photo cover when available; colored placeholder otherwise.
+      const coverImage = COVER_MAP[c.slug] ?? makeCoverDataUri(c.title, h % 6);
       const authorId = authorIds.get(c.author);
       const narratorId = c.narrator ? narratorIds.get(c.narrator) : undefined;
       const publisherId = c.publisher ? publisherIds.get(c.publisher) : undefined;
@@ -517,7 +574,7 @@ export const seedAll = mutation({
     }
 
     // ---- Challenges ----
-    for (const ch of CHALLENGES) {
+    for (const [i, ch] of CHALLENGES.entries()) {
       const start = new Date(now + ch.daysFromNow * 86400000);
       const end = new Date(start.getTime() + ch.durationDays * 86400000);
       const today = new Date();
@@ -527,6 +584,7 @@ export const seedAll = mutation({
         name: ch.name,
         nameEn: ch.nameEn,
         description: ch.description,
+        image: CHALLENGE_IMAGES[i % CHALLENGE_IMAGES.length],
         startDate: start.toISOString().slice(0, 10),
         endDate: end.toISOString().slice(0, 10),
         participants: ch.baseParticipants,
@@ -537,11 +595,12 @@ export const seedAll = mutation({
     }
 
     // ---- Live streams ----
-    for (const s of STREAMS) {
+    for (const [i, s] of STREAMS.entries()) {
       await ctx.db.insert("live_streams", {
         title: s.title,
         hostName: s.hostName,
         description: s.description,
+        image: STREAM_IMAGES[i % STREAM_IMAGES.length],
         streamUrl: undefined,
         scheduledStart: s.scheduledStart,
         scheduledEnd: s.scheduledEnd,

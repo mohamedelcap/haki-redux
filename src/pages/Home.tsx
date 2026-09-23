@@ -20,6 +20,8 @@ import {
 } from "lucide-react";
 import { Link } from "react-router";
 
+const FALLBACK_COVER = "https://images.unsplash.com/photo-1543002588-bfa74002ed7e?w=480&h=720&fit=crop&q=80";
+
 const SECTIONS = [
   { type: "ebook", icon: BookOpen, href: "/browse/ebooks", desc: { ar: "اقرأ أحدث الإصدارات الرقمية", en: "Read the latest digital releases" } },
   { type: "audiobook", icon: Headphones, href: "/browse/audiobooks", desc: { ar: "استمع لأفضل الكتب بصوت أهلها", en: "Listen to the best narrated books" } },
@@ -120,8 +122,8 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Floating covers collage */}
-          <div className="relative hidden lg:block" aria-hidden="true">
+          {/* Floating covers collage — real covers linking to their pages */}
+          <div className="relative hidden lg:block" aria-hidden="false">
             <div className="grid grid-cols-3 gap-4">
               {[0, 1, 2].map((col) => (
                 <div key={col} className={cn("space-y-4", col === 1 && "translate-y-6", col === 2 && "translate-y-12")}>
@@ -129,13 +131,19 @@ export default function Home() {
                     const item = trending?.[(col * 2 + row) % Math.max(trending?.length ?? 1, 1)];
                     if (!item) return <div key={row} className="aspect-[3/4] rounded-2xl bg-muted" />;
                     return (
-                      <img
+                      <Link
                         key={row}
-                        src={item.coverImage}
-                        alt=""
-                        loading="lazy"
-                        className="aspect-[3/4] w-full rounded-2xl border object-cover card-shadow"
-                      />
+                        to={`/content/${item.slug}`}
+                        className="group block overflow-hidden rounded-2xl border card-shadow transition-transform hover:-translate-y-1"
+                        aria-label={item.title}
+                      >
+                        <img
+                          src={item.coverImage || FALLBACK_COVER}
+                          alt={item.title}
+                          loading="lazy"
+                          className="aspect-[3/4] w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                        />
+                      </Link>
                     );
                   })}
                 </div>
@@ -217,9 +225,18 @@ export default function Home() {
           <h2 className="text-xl font-extrabold sm:text-2xl">{t("live")}</h2>
           <div
             className={cn(
-              "mt-4 rounded-2xl border p-6 sm:p-8",
+              "mt-4 overflow-hidden rounded-2xl border p-6 sm:p-8",
               live ? "bg-gradient-to-l from-primary/10 via-background to-background" : "bg-secondary",
             )}
+            style={
+              live?.image
+                ? {
+                    backgroundImage: `linear-gradient(to left, rgba(255,255,255,0.97) 30%, rgba(255,255,255,0.75)), url(${live.image})`,
+                    backgroundSize: "cover",
+                    backgroundPosition: "center",
+                  }
+                : undefined
+            }
           >
             {live ? (
               <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">

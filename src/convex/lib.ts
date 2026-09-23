@@ -31,9 +31,12 @@ export type PublicContent = Doc<"content">;
 export type EnrichedContent = Omit<Doc<"content">, "authorId" | "narratorId" | "publisherId"> & {
   authorName: string | null;
   authorId: Id<"authors"> | null;
+  authorImage: string | null;
   narratorName: string | null;
   narratorId: Id<"narrators"> | null;
+  narratorImage: string | null;
   publisherName: string | null;
+  publisherLogo: string | null;
   categories: { id: Id<"categories">; name: string; slug: string }[];
   chapterCount: number;
   episodeCount: number;
@@ -66,8 +69,11 @@ export async function enrichContent(
       authorId: row.authorId ?? null,
       narratorId: row.narratorId ?? null,
       authorName: author?.name ?? null,
+      authorImage: author?.image ?? null,
       narratorName: narrator?.name ?? null,
+      narratorImage: narrator?.image ?? null,
       publisherName: publisher?.name ?? null,
+      publisherLogo: publisher?.logo ?? null,
       categories: cats,
       chapterCount: chapters.length,
       episodeCount: episodes.length,

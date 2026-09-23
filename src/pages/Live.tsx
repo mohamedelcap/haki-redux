@@ -48,7 +48,16 @@ export default function Live() {
           <Skeleton className="mt-10 h-64 rounded-3xl" />
         ) : current ? (
           <div className="mt-10 overflow-hidden rounded-3xl border bg-card card-shadow">
-            <div className="relative bg-gradient-to-l from-primary/20 via-accent/30 to-transparent p-8 sm:p-12">
+            <div
+              className="relative bg-gradient-to-l from-primary/20 via-accent/30 to-transparent bg-cover bg-center p-8 sm:p-12"
+              style={
+                current.image
+                  ? {
+                      backgroundImage: `linear-gradient(to left, rgba(255,255,255,0.96), rgba(255,255,255,0.88)), url(${current.image})`,
+                    }
+                  : undefined
+              }
+            >
               <Badge className="gap-1.5 bg-red-600 px-3 py-1.5 text-white hover:bg-red-600">
                 <span className="relative flex size-2">
                   <span className="absolute inline-flex size-full animate-ping rounded-full bg-white opacity-75" />
@@ -131,12 +140,20 @@ export default function Live() {
               {streams
                 .filter((s) => !s.isLive)
                 .map((s) => (
-                  <div key={s._id} className="rounded-2xl border bg-card p-5 card-shadow">
-                    <h3 className="font-bold">{s.title}</h3>
-                    <p className="mt-1 text-sm text-muted-foreground">{s.hostName}</p>
-                    <p className="mt-2 text-xs text-muted-foreground">
-                      {s.scheduledStart} - {s.scheduledEnd}
-                    </p>
+                  <div key={s._id} className="overflow-hidden rounded-2xl border bg-card card-shadow">
+                    {s.image && (
+                      <div className="relative h-32 w-full overflow-hidden">
+                        <img src={s.image} alt="" loading="lazy" className="size-full object-cover" />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
+                      </div>
+                    )}
+                    <div className="p-5">
+                      <h3 className="font-bold">{s.title}</h3>
+                      <p className="mt-1 text-sm text-muted-foreground">{s.hostName}</p>
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        {s.scheduledStart} - {s.scheduledEnd}
+                      </p>
+                    </div>
                   </div>
                 ))}
             </div>

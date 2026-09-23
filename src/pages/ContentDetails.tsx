@@ -2,6 +2,7 @@ import { api } from "@/convex/_generated/api";
 import { SEO } from "@/components/SEO";
 import { ContentTypeIcon, TYPE_LABELS, demoAudioUrl } from "@/components/ContentCard";
 import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/hooks/use-auth";
@@ -192,7 +193,7 @@ export default function ContentDetails() {
         <div className="haki-container relative grid gap-8 py-10 lg:grid-cols-[280px_1fr]">
           <div className="mx-auto w-48 sm:w-56 lg:w-full lg:max-w-[280px]">
             <img
-              src={item.coverImage || "/logo.svg"}
+              src={item.coverImage || "https://images.unsplash.com/photo-1543002588-bfa74002ed7e?w=480&h=720&fit=crop&q=80"}
               alt={item.title}
               className="aspect-[3/4] w-full rounded-2xl border object-cover card-shadow"
               loading="lazy"
@@ -218,8 +219,17 @@ export default function ContentDetails() {
 
             <div className="mt-3 space-y-1 text-sm text-muted-foreground">
               {item.authorName && (
-                <p>
-                  {t("by")} <span className="font-bold text-foreground">{item.authorName}</span>
+                <p className="flex items-center gap-2">
+                  {t("by")} {" "}
+                  <Avatar className="size-6">
+                    {item.authorImage ? (
+                      <AvatarImage src={item.authorImage} alt={item.authorName} loading="lazy" />
+                    ) : null}
+                    <AvatarFallback className="bg-accent text-[10px] font-bold text-accent-foreground">
+                      {item.authorName.charAt(0)}
+                    </AvatarFallback>
+                  </Avatar>
+                  <span className="font-bold text-foreground">{item.authorName}</span>
                 </p>
               )}
               {item.narratorName && (
@@ -228,7 +238,19 @@ export default function ContentDetails() {
                   <span className="font-bold text-foreground">{item.narratorName}</span>
                 </p>
               )}
-              {item.publisherName && <p>{item.publisherName}</p>}
+              {item.publisherName && (
+                <p className="flex items-center gap-2">
+                  {item.publisherLogo ? (
+                    <img
+                      src={item.publisherLogo}
+                      alt=""
+                      loading="lazy"
+                      className="size-5 rounded object-cover"
+                    />
+                  ) : null}
+                  {item.publisherName}
+                </p>
+              )}
             </div>
 
             <div className="mt-4 flex flex-wrap items-center gap-4 text-xs text-muted-foreground">

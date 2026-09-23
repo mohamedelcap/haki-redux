@@ -343,7 +343,7 @@ function ContentManager({ L, lang }: { L: (ar: string, en: string) => string; la
                   <TR key={item._id}>
                     <TD>
                       <div className="flex items-center gap-2.5">
-                        <img src={item.coverImage || "/logo.svg"} alt="" className="size-9 rounded-md object-cover" />
+                        <img src={item.coverImage || "https://images.unsplash.com/photo-1543002588-bfa74002ed7e?w=480&h=720&fit=crop&q=80"} alt="" className="size-9 rounded-md object-cover" />
                         <div className="min-w-0">
                           <p className="truncate text-sm font-bold">{item.title}</p>
                           <p className="truncate text-xs text-muted-foreground">{item.authorName}</p>

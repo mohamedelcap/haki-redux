@@ -1,7 +1,11 @@
+import { api } from "@/convex/_generated/api";
 import { SEO } from "@/components/SEO";
 import { ContentTypeIcon, TYPE_LABELS } from "@/components/ContentCard";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useLang } from "@/lib/i18n";
+import { useQuery } from "convex/react";
 import {
   BookOpen,
   Building2,
@@ -117,6 +121,9 @@ export default function About() {
           </div>
         </section>
 
+        {/* Authors & narrators (from database) */}
+        <PeopleShowcase />
+
         {/* Contact */}
         <section id="contact" className="mt-14 rounded-3xl bg-foreground p-8 text-center text-background sm:p-12">
           <h2 className="text-2xl font-black">{L("تواصل معنا", "Contact us")}</h2>
@@ -146,5 +153,57 @@ export default function About() {
         </section>
       </div>
     </div>
+  );
+}
+
+/** Authors & narrators strips, showing real profile photos from the database. */
+function PeopleShowcase() {
+  const { lang, t } = useLang();
+  const L = (ar: string, en: string) => (lang === "ar" ? ar : en);
+  const authors = useQuery(api.content.listAuthors, {});
+  const narrators = useQuery(api.content.listNarrators, {});
+
+  const strip = (
+    people: { _id: string; name: string; nameEn?: string | null; image?: string | null }[] | undefined,
+  ) => (
+    <div className="mt-5 flex gap-4 overflow-x-auto pb-2 no-scrollbar">
+      {(people ?? Array.from({ length: 8 })).map((p: any, i: number) =>
+        p?._id ? (
+          <div key={p._id} className="w-28 shrink-0 text-center">
+            <Avatar className="mx-auto size-24 border-2 border-background card-shadow">
+              {p.image ? (
+                <AvatarImage src={p.image} alt={p.name} loading="lazy" />
+              ) : (
+                <AvatarFallback className="bg-accent text-xl font-black text-accent-foreground">
+                  {p.name.charAt(0)}
+                </AvatarFallback>
+              )}
+            </Avatar>
+            <p className="mt-2 truncate text-sm font-bold">{p.name}</p>
+            <p className="truncate text-xs text-muted-foreground" dir="ltr">
+              {p.nameEn}
+            </p>
+          </div>
+        ) : (
+          <div key={i} className="w-28 shrink-0">
+            <Skeleton className="mx-auto size-24 rounded-full" />
+            <Skeleton className="mx-auto mt-2 h-4 w-20" />
+          </div>
+        ),
+      )}
+    </div>
+  );
+
+  return (
+    <>
+      <section className="mt-14">
+        <h2 className="text-xl font-extrabold">{L("مؤلفونا", "Our authors")}</h2>
+        {strip(authors)}
+      </section>
+      <section className="mt-10">
+        <h2 className="text-xl font-extrabold">{L("رواتنا", "Our narrators")}</h2>
+        {strip(narrators)}
+      </section>
+    </>
   );
 }

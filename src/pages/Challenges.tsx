@@ -61,7 +61,7 @@ export default function Challenges() {
         {challenges === undefined ? (
           <div className="mt-10 grid gap-5 md:grid-cols-2">
             {[0, 1, 2, 3].map((i) => (
-              <Skeleton key={i} className="h-48 rounded-2xl" />
+              <Skeleton key={i} className="h-72 rounded-2xl" />
             ))}
           </div>
         ) : (
@@ -77,10 +77,22 @@ export default function Challenges() {
                 <div
                   key={ch._id}
                   className={cn(
-                    "rounded-2xl border bg-card p-6 transition-all card-shadow hover:card-shadow-hover",
+                    "overflow-hidden rounded-2xl border bg-card transition-all card-shadow hover:card-shadow-hover",
                     ch.status === "active" && "border-primary/40",
                   )}
                 >
+                  {ch.image && (
+                    <div className="relative h-36 w-full overflow-hidden sm:h-44">
+                      <img
+                        src={ch.image}
+                        alt=""
+                        loading="lazy"
+                        className="size-full object-cover transition-transform duration-500 hover:scale-105"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-black/5 to-transparent" />
+                    </div>
+                  )}
+                  <div className="p-6">
                   <div className="flex items-start justify-between gap-3">
                     <h2 className="text-lg font-extrabold">
                       {lang === "ar" ? ch.name : ch.nameEn}
@@ -124,6 +136,7 @@ export default function Challenges() {
                         {t("ended")}
                       </Button>
                     )}
+                  </div>
                   </div>
                 </div>
               );
