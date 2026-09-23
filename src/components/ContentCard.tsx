@@ -145,7 +145,7 @@ export function SectionRow({
   items: EnrichedContent[];
   moreHref?: string;
 }) {
-  const { lang } = useLang();
+  const { lang, t } = useLang();
   const scroller = useRef<HTMLDivElement>(null);
 
   const scroll = (dir: -1 | 1) => {
@@ -172,7 +172,7 @@ export function SectionRow({
               to={moreHref}
               className="text-sm font-semibold text-primary hover:underline"
             >
-              {lang === "ar" ? "عرض الكل" : "View all"}
+              {t("viewAll")}
             </Link>
           )}
           <div className="hidden sm:flex items-center gap-1">

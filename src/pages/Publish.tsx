@@ -110,8 +110,8 @@ export default function Publish() {
           <h1 className="text-3xl font-black sm:text-4xl">{L("انشر محتواك على حكي", "Publish on HAKI")}</h1>
           <p className="mx-auto mt-3 max-w-xl text-muted-foreground">
             {L(
-              "انشر كتبك ومحتواك الصوتي مع حكي واوصل إلى آلاف المستمعين في العالم العربي. املأ النموذج وسيتواصل معك فريقنا.",
-              "Publish your books and audio content with HAKI and reach thousands of listeners. Fill the form and our team will reach out.",
+              "افتح مكتبتك أمام آلاف المستمعين في العالم العربي. انشر كتبك الصوتية والإلكترونية، دراماك، أو بودكاستك مع حكي — املأ النموذج التالي وسيتواصل معك فريقنا خلال أيام عمل قليلة.",
+              "Open your work to thousands of listeners across the Arab world. Publish your audiobooks, ebooks, dramas, or podcasts with HAKI — fill in the form below and our team will get back to you within a few business days.",
             )}
           </p>
         </div>
@@ -183,7 +183,7 @@ export default function Publish() {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="message">{L("رسالة", "Message")}</Label>
+            <Label htmlFor="message">{L("رسالة إضافية", "Additional message")}</Label>
             <Textarea
               id="message"
               name="message"

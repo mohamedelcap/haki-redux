@@ -36,7 +36,7 @@ export function LogoDropdown() {
         <Button variant="ghost" size="icon" className="h-10 w-10">
           <img
             src={logo}
-            alt="Logo"
+            alt="حكي"
             width={32}
             height={32}
             className="rounded-lg"
@@ -46,7 +46,7 @@ export function LogoDropdown() {
       <DropdownMenuContent align="start" className="w-48">
         <DropdownMenuItem onClick={handleGoHome} className="cursor-pointer">
           <Home className="mr-2 h-4 w-4" />
-          Landing Page
+          الصفحة الرئيسية
         </DropdownMenuItem>
         {isAuthenticated && (
           <>
@@ -56,7 +56,7 @@ export function LogoDropdown() {
               className="cursor-pointer text-destructive focus:text-destructive"
             >
               <LogOut className="mr-2 h-4 w-4" />
-              Sign Out
+              تسجيل الخروج
             </DropdownMenuItem>
           </>
         )}

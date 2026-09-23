@@ -61,9 +61,9 @@ export function Header() {
       )}
     >
       <div className="haki-container flex h-16 items-center gap-3">
-        {/* Logo — right side in RTL (first in DOM) */}
-        <Link to="/" className="flex shrink-0 items-center gap-2" aria-label="HAKI home">
-          <img src={logo} alt="HAKI" className="size-9 rounded-lg" />
+          {/* Logo — right side in RTL (first in DOM) */}
+        <Link to="/" className="flex shrink-0 items-center gap-2" aria-label="حكي — الصفحة الرئيسية">
+          <img src={logo} alt="حكي" className="size-9 rounded-lg" />
           <span className="text-xl font-black tracking-tight text-foreground">
             {lang === "ar" ? "حكي" : "HAKI"}
           </span>
@@ -105,7 +105,7 @@ export function Header() {
             variant="ghost"
             size="sm"
             className="hidden sm:inline-flex h-9 px-2.5 font-bold text-xs"
-            aria-label="Switch language"
+            aria-label={lang === "ar" ? "التبديل إلى الإنجليزية" : "التبديل إلى العربية"}
             onClick={() => setLang(lang === "ar" ? "en" : "ar")}
           >
             {lang === "ar" ? "EN" : "ع"}

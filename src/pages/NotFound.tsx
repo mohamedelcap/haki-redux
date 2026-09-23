@@ -1,4 +1,6 @@
 import { motion } from "framer-motion";
+import { BookOpen, Home } from "lucide-react";
+import { Link } from "react-router";
 
 export default function NotFound() {
   return (
@@ -6,20 +8,34 @@ export default function NotFound() {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.5 }}
-      className="min-h-screen flex flex-col"
+      className="hero-gradient flex min-h-screen flex-col"
     >
-
-      
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col items-center justify-center">
-        <div className="max-w-5xl mx-auto relative px-4">
-          <div className="flex items-center justify-center min-h-[200px]">
-            <div className="text-center">
-              <h1 className="text-4xl font-bold text-gray-900 mb-4">404</h1>
-              <p className="text-lg text-gray-600">Page Not Found</p>
-            </div>
-          </div>
+      <div className="flex flex-1 flex-col items-center justify-center px-4 py-20 text-center">
+        <div className="flex size-16 items-center justify-center rounded-2xl bg-accent">
+          <BookOpen className="size-7 text-accent-foreground" />
         </div>
+        <h1 className="mt-8 text-6xl font-black text-foreground">404</h1>
+        <p className="mt-3 text-xl font-bold">الصفحة غير موجودة</p>
+        <p className="mt-2 max-w-sm leading-relaxed text-muted-foreground">
+          يبدو أن هذه الصفحة انتقلت إلى رفٍّ آخر. جرّب العودة إلى المكتبة أو استخدم شريط التنقل بالأعلى.
+        </p>
+        <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+          <Link
+            to="/"
+            className="inline-flex h-11 items-center gap-2 rounded-lg bg-primary px-6 text-sm font-bold text-white transition-colors hover:bg-primary/90"
+          >
+            <Home className="size-4" />
+            الصفحة الرئيسية
+          </Link>
+          <Link
+            to="/browse"
+            className="inline-flex h-11 items-center gap-2 rounded-lg border bg-background px-6 text-sm font-bold transition-colors hover:bg-muted"
+          >
+            <BookOpen className="size-4" />
+            تصفح المكتبة
+          </Link>
+        </div>
+        <p className="mt-10 text-xs text-muted-foreground">حكي © 2026</p>
       </div>
     </motion.div>
   );

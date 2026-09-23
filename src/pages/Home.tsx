@@ -89,9 +89,9 @@ export default function Home() {
                 </>
               ) : (
                 <>
-                  Read, listen and live
+                  Read, listen, and live
                   <br />
-                  the content with <span className="text-primary">HAKI</span>
+                  the content — <span className="text-primary">HAKI</span>
                 </>
               )}
             </h1>
@@ -115,7 +115,7 @@ export default function Home() {
                 <Headphones className="size-4 text-primary" /> +500 {lang === "ar" ? "كتاب صوتي" : "audiobooks"}
               </span>
               <span className="flex items-center gap-1.5">
-                <Mic className="size-4 text-primary" /> +40 {lang === "ar" ? "برنامجًا" : "shows"}
+                <Mic className="size-4 text-primary" /> +40 {lang === "ar" ? "برنامجًا وحلقة" : "shows and episodes"}
               </span>
             </div>
           </div>
@@ -283,6 +283,11 @@ export default function Home() {
               </h2>
               <p className="mx-auto mt-3 max-w-md text-muted-foreground">
                 {t("publishCtaBody")}
+              </p>
+              <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground/70">
+                {lang === "ar"
+                  ? "مرحّب بالمؤلفين ودور النشر والرواة وصناع البودكاست — فريقنا يرافقك من الملف الأول حتى النشر."
+                  : "Authors, publishers, narrators, and podcasters are all welcome — our team supports you from first file to launch."}
               </p>
               <Link to="/publish">
                 <Button size="lg" className="mt-6 h-12 bg-primary px-8 text-base font-bold text-white hover:bg-primary/90">
