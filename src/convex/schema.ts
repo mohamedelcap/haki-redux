@@ -111,6 +111,8 @@ const schema = defineSchema(
       playCount: v.number(),
       // full audio url (single-file content) – chapters have their own
       audioUrl: v.optional(v.string()),
+      // e-book file (PDF/EPUB) served from storage
+      fileUrl: v.optional(v.string()),
       createdAt: v.number(),
       updatedAt: v.number(),
     })
@@ -123,6 +125,22 @@ const schema = defineSchema(
       contentId: v.id("content"),
       categoryId: v.id("categories"),
     }).index("by_content", ["contentId"]),
+
+    /** Homepage sections managed from the admin dashboard (dynamic, no code). */
+    homepage_sections: defineTable({
+      key: v.string(),
+      titleAr: v.string(),
+      titleEn: v.string(),
+      /** "trending" | "new" | "featured" | "type" | "manual" */
+      sourceType: v.string(),
+      /** For sourceType="type": which content type to show. */
+      contentType: v.optional(contentTypeValidator),
+      /** Manual item order for sourceType="manual". */
+      itemIds: v.optional(v.array(v.id("content"))),
+      limit: v.optional(v.number()),
+      isHidden: v.optional(v.boolean()),
+      order: v.number(),
+    }).index("by_key", ["key"]),
 
     // Episodes for podcasts / audio dramas / micro dramas / magazines
     episodes: defineTable({

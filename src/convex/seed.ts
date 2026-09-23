@@ -609,6 +609,32 @@ export const seedAll = mutation({
       });
     }
 
+    // ---- Homepage sections (dynamic, editable from admin) ----
+    const DEFAULT_SECTIONS = [
+      { key: "trending", titleAr: "الأكثر استماعًا", titleEn: "Most listened", sourceType: "trending", contentType: undefined as any, order: 1 },
+      { key: "new", titleAr: "وصل حديثًا", titleEn: "New arrivals", sourceType: "new", contentType: undefined as any, order: 2 },
+      { key: "featured", titleAr: "اختيارات حكي", titleEn: "HAKI picks", sourceType: "featured", contentType: undefined as any, order: 3 },
+      { key: "audio_drama", titleAr: "دراما صوتية", titleEn: "Audio drama", sourceType: "type", contentType: "audio_drama" as any, order: 4 },
+      { key: "podcast", titleAr: "بودكاست", titleEn: "Podcasts", sourceType: "type", contentType: "podcast" as any, order: 5 },
+      { key: "micro_drama", titleAr: "مايكرو دراما", titleEn: "Micro drama", sourceType: "type", contentType: "micro_drama" as any, order: 6 },
+      { key: "magazine", titleAr: "صحف ومجلات", titleEn: "Magazines", sourceType: "type", contentType: "magazine" as any, order: 7 },
+    ];
+    const existingSections = await ctx.db.query("homepage_sections").collect();
+    for (const s of DEFAULT_SECTIONS) {
+      const existing = existingSections.find((x) => x.key === s.key);
+      if (existing) continue;
+      await ctx.db.insert("homepage_sections", {
+        key: s.key,
+        titleAr: s.titleAr,
+        titleEn: s.titleEn,
+        sourceType: s.sourceType,
+        contentType: s.contentType,
+        limit: 12,
+        order: s.order,
+        isHidden: false,
+      });
+    }
+
     // ---- Settings ----
     for (const s of SETTINGS) {
       await ctx.db.insert("settings", { key: s.key, value: s.value });

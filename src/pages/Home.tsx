@@ -7,6 +7,7 @@ import { useLang } from "@/lib/i18n";
 import { usePlayer, demoAudioUrl } from "@/lib/player";
 import { cn } from "@/lib/utils";
 import { useQuery } from "convex/react";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   ArrowLeft,
   BookOpen,
@@ -35,12 +36,8 @@ const SECTIONS = [
 export default function Home() {
   const { lang, t } = useLang();
   const { play } = usePlayer();
-  const trending = useQuery(api.content.listTrending, { limit: 12 });
-  const fresh = useQuery(api.content.listNew, { limit: 12 });
-  const featured = useQuery(api.content.listFeatured, { limit: 10 });
-  const drama = useQuery(api.content.listPublished, { contentType: "audio_drama", limit: 10 });
-  const microDrama = useQuery(api.content.listPublished, { contentType: "micro_drama", limit: 10 });
-  const podcasts = useQuery(api.content.listPublished, { contentType: "podcast", limit: 10 });
+  // Homepage sections come from the database (managed in the admin dashboard).
+  const dynamicSections = useQuery(api.homepage.getPublicSections, {});
   const live = useQuery(api.engagement.getCurrentLive, {});
 
   const handlePlay = (item: { _id: any; title: any; coverImage: any; authorName: any; narratorName: any }) => {
@@ -128,7 +125,7 @@ export default function Home() {
               {[0, 1, 2].map((col) => (
                 <div key={col} className={cn("space-y-4", col === 1 && "translate-y-6", col === 2 && "translate-y-12")}>
                   {[0, 1].map((row) => {
-                    const item = trending?.[(col * 2 + row) % Math.max(trending?.length ?? 1, 1)];
+                    const item = dynamicSections?.[0]?.items[(col * 2 + row) % Math.max(dynamicSections?.[0]?.items.length ?? 1, 1)];
                     if (!item) return <div key={row} className="aspect-[3/4] rounded-2xl bg-muted" />;
                     return (
                       <Link
@@ -177,47 +174,20 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ============ Most listened ============ */}
-      <SectionRow
-        title={t("mostListened")}
-        items={trending ?? []}
-        moreHref="/browse?sort=popular"
-      />
-
-      {/* ============ New arrivals ============ */}
-      <SectionRow
-        title={t("newArrivals")}
-        items={fresh ?? []}
-        moreHref="/browse?sort=newest"
-      />
-
-      {/* ============ HAKI picks ============ */}
-      <SectionRow
-        title={t("hakiPicks")}
-        items={featured ?? []}
-        moreHref="/browse"
-      />
-
-      {/* ============ Audio drama ============ */}
-      <SectionRow
-        title={t("audioDrama")}
-        items={drama ?? []}
-        moreHref="/browse/drama"
-      />
-
-      {/* ============ Podcasts ============ */}
-      <SectionRow
-        title={t("podcast")}
-        items={podcasts ?? []}
-        moreHref="/browse/podcast"
-      />
-
-      {/* ============ Micro drama ============ */}
-      <SectionRow
-        title={t("micro_drama")}
-        items={microDrama ?? []}
-        moreHref="/browse/micro-drama"
-      />
+      {/* ============ Dynamic sections from the database ============ */}
+      {dynamicSections?.map((section) => (
+        <SectionRow
+          key={section.key}
+          title={lang === "ar" ? section.titleAr : section.titleEn}
+          items={section.items}
+          moreHref={section.moreHref}
+        />
+      ))}
+      {dynamicSections === undefined && (
+        <>
+          <SectionSkeleton /> <SectionSkeleton /> <SectionSkeleton />
+        </>
+      )}
 
       {/* ============ Live now ============ */}
       <section className="py-6">
@@ -317,5 +287,21 @@ export default function Home() {
         </div>
       </section>
     </div>
+  );
+}
+
+/** Loading placeholder for dynamic sections. */
+function SectionSkeleton() {
+  return (
+    <section className="py-6">
+      <div className="haki-container">
+        <Skeleton className="h-7 w-40" />
+        <div className="no-scrollbar mt-4 flex gap-4 overflow-hidden">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="aspect-[3/4] w-40 shrink-0 rounded-2xl sm:w-44 lg:w-48" />
+          ))}
+        </div>
+      </div>
+    </section>
   );
 }

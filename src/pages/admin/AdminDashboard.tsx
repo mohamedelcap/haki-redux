@@ -2,6 +2,8 @@ import { api } from "@/convex/_generated/api";
 import { FileUpload } from "@/components/FileUpload";
 import { RequireAuth } from "@/components/RequireAuth";
 import { TracksManager } from "@/pages/admin/TracksManager";
+import { HomepageManager } from "@/pages/admin/HomepageManager";
+import { MediaLibrary } from "@/pages/admin/MediaLibrary";
 import { SEO } from "@/components/SEO";
 import { HakiLogo } from "@/components/HakiLogo";
 import { TYPE_LABELS } from "@/components/ContentCard";
@@ -29,7 +31,10 @@ import {
   BookOpen,
   Crown,
   FileText,
+  Flame,
   Headphones,
+  Images,
+  LayoutDashboard,
   Loader2,
   ListMusic,
   Mic,
@@ -38,6 +43,8 @@ import {
   Radio,
   Settings2,
   Shield,
+  Sparkles,
+  Star,
   Trash2,
   Trophy,
   Upload,
@@ -51,6 +58,8 @@ type TabKey =
   | "overview"
   | "content"
   | "tracks"
+  | "homepage"
+  | "media"
   | "entities"
   | "plans"
   | "challenges"
@@ -71,6 +80,8 @@ function AdminInner() {
     { key: "overview", label: L("نظرة عامة", "Overview"), icon: BarChart3 },
     { key: "content", label: L("المحتوى", "Content"), icon: Headphones },
     { key: "tracks", label: L("الفصول والحلقات", "Tracks"), icon: ListMusic },
+    { key: "homepage", label: L("الصفحة الرئيسية", "Homepage"), icon: LayoutDashboard },
+    { key: "media", label: L("الوسائط", "Media"), icon: Images },
     { key: "entities", label: L("المؤلفون والتصنيفات", "Entities"), icon: BookOpen },
     { key: "plans", label: L("الباقات", "Plans"), icon: Crown },
     { key: "challenges", label: L("التحديات", "Challenges"), icon: Trophy },
@@ -138,6 +149,8 @@ function AdminInner() {
         {tab === "overview" && <Overview lang={lang} L={L} />}
         {tab === "content" && <ContentManager L={L} lang={lang} />}
         {tab === "tracks" && <TracksManager L={L} />}
+        {tab === "homepage" && <HomepageManager L={L} />}
+        {tab === "media" && <MediaLibrary L={L} />}
         {tab === "entities" && <EntityManager L={L} />}
         {tab === "plans" && <PlansManager L={L} lang={lang} />}
         {tab === "challenges" && <ChallengesManager L={L} />}
@@ -239,6 +252,9 @@ function ContentManager({ L, lang }: { L: (ar: string, en: string) => string; la
   const remove = useMutation(api.adminContent.deleteContent);
   const saveCoverUpload = useMutation(api.files.saveCover);
   const saveAudioUpload = useMutation(api.files.saveAudio);
+  const saveFileUpload = useMutation(api.homepage.saveContentFile);
+  const setFlags = useMutation(api.homepage.setFlags);
+  const [typeFilter, setTypeFilter] = useState<string>("all");
   const [editing, setEditing] = useState<any>(null);
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -266,6 +282,7 @@ function ContentManager({ L, lang }: { L: (ar: string, en: string) => string; la
       title: item.title,
       slug: item.slug,
       description: item.description,
+      fileUrl: item.fileUrl ?? "",
       contentType: item.contentType,
       authorId: item.authorId ?? "",
       narratorId: item.narratorId ?? "",
@@ -331,34 +348,64 @@ function ContentManager({ L, lang }: { L: (ar: string, en: string) => string; la
         </Button>
       </div>
 
+      {/* Type filter pills */}
+      <div className="no-scrollbar mt-4 flex gap-1.5 overflow-x-auto pb-1">
+        <button
+          type="button"
+          onClick={() => setTypeFilter("all")}
+          className={cn(
+            "shrink-0 rounded-full border px-3 py-1.5 text-xs font-bold transition-colors",
+            typeFilter === "all" ? "border-primary bg-primary text-white" : "hover:bg-muted",
+          )}
+        >
+          {L("الكل", "All")}
+        </button>
+        {Object.entries(TYPE_LABELS).map(([k, v]) => (
+          <button
+            key={k}
+            type="button"
+            onClick={() => setTypeFilter(k)}
+            className={cn(
+              "shrink-0 rounded-full border px-3 py-1.5 text-xs font-bold transition-colors",
+              typeFilter === k ? "border-primary bg-primary text-white" : "hover:bg-muted",
+            )}
+          >
+            {v[lang as "ar" | "en"]}
+          </button>
+        ))}
+      </div>
+
       {items === undefined ? (
         <Skeleton className="mt-6 h-64 rounded-2xl" />
       ) : (
-        <div className="mt-6 overflow-hidden rounded-2xl border bg-card">
+        <div className="mt-4 overflow-hidden rounded-2xl border bg-card">
           <div className="overflow-x-auto">
             <Table>
               <THead>
                 <TR>
                   <TH>{L("العنوان", "Title")}</TH>
-                  <TH>{L("النوع", "Type")}</TH>
                   <TH>{L("الحالة", "Status")}</TH>
-                  <TH>{L("مميز", "Featured")}</TH>
+                  <TH>{L("إجراءات سريعة", "Quick actions")}</TH>
                   <TH>{" "}</TH>
                 </TR>
               </THead>
               <TBody>
-                {items.map((item) => (
+                {items
+                  .filter((i) => typeFilter === "all" || i.contentType === typeFilter)
+                  .map((item) => (
                   <TR key={item._id}>
                     <TD>
                       <div className="flex items-center gap-2.5">
                         <img src={item.coverImage || "https://images.unsplash.com/photo-1543002588-bfa74002ed7e?w=480&h=720&fit=crop&q=80"} alt="" className="size-9 rounded-md object-cover" />
                         <div className="min-w-0">
                           <p className="truncate text-sm font-bold">{item.title}</p>
-                          <p className="truncate text-xs text-muted-foreground">{item.authorName}</p>
+                          <p className="truncate text-xs text-muted-foreground">
+                            {TYPE_LABELS[item.contentType as keyof typeof TYPE_LABELS]?.[lang as "ar" | "en"] ?? item.contentType}
+                            {item.authorName ? ` · ${item.authorName}` : ""}
+                          </p>
                         </div>
                       </div>
                     </TD>
-                    <TD>{TYPE_LABELS[item.contentType as keyof typeof TYPE_LABELS]?.[lang as "ar" | "en"] ?? item.contentType}</TD>
                     <TD>
                       <Badge
                         variant="secondary"
@@ -367,19 +414,72 @@ function ContentManager({ L, lang }: { L: (ar: string, en: string) => string; la
                           item.status === "draft" && "bg-amber-100 text-amber-700",
                         )}
                       >
-                        {item.status}
+                        {item.status === "published" ? L("منشور", "Published") : L("مسودة", "Draft")}
                       </Badge>
                     </TD>
-                    <TD>{item.isFeatured ? "★" : "—"}</TD>
+                    <TD>
+                      <div className="flex flex-wrap gap-1">
+                        <Button
+                          variant={item.status === "published" ? "secondary" : "default"}
+                          size="sm"
+                          className="h-7 px-2 text-xs"
+                          onClick={async () => {
+                            await setFlags({
+                              contentId: item._id,
+                              status: item.status === "published" ? "draft" : "published",
+                            });
+                            toast.success(item.status === "published" ? L("أُخفي (مسودة)", "Unpublished") : L("تم النشر", "Published"));
+                          }}
+                        >
+                          {item.status === "published" ? L("إلغاء النشر", "Unpublish") : L("نشر", "Publish")}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className={cn("size-7", item.isFeatured && "text-primary")}
+                          aria-label={L("مميز", "Featured")}
+                          title={L("مميز (Featured)", "Featured")}
+                          onClick={async () => {
+                            await setFlags({ contentId: item._id, isFeatured: !item.isFeatured });
+                          }}
+                        >
+                          <Star className={cn("size-4", item.isFeatured && "fill-current")} />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className={cn("size-7", item.isTrending && "text-primary")}
+                          aria-label={L("رائج", "Trending")}
+                          title={L("رائج (Trending)", "Trending")}
+                          onClick={async () => {
+                            await setFlags({ contentId: item._id, isTrending: !item.isTrending });
+                          }}
+                        >
+                          <Flame className={cn("size-4", item.isTrending && "fill-current")} />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className={cn("size-7", item.isNew && "text-primary")}
+                          aria-label={L("جديد", "New")}
+                          title={L("جديد (New)", "New")}
+                          onClick={async () => {
+                            await setFlags({ contentId: item._id, isNew: !item.isNew });
+                          }}
+                        >
+                          <Sparkles className={cn("size-4", item.isNew && "fill-current")} />
+                        </Button>
+                      </div>
+                    </TD>
                     <TD>
                       <div className="flex gap-1">
-                        <Button variant="ghost" size="icon" onClick={() => startEdit(item)} aria-label="Edit">
+                        <Button variant="ghost" size="icon" onClick={() => startEdit(item)} aria-label={L("تعديل", "Edit")}>
                           <Pencil className="size-3.5" />
                         </Button>
                         <Button
                           variant="ghost"
                           size="icon"
-                          aria-label="Delete"
+                          aria-label={L("حذف", "Delete")}
                           onClick={async () => {
                             if (!confirm(L("تأكيد الحذف؟", "Confirm delete?"))) return;
                             await remove({ id: item._id });
@@ -543,6 +643,39 @@ function ContentManager({ L, lang }: { L: (ar: string, en: string) => string; la
                     }
                   }}
                 />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>{L("ملف الكتاب الإلكتروني (PDF/EPUB)", "E-book file (PDF/EPUB)")}</Label>
+              <div className="flex flex-wrap items-center gap-2">
+                <FileUpload
+                  accept=".pdf,.epub,application/pdf,application/epub+zip"
+                  label={editing.fileUrl ? L("استبدال الملف", "Replace file") : L("رفع PDF/EPUB", "Upload PDF/EPUB")}
+                  maxSizeMB={100}
+                  onUploaded={async (storageId) => {
+                    try {
+                      if (editing._id) {
+                        await saveFileUpload({ storageId: storageId as any, contentId: editing._id as any });
+                        toast.success(L("تم رفع الملف وربطه", "File uploaded"));
+                      } else {
+                        toast.info(L("احفظ المحتوى أولًا ثم ارفع الملف", "Save the content first, then upload the file"));
+                      }
+                    } catch (err: any) {
+                      toast.error(err.message);
+                    }
+                  }}
+                />
+                {editing.fileUrl && (
+                  <a
+                    href={editing.fileUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs font-semibold text-primary hover:underline"
+                    dir="ltr"
+                  >
+                    {L("عرض الملف الحالي ↗", "View current file ↗")}
+                  </a>
+                )}
               </div>
             </div>
             <div className="space-y-1.5">
