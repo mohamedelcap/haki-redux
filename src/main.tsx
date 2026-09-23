@@ -163,9 +163,14 @@ function SiteRoutes() {
       <Route
         path="/admin"
         element={
-          <Suspense fallback={<RouteLoading />}>
-            <AdminDashboard />
-          </Suspense>
+          <RequireAuth
+            title="هذه الصفحة للمديرين فقط"
+            description="سجّل الدخول بحساب مدير للوصول إلى لوحة التحكم."
+          >
+            <Suspense fallback={<RouteLoading />}>
+              <AdminDashboard />
+            </Suspense>
+          </RequireAuth>
         }
       />
     </Routes>

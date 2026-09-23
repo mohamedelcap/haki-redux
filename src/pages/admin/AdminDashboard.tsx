@@ -1,5 +1,7 @@
 import { api } from "@/convex/_generated/api";
+import { FileUpload } from "@/components/FileUpload";
 import { RequireAuth } from "@/components/RequireAuth";
+import { TracksManager } from "@/pages/admin/TracksManager";
 import { SEO } from "@/components/SEO";
 import { HakiLogo } from "@/components/HakiLogo";
 import { TYPE_LABELS } from "@/components/ContentCard";
@@ -29,6 +31,7 @@ import {
   FileText,
   Headphones,
   Loader2,
+  ListMusic,
   Mic,
   Pencil,
   Plus,
@@ -47,6 +50,7 @@ import { toast } from "sonner";
 type TabKey =
   | "overview"
   | "content"
+  | "tracks"
   | "entities"
   | "plans"
   | "challenges"
@@ -66,6 +70,7 @@ function AdminInner() {
   const tabs: { key: TabKey; label: string; icon: any }[] = [
     { key: "overview", label: L("نظرة عامة", "Overview"), icon: BarChart3 },
     { key: "content", label: L("المحتوى", "Content"), icon: Headphones },
+    { key: "tracks", label: L("الفصول والحلقات", "Tracks"), icon: ListMusic },
     { key: "entities", label: L("المؤلفون والتصنيفات", "Entities"), icon: BookOpen },
     { key: "plans", label: L("الباقات", "Plans"), icon: Crown },
     { key: "challenges", label: L("التحديات", "Challenges"), icon: Trophy },
@@ -132,6 +137,7 @@ function AdminInner() {
       <div className="haki-container py-8">
         {tab === "overview" && <Overview lang={lang} L={L} />}
         {tab === "content" && <ContentManager L={L} lang={lang} />}
+        {tab === "tracks" && <TracksManager L={L} />}
         {tab === "entities" && <EntityManager L={L} />}
         {tab === "plans" && <PlansManager L={L} lang={lang} />}
         {tab === "challenges" && <ChallengesManager L={L} />}
@@ -231,6 +237,8 @@ function ContentManager({ L, lang }: { L: (ar: string, en: string) => string; la
   const publishers = useQuery(api.content.listPublishers, {});
   const upsert = useMutation(api.adminContent.upsertContent);
   const remove = useMutation(api.adminContent.deleteContent);
+  const saveCoverUpload = useMutation(api.files.saveCover);
+  const saveAudioUpload = useMutation(api.files.saveAudio);
   const [editing, setEditing] = useState<any>(null);
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -488,11 +496,53 @@ function ContentManager({ L, lang }: { L: (ar: string, en: string) => string; la
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label>{L("رابط الغلاف", "Cover image URL")}</Label>
-                <Input name="coverImage" defaultValue={editing.coverImage} dir="ltr" placeholder="https://..." />
+                <Input name="coverImage" key={`cover-${editing.coverImage ?? ""}`} defaultValue={editing.coverImage} dir="ltr" placeholder="https://..." />
+                <FileUpload
+                  accept="image/*"
+                  label={L("أو ارفع صورة الغلاف", "Or upload a cover image")}
+                  maxSizeMB={10}
+                  className="w-full"
+                  onUploaded={async (storageId) => {
+                    try {
+                      if (editing._id) {
+                        await saveCoverUpload({ storageId: storageId as any, contentId: editing._id as any });
+                        toast.success(L("تم رفع الغلاف وربطه", "Cover uploaded"));
+                        setOpen(false);
+                        setEditing(null);
+                      } else {
+                        const url = await (window as any).__getStorageUrl?.(storageId);
+                        setEditing({ ...editing, coverImage: url ?? editing.coverImage });
+                        toast.info(L("سيُرفق الغلاف عند الحفظ", "Cover will attach on save"));
+                      }
+                    } catch (err: any) {
+                      toast.error(err.message);
+                    }
+                  }}
+                />
               </div>
               <div className="space-y-1.5">
                 <Label>{L("رابط الملف الصوتي (MP3/M4A)", "Audio file URL (MP3/M4A)")}</Label>
                 <Input name="audioUrl" defaultValue={editing.audioUrl} dir="ltr" placeholder="https://... .mp3" />
+                <FileUpload
+                  accept=".mp3,.m4a,audio/mpeg,audio/mp4,audio/*"
+                  label={L("أو ارفع الملف الصوتي", "Or upload an audio file")}
+                  maxSizeMB={80}
+                  className="w-full"
+                  onUploaded={async (storageId) => {
+                    try {
+                      if (editing._id) {
+                        await saveAudioUpload({ storageId: storageId as any, target: { kind: "content", contentId: editing._id as any } });
+                        toast.success(L("تم رفع الصوت وربطه", "Audio uploaded"));
+                        setOpen(false);
+                        setEditing(null);
+                      } else {
+                        toast.info(L("احفظ المحتوى أولًا ثم ارفع الصوت", "Save the content first, then upload audio"));
+                      }
+                    } catch (err: any) {
+                      toast.error(err.message);
+                    }
+                  }}
+                />
               </div>
             </div>
             <div className="space-y-1.5">

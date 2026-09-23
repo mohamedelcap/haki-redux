@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { query } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
-import { enrichContent, type EnrichedContent } from "./lib";
+import { enrichContent, requireAdmin, type EnrichedContent } from "./lib";
 import { CONTENT_TYPES, contentTypeValidator, contentStatusValidator } from "./schema";
 
 /**
@@ -302,6 +302,8 @@ export const browse = query({
 export const listAllForAdmin = query({
   args: {},
   handler: async (ctx) => {
+    // Admin-only: includes drafts and archived items.
+    await requireAdmin(ctx);
     const rows = await ctx.db.query("content").collect();
     rows.sort((a, b) => b.createdAt - a.createdAt);
     return await enrichContent(ctx, rows);
