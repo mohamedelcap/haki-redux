@@ -1,6 +1,7 @@
 import { api } from "@/convex/_generated/api";
 import { RequireAuth } from "@/components/RequireAuth";
 import { SEO } from "@/components/SEO";
+import { HakiLogo } from "@/components/HakiLogo";
 import { TYPE_LABELS } from "@/components/ContentCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -86,9 +87,12 @@ function AdminInner() {
                 <ArrowLeft className="size-4" />
               </Button>
             </Link>
-            <div>
-              <h1 className="text-lg font-black">{L("لوحة تحكم حكي", "HAKI Admin")}</h1>
-              <p className="text-xs text-muted-foreground">{user?.email}</p>
+            <div className="flex items-center gap-2.5">
+              <HakiLogo variant="outline" size={36} hideWordmark className="text-foreground" />
+              <div>
+                <h1 className="font-logo text-lg font-black leading-tight">لوحة تحكم حكي</h1>
+                <p className="text-xs text-muted-foreground" dir="ltr">{user?.email}</p>
+              </div>
             </div>
           </div>
           <Button

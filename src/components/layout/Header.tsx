@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/sheet";
 import { useAuth } from "@/hooks/use-auth";
 import { useLang } from "@/lib/i18n";
-import logo from "@/assets/logo.svg";
+import { HakiLogo, HakiLogoInline } from "@/components/HakiLogo";
 import { usePlayer } from "@/lib/player";
 import { cn } from "@/lib/utils";
 import {
@@ -62,11 +62,15 @@ export function Header() {
     >
       <div className="haki-container flex h-16 items-center gap-3">
           {/* Logo — right side in RTL (first in DOM) */}
-        <Link to="/" className="flex shrink-0 items-center gap-2" aria-label="حكي — الصفحة الرئيسية">
-          <img src={logo} alt="حكي" className="size-9 rounded-lg" />
-          <span className="text-xl font-black tracking-tight text-foreground">
-            {lang === "ar" ? "حكي" : "HAKI"}
-          </span>
+        <Link to="/" className="flex shrink-0 items-center" aria-label="حكي — الصفحة الرئيسية">
+          <HakiLogoInline
+            variant="colored"
+            size={38}
+            wordClass={lang === "ar" ? "text-foreground" : "hidden"}
+          />
+          {lang !== "ar" && (
+            <span className="text-xl font-black tracking-wide text-foreground">HAKI</span>
+          )}
         </Link>
 
         {/* Desktop nav */}
@@ -150,8 +154,8 @@ export function Header() {
               <SheetContent side="right" className="w-72 p-0">
                 <SheetHeader className="border-b p-4 text-start">
                   <SheetTitle className="flex items-center gap-2">
-                    <img src={logo} alt="" className="size-8 rounded-md" />
-                    {lang === "ar" ? "حكي" : "HAKI"}
+                    <HakiLogo variant="colored" size={32} hideWordmark />
+                    <span className="font-logo text-xl font-bold">حكي</span>
                   </SheetTitle>
                 </SheetHeader>
                 <nav className="flex flex-col p-3" aria-label="Mobile">

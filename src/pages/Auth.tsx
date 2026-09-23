@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/input-otp";
 
 import { useAuth } from "@/hooks/use-auth";
-import logo from "@/assets/logo.svg";
+import { HakiLogo } from "@/components/HakiLogo";
 import { Loader2, Mail, UserX } from "lucide-react";
 import { Suspense, useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
@@ -112,14 +112,14 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
               <>
                 <CardHeader className="text-center">
                   <div className="flex justify-center">
-                    <img
-                      src={logo}
-                      alt="حكي"
-                      width={64}
-                      height={64}
-                      className="mb-4 mt-4 cursor-pointer rounded-xl"
+                    <button
+                      type="button"
                       onClick={() => navigate("/")}
-                    />
+                      aria-label="حكي — الصفحة الرئيسية"
+                      className="mb-4 mt-4 cursor-pointer transition-transform hover:scale-105"
+                    >
+                      <HakiLogo variant="colored" size={72} />
+                    </button>
                   </div>
                   <CardTitle className="text-xl">مرحبًا بك في حكي</CardTitle>
                   <CardDescription>

@@ -1,6 +1,6 @@
 import { useLang } from "@/lib/i18n";
 import { Separator } from "@/components/ui/separator";
-import logo from "@/assets/logo.svg";
+import { HakiLogo, HakiLogoInline } from "@/components/HakiLogo";
 import { MessageCircle } from "lucide-react";
 import { Link } from "react-router";
 
@@ -35,15 +35,19 @@ export function Footer() {
       <div className="haki-container py-12">
         <div className="grid gap-10 md:grid-cols-4">
           <div className="space-y-4">
-            <Link to="/" className="flex items-center gap-2">
-              <img src={logo} alt="HAKI" className="size-10 rounded-xl" />
-              <div>
-                <p className="text-lg font-black leading-none">{lang === "ar" ? "حكي" : "HAKI"}</p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {lang === "ar" ? "منصة المحتوى الصوتي والرقمي" : "Arabic audio & digital content"}
-                </p>
-              </div>
+            <Link to="/" className="flex items-center gap-2.5">
+              <HakiLogoInline
+                variant="outline"
+                size={44}
+                wordClass={lang === "ar" ? "text-foreground" : "hidden"}
+              />
+              {lang !== "ar" && (
+                <span className="text-lg font-black tracking-wide text-foreground">HAKI</span>
+              )}
             </Link>
+            <p className="text-xs font-semibold text-muted-foreground">
+              {lang === "ar" ? "منصة المحتوى الصوتي والرقمي" : "Arabic audio & digital content"}
+            </p>
             <p className="max-w-xs text-sm leading-relaxed text-muted-foreground">
               {lang === "ar"
                 ? "كتب صوتية، دراما، بودكاست، مجلات، وبث مباشر — كل ما تحب في مكان واحد."

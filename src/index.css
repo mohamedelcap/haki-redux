@@ -165,4 +165,8 @@
   .text-balance {
     text-wrap: balance;
   }
+  /* خط شعار حكي الكاليغرافي */
+  .font-logo {
+    font-family: "Aref Ruqaa", "Cairo", serif;
+  }
 }
