@@ -298,6 +298,26 @@ const schema = defineSchema(
       createdAt: v.number(),
     }).index("by_user", ["userId"]),
 
+    ratings: defineTable({
+      contentId: v.id("content"),
+      userId: v.id("users"),
+      /** 1..5 */
+      value: v.number(),
+      review: v.optional(v.string()),
+      createdAt: v.number(),
+      updatedAt: v.number(),
+    })
+      .index("by_content", ["contentId"])
+      .index("by_user_content", ["userId", "contentId"]),
+
+    podcast_follows: defineTable({
+      userId: v.id("users"),
+      contentId: v.id("content"),
+      followedAt: v.number(),
+    })
+      .index("by_user", ["userId"])
+      .index("by_user_content", ["userId", "contentId"]),
+
     settings: defineTable({
       key: v.string(),
       value: v.string(),

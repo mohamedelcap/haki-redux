@@ -6,32 +6,78 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/hooks/use-auth";
 import { useLang } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
-import { useMutation, useQuery } from "convex/react";
+import { useAction, useMutation, useQuery } from "convex/react";
 import { Check, Crown, Sparkles } from "lucide-react";
-import { Link } from "react-router";
+import { Link, useNavigate, useSearchParams } from "react-router";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 export default function Subscriptions() {
   const { lang, t } = useLang();
   const { isAuthenticated } = useAuth();
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const plans = useQuery(api.subscriptions.listPlans, { activeOnly: true });
   const mySub = useQuery(api.subscriptions.mySubscription, {});
   const subscribe = useMutation(api.subscriptions.subscribe);
   const cancelSub = useMutation(api.subscriptions.cancelMySubscription);
+  const createCheckout = useAction(api.payments.createCheckoutSession);
+  const activateAfterCheckout = useAction(api.payments.activateAfterCheckout);
+  const [paying, setPaying] = useState<string | null>(null);
+
+  // Handle return from Stripe Checkout (?success=1&session_id=...).
+  useEffect(() => {
+    const success = searchParams.get("success");
+    const sessionId = searchParams.get("session_id");
+    if (success && sessionId && isAuthenticated) {
+      activateAfterCheckout({ sessionId })
+        .then(() => {
+          toast.success(
+            lang === "ar" ? "تم تفعيل اشتراكك بنجاح 🎉" : "Subscription activated 🎉",
+          );
+        })
+        .catch((e: any) => toast.error(e.message ?? "خطأ"))
+        .finally(() => {
+          setSearchParams({}, { replace: true });
+        });
+    } else if (searchParams.get("cancelled")) {
+      toast.info(lang === "ar" ? "أُلغيت عملية الدفع" : "Checkout cancelled");
+      setSearchParams({}, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, isAuthenticated]);
 
   const handleSubscribe = async (planId: string) => {
     if (!isAuthenticated) {
       toast.error(lang === "ar" ? "سجّل الدخول للاشتراك" : "Sign in to subscribe");
+      navigate("/auth?returnTo=%2Fsubscriptions");
       return;
     }
     if ((mySub?.plan as any)?._id === planId) return;
+    setPaying(planId);
     try {
-      await subscribe({ planId: planId as any });
-      toast.success(
-        lang === "ar" ? "تم تفعيل الاشتراك بنجاح 🎉" : "Subscription activated 🎉",
-      );
+      // Preferred path: real Stripe Checkout when the key is configured.
+      const res: any = await createCheckout({ planId: planId as any });
+      window.location.href = res.url;
     } catch (e: any) {
-      toast.error(e.message ?? "خطأ");
+      const msg = String(e?.message ?? "");
+      if (msg.includes("STRIPE_SECRET_KEY")) {
+        // Stripe not configured yet → fall back to direct activation (demo mode).
+        try {
+          await subscribe({ planId: planId as any });
+          toast.success(
+            lang === "ar"
+              ? "تم تفعيل الاشتراك (وضع تجريبي — لم يُربط الدفع بعد)"
+              : "Subscribed (demo mode — payment not wired yet)",
+          );
+        } catch (e2: any) {
+          toast.error(e2.message ?? "خطأ");
+        }
+      } else {
+        toast.error(msg || "خطأ");
+      }
+    } finally {
+      setPaying(null);
     }
   };
 
@@ -131,10 +177,14 @@ export default function Subscriptions() {
                   <Button
                     className={cn("mt-7 w-full font-bold", isCurrent && "opacity-60")}
                     variant={plan.isPopular ? "default" : "outline"}
-                    disabled={isCurrent}
+                    disabled={isCurrent || paying !== null}
                     onClick={() => handleSubscribe(plan._id)}
                   >
-                    {isCurrent ? t("currentPlanBadge") : t("choosePlan")}
+                    {paying === plan._id
+                      ? "…"
+                      : isCurrent
+                        ? t("currentPlanBadge")
+                        : t("choosePlan")}
                   </Button>
                 </div>
               );

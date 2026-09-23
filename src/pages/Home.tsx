@@ -3,6 +3,7 @@ import { SEO } from "@/components/SEO";
 import { ContentCard, ContentTypeIcon, SectionRow, TYPE_LABELS } from "@/components/ContentCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/hooks/use-auth";
 import { useLang } from "@/lib/i18n";
 import { usePlayer, demoAudioUrl } from "@/lib/player";
 import { cn } from "@/lib/utils";
@@ -36,9 +37,14 @@ const SECTIONS = [
 export default function Home() {
   const { lang, t } = useLang();
   const { play } = usePlayer();
+  const { isAuthenticated } = useAuth();
   // Homepage sections come from the database (managed in the admin dashboard).
   const dynamicSections = useQuery(api.homepage.getPublicSections, {});
   const live = useQuery(api.engagement.getCurrentLive, {});
+  const continueList = useQuery(
+    api.library.continueListening,
+    isAuthenticated ? {} : "skip",
+  );
 
   const handlePlay = (item: { _id: any; title: any; coverImage: any; authorName: any; narratorName: any }) => {
     play({
@@ -187,6 +193,40 @@ export default function Home() {
         <>
           <SectionSkeleton /> <SectionSkeleton /> <SectionSkeleton />
         </>
+      )}
+
+      {/* ============ Continue listening (signed-in only) ============ */}
+      {isAuthenticated && continueList && continueList.length > 0 && (
+        <section className="py-6">
+          <div className="haki-container">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-extrabold sm:text-2xl">
+                {lang === "ar" ? "أكمل الاستماع" : "Continue listening"}
+              </h2>
+              <Link
+                to="/history"
+                className="text-sm font-semibold text-primary hover:underline"
+              >
+                {t("viewAll")}
+              </Link>
+            </div>
+            <div className="no-scrollbar mt-4 flex gap-4 overflow-x-auto pb-2">
+              {continueList.map((row) => (
+                <div key={row._id} className="w-44 shrink-0">
+                  <ContentCard item={row.content as any} />
+                  <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-muted">
+                    <div
+                      className="h-full bg-primary transition-all"
+                      style={{
+                        width: `${Math.min(100, (row.position / Math.max(row.duration, 1)) * 100)}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
       )}
 
       {/* ============ Live now ============ */}

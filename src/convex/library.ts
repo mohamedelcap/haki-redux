@@ -250,3 +250,31 @@ export const myNotifications = query({
     return rows.slice(0, 30);
   },
 });
+
+/** Mark one notification as read. */
+export const markNotificationRead = mutation({
+  args: { id: v.id("notifications") },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("غير مصرح");
+    const row = await ctx.db.get(args.id);
+    if (!row || row.userId !== userId) throw new Error("غير مصرح");
+    if (!row.isRead) await ctx.db.patch(args.id, { isRead: true });
+  },
+});
+
+/** Mark all of the current user's notifications as read. */
+export const markAllNotificationsRead = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("غير مصرح");
+    const rows = await ctx.db
+      .query("notifications")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .collect();
+    for (const row of rows) {
+      if (!row.isRead) await ctx.db.patch(row._id, { isRead: true });
+    }
+  },
+});

@@ -23,6 +23,12 @@ const DICT = {
   signOut: { ar: "تسجيل الخروج", en: "Sign out" },
   myAccount: { ar: "حسابي", en: "My account" },
   searchPlaceholder: { ar: "ابحث عن كتاب...", en: "Search for a book..." },
+  notifications: { ar: "الإشعارات", en: "Notifications" },
+  markAllRead: { ar: "تحديد الكل كمقروء", en: "Mark all read" },
+  noNotifications: { ar: "لا إشعارات حتى الآن", en: "No notifications yet" },
+  markRead: { ar: "تحديد كمقروء", en: "Mark as read" },
+  myDashboard: { ar: "لوحتي", en: "My dashboard" },
+  ratings: { ar: "التقييمات والمراجعات", en: "Ratings & reviews" },
   // content types
   ebook: { ar: "كتب إلكترونية", en: "E-books" },
   audiobook: { ar: "كتب صوتية", en: "Audiobooks" },

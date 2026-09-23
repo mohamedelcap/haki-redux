@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { RatingsSection } from "@/components/RatingsSection";
 import { useAuth } from "@/hooks/use-auth";
 import { formatDuration, formatTime, useLang } from "@/lib/i18n";
 import { usePlayer } from "@/lib/player";
@@ -230,13 +231,31 @@ export default function ContentDetails() {
                       {item.authorName.charAt(0)}
                     </AvatarFallback>
                   </Avatar>
-                  <span className="font-bold text-foreground">{item.authorName}</span>
+                  {item.authorId ? (
+                    <Link
+                      to={`/author/${item.authorId}`}
+                      className="font-bold text-foreground hover:text-primary hover:underline"
+                    >
+                      {item.authorName}
+                    </Link>
+                  ) : (
+                    <span className="font-bold text-foreground">{item.authorName}</span>
+                  )}
                 </p>
               )}
               {item.narratorName && (
                 <p>
                   {t("narratedBy")}{" "}
-                  <span className="font-bold text-foreground">{item.narratorName}</span>
+                  {item.narratorId ? (
+                    <Link
+                      to={`/narrator/${item.narratorId}`}
+                      className="font-bold text-foreground hover:text-primary hover:underline"
+                    >
+                      {item.narratorName}
+                    </Link>
+                  ) : (
+                    <span className="font-bold text-foreground">{item.narratorName}</span>
+                  )}
                 </p>
               )}
               {item.publisherName && (
@@ -351,6 +370,11 @@ export default function ContentDetails() {
             </ol>
           </aside>
         )}
+      </div>
+
+      {/* Ratings & reviews */}
+      <div className="haki-container pb-12">
+        <RatingsSection contentId={item._id} />
       </div>
     </div>
   );

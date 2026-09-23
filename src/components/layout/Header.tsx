@@ -11,6 +11,7 @@ import {
 import { useAuth } from "@/hooks/use-auth";
 import { useLang } from "@/lib/i18n";
 import { HakiLogo, HakiLogoInline } from "@/components/HakiLogo";
+import { NotificationsBell } from "@/components/NotificationsBell";
 import { usePlayer } from "@/lib/player";
 import { cn } from "@/lib/utils";
 import {
@@ -115,6 +116,9 @@ export function Header() {
             {lang === "ar" ? "EN" : "ع"}
           </Button>
 
+          {/* Notifications */}
+          <NotificationsBell />
+
           {/* Publish */}
           <Link to="/publish" className="hidden md:inline-flex">
             <Button size="sm" variant="outline" className="h-9 gap-1.5 font-semibold">
@@ -184,6 +188,15 @@ export function Header() {
                   >
                     {t("myAccount")}
                   </Link>
+                  {isAuthenticated && (
+                    <Link
+                      to="/dashboard"
+                      onClick={() => setMobileOpen(false)}
+                      className="rounded-lg px-3 py-2.5 text-sm font-semibold hover:bg-muted"
+                    >
+                      {t("myDashboard")}
+                    </Link>
+                  )}
                   {isAdmin && (
                     <Link
                       to="/admin"
