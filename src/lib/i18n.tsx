@@ -29,6 +29,8 @@ const DICT = {
   markRead: { ar: "تحديد كمقروء", en: "Mark as read" },
   myDashboard: { ar: "لوحتي", en: "My dashboard" },
   ratings: { ar: "التقييمات والمراجعات", en: "Ratings & reviews" },
+  followShow: { ar: "متابعة البرنامج", en: "Follow show" },
+  following: { ar: "متابَع", en: "Following" },
   // content types
   ebook: { ar: "كتب إلكترونية", en: "E-books" },
   audiobook: { ar: "كتب صوتية", en: "Audiobooks" },

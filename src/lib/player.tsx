@@ -1,7 +1,14 @@
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { formatTime, useLang } from "@/lib/i18n";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Slider } from "@/components/ui/slider";
 import { useAuth } from "@/hooks/use-auth";
 import { useMutation } from "convex/react";
@@ -10,6 +17,8 @@ import {
   Play,
   RotateCcw,
   RotateCw,
+  Timer,
+  TimerOff,
   Volume2,
   VolumeX,
   X,
@@ -87,11 +96,14 @@ type PlayerState = {
   speed: number;
   volume: number;
   muted: boolean;
+  /** Sleep timer: absolute end timestamp, null = off. */
+  sleepTimerEnd: number | null;
   setTrack: (t: PlayerTrack | null) => void;
   setIsPlaying: (p: boolean) => void;
   setSpeed: (s: number) => void;
   setVolume: (v: number) => void;
   setMuted: (m: boolean) => void;
+  setSleepTimer: (minutes: number | null) => void;
 };
 
 export const usePlayerStore = create<PlayerState>((set) => ({
@@ -100,11 +112,14 @@ export const usePlayerStore = create<PlayerState>((set) => ({
   speed: 1,
   volume: 1,
   muted: false,
+  sleepTimerEnd: null,
   setTrack: (track) => set({ track, isPlaying: true }),
   setIsPlaying: (isPlaying) => set({ isPlaying }),
   setSpeed: (speed) => set({ speed }),
   setVolume: (volume) => set({ volume }),
   setMuted: (muted) => set({ muted }),
+  setSleepTimer: (minutes) =>
+    set({ sleepTimerEnd: minutes ? Date.now() + minutes * 60000 : null }),
 }));
 
 // ============ Context wrapper ============
@@ -247,7 +262,7 @@ function PlayerBar({
 }: {
   audioRef: React.RefObject<HTMLAudioElement | null>;
 }) {
-  const { t } = useLang();
+  const { t, lang } = useLang();
   const track = usePlayerStore((s) => s.track);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
   const setIsPlaying = usePlayerStore((s) => s.setIsPlaying);
@@ -255,8 +270,23 @@ function PlayerBar({
   const setSpeed = usePlayerStore((s) => s.setSpeed);
   const muted = usePlayerStore((s) => s.muted);
   const setMuted = usePlayerStore((s) => s.setMuted);
+  const sleepTimerEnd = usePlayerStore((s) => s.sleepTimerEnd);
+  const setSleepTimer = usePlayerStore((s) => s.setSleepTimer);
   const close = usePlayer().close;
   const [, setTick] = useState(0);
+
+  // Sleep timer: pause playback when the countdown reaches zero.
+  useEffect(() => {
+    if (!sleepTimerEnd || !isPlaying) return;
+    const id = setInterval(() => {
+      setTick((v) => v + 1);
+      if (Date.now() >= sleepTimerEnd) {
+        setIsPlaying(false);
+        setSleepTimer(null);
+      }
+    }, 1000);
+    return () => clearInterval(id);
+  }, [sleepTimerEnd, isPlaying, setIsPlaying, setSleepTimer]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -354,6 +384,50 @@ function PlayerBar({
           >
             {speed}x
           </Button>
+          {/* Sleep timer */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="مؤقت النوم"
+                className={cn(
+                  "hidden sm:inline-flex text-[10px] font-bold",
+                  sleepTimerEnd && "text-primary",
+                )}
+              >
+                {sleepTimerEnd ? <Timer className="size-4" /> : <TimerOff className="size-4" />}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => setSleepTimer(15)}>
+                {lang === "ar" ? "15 دقيقة" : "15 minutes"}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setSleepTimer(30)}>
+                {lang === "ar" ? "30 دقيقة" : "30 minutes"}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setSleepTimer(60)}>
+                {lang === "ar" ? "ساعة" : "1 hour"}
+              </DropdownMenuItem>
+              {sleepTimerEnd && (
+                <DropdownMenuItem
+                  onClick={() => setSleepTimer(null)}
+                  className="text-destructive"
+                >
+                  {lang === "ar" ? "إلغاء المؤقت" : "Cancel timer"}
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+          {sleepTimerEnd && (
+            <span
+              className="hidden lg:inline text-[10px] font-bold tabular-nums text-primary"
+              dir="ltr"
+            >
+              {formatTime(Math.max(0, Math.round((sleepTimerEnd - Date.now()) / 1000)))}
+            </span>
+          )}
+
           <Button
             variant="ghost"
             size="icon"

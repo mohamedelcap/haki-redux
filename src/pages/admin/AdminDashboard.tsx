@@ -1,6 +1,7 @@
 import { api } from "@/convex/_generated/api";
 import { FileUpload } from "@/components/FileUpload";
 import { RequireAuth } from "@/components/RequireAuth";
+import { AdminGate } from "@/components/AdminGate";
 import { TracksManager } from "@/pages/admin/TracksManager";
 import { HomepageManager } from "@/pages/admin/HomepageManager";
 import { MediaLibrary } from "@/pages/admin/MediaLibrary";
@@ -56,6 +57,8 @@ import {
   Trophy,
   Upload,
   Users,
+  KeyRound,
+  RefreshCw,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router";
@@ -82,6 +85,7 @@ type TabKey =
   | "live"
   | "submissions"
   | "users"
+  | "access"
   | "settings";
 
 function AdminInner() {
@@ -113,6 +117,7 @@ function AdminInner() {
     { key: "live", label: L("البث المباشر", "Live Streaming"), icon: Radio },
     { key: "submissions", label: L("طلبات النشر", "Submissions"), icon: FileText },
     { key: "users", label: L("المستخدمون", "Users"), icon: Users },
+    { key: "access", label: L("الوصول والأدوار", "Access & roles"), icon: KeyRound },
     { key: "settings", label: L("الإعدادات", "Settings"), icon: Settings2 },
   ];
 
@@ -191,6 +196,7 @@ function AdminInner() {
         {tab === "live" && <LiveManager L={L} />}
         {tab === "submissions" && <SubmissionsManager L={L} />}
         {tab === "users" && <UsersManager L={L} />}
+        {tab === "access" && <AccessManager L={L} />}
         {tab === "settings" && <SettingsManager L={L} />}
       </div>
     </div>
@@ -1326,6 +1332,109 @@ function SubmissionsManager({ L }: { L: (ar: string, en: string) => string }) {
 
 // ============ Users ============
 
+function AccessManager({ L }: { L: (ar: string, en: string) => string }) {
+  const me = useQuery(api.adminUsers.me, {});
+  const gateStatus = useQuery(api.adminGate.status, {});
+  const setGatePassword = useMutation(api.adminGate.setPassword);
+  const isAdmin = me?.isAdmin ?? false;
+
+  const [currentPw, setCurrentPw] = useState("");
+  const [newPw, setNewPw] = useState("");
+  const [newPw2, setNewPw2] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const submitPw = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newPw.length < 8) {
+      toast.error(L("كلمة المرور يجب أن تكون 8 أحرف على الأقل", "Password must be at least 8 characters"));
+      return;
+    }
+    if (newPw !== newPw2) {
+      toast.error(L("كلمتا المرور غير متطابقتين", "Passwords do not match"));
+      return;
+    }
+    setSaving(true);
+    try {
+      await setGatePassword({
+        currentPassword: gateStatus?.configured ? currentPw : undefined,
+        newPassword: newPw,
+      });
+      toast.success(L("تم تحديث كلمة مرور اللوحة", "Dashboard password updated"));
+      setCurrentPw("");
+      setNewPw("");
+      setNewPw2("");
+      try { sessionStorage.removeItem("haki_admin_gate_token"); } catch { /* noop */ }
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const roleDescriptions: { role: string; label: string; desc: string }[] = [
+    { role: "super_admin", label: L("مدير النظام", "Super Admin"), desc: L("تحكم كامل: النظام، الإعدادات، الأدوار، منح Super Admin", "Full control: system, settings, roles, granting Super Admin") },
+    { role: "admin", label: L("مدير", "Admin"), desc: L("إدارة كل المحتوى والمستخدمين والباقات — بلا تعديل مديري النظام", "Manage all content, users, plans — cannot edit Super Admins") },
+    { role: "publisher", label: L("ناشر", "Publisher"), desc: L("إدارة محتوى دار النشر الخاصة به فقط", "Manage only their imprint's content") },
+    { role: "author", label: L("مؤلف", "Author"), desc: L("إدارة أعماله الخاصة فقط", "Manage only their own works") },
+    { role: "user", label: L("مستخدم", "User"), desc: L("تصفح واستماع — لا وصول للوحة التحكم", "Browse & listen — no dashboard access") },
+  ];
+
+  return (
+    <div>
+      <h2 className="text-xl font-black">{L("الوصول والأدوار", "Access & roles")}</h2>
+
+      <div className="mt-6 max-w-xl rounded-2xl border bg-card p-6">
+        <h3 className="flex items-center gap-2 font-extrabold">
+          <KeyRound className="size-4 text-primary" />
+          {L("كلمة مرور لوحة التحكم", "Dashboard password")}
+        </h3>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {gateStatus?.configured
+            ? L("مفعّلة — تُطلب عند كل جلسة إدارة جديدة. تغييرها يُنهي جلسات البوابة الحالية.", "Enabled — required each admin session. Changing it ends current gate sessions.")
+            : L("لم تُضبط بعد — ستُطلب في أول فتح للوحة.", "Not set yet — will be asked on first dashboard open.")}
+        </p>
+        {isAdmin ? (
+          <form onSubmit={submitPw} className="mt-4 space-y-3">
+            {gateStatus?.configured && (
+              <Input type="password" dir="ltr" placeholder={L("كلمة المرور الحالية", "Current password")} value={currentPw} onChange={(e) => setCurrentPw(e.target.value)} autoComplete="current-password" />
+            )}
+            <Input type="password" dir="ltr" placeholder={L("كلمة المرور الجديدة (8+ أحرف)", "New password (8+ chars)")} value={newPw} onChange={(e) => setNewPw(e.target.value)} autoComplete="new-password" />
+            <Input type="password" dir="ltr" placeholder={L("تأكيد كلمة المرور الجديدة", "Confirm new password")} value={newPw2} onChange={(e) => setNewPw2(e.target.value)} autoComplete="new-password" />
+            <Button type="submit" className="font-bold" disabled={saving}>
+              {saving ? "…" : L("حفظ كلمة المرور", "Save password")}
+            </Button>
+          </form>
+        ) : (
+          <p className="mt-4 rounded-xl bg-muted p-3 text-sm">
+            {L("ضبط كلمة المرور متاح للمديرين فقط.", "Only admins can set the password.")}
+          </p>
+        )}
+      </div>
+
+      <div className="mt-6 max-w-xl rounded-2xl border bg-card p-6">
+        <h3 className="flex items-center gap-2 font-extrabold">
+          <RefreshCw className="size-4 text-primary" />
+          {L("توزيع الأدوار", "Role assignment")}
+        </h3>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {L("من تبويب «المستخدمون» تختار دور كل عضو من القائمة المنسدلة بجانب اسمه.", "In the Users tab, pick each member's role from the dropdown next to their name.")}
+        </p>
+        <div className="mt-4 space-y-2.5">
+          {roleDescriptions.map((r) => (
+            <div key={r.role} className="rounded-xl border p-3">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-bold">{r.label}</p>
+                <code className="text-[10px] text-muted-foreground" dir="ltr">{r.role}</code>
+              </div>
+              <p className="mt-0.5 text-xs text-muted-foreground">{r.desc}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function UsersManager({ L }: { L: (ar: string, en: string) => string }) {
   const me = useQuery(api.adminUsers.me, {});
   const users = useQuery(api.adminUsers.listUsers, {});
@@ -1483,12 +1592,12 @@ export default function AdminDashboard() {
       title="هذه الصفحة للمديرين فقط"
       description="سجّل الدخول بحساب مدير للوصول إلى لوحة التحكم."
     >
-      <AdminGate />
+      <RoleGate />
     </RequireAuth>
   );
 }
 
-function AdminGate() {
+function RoleGate() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const hasAdmin = useQuery(api.seed.hasAnyAdmin, {});
@@ -1526,5 +1635,14 @@ function AdminGate() {
       </div>
     );
   }
-  return <AdminInner />;
+  // Password gate on top of the role check (managed in Settings tab).
+  return (
+    <PasswordGate>
+      <AdminInner />
+    </PasswordGate>
+  );
+}
+
+function PasswordGate({ children }: { children: React.ReactNode }) {
+  return <AdminGate>{children}</AdminGate>;
 }

@@ -202,7 +202,17 @@ export const upsertEpisode = mutation({
       await ctx.db.patch(id, data);
       return id;
     }
-    return await ctx.db.insert("episodes", data);
+    const episodeId = await ctx.db.insert("episodes", data);
+
+    // New episode on a podcast → notify followers of the show.
+    if (parent && parent.contentType === "podcast") {
+      await ctx.runMutation(api.podcasts.notifyFollowersOfNewEpisode, {
+        contentId: args.contentId,
+        episodeTitle: args.title,
+        showTitle: parent.title,
+      });
+    }
+    return episodeId;
   },
 });
 

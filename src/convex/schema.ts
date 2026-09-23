@@ -316,7 +316,8 @@ const schema = defineSchema(
       followedAt: v.number(),
     })
       .index("by_user", ["userId"])
-      .index("by_user_content", ["userId", "contentId"]),
+      .index("by_user_content", ["userId", "contentId"])
+      .index("by_content", ["contentId"]),
 
     settings: defineTable({
       key: v.string(),
