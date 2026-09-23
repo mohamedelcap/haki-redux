@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { query } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
-import { enrichContent, requireAdmin, type EnrichedContent } from "./lib";
+import { enrichContent, requireStaff, isAdminRole, type EnrichedContent } from "./lib";
 import { CONTENT_TYPES, contentTypeValidator, contentStatusValidator } from "./schema";
 
 /**
@@ -302,11 +302,31 @@ export const browse = query({
 export const listAllForAdmin = query({
   args: {},
   handler: async (ctx) => {
-    // Admin-only: includes drafts and archived items.
-    await requireAdmin(ctx);
+    // Staff-only: admins see everything (incl. drafts); publishers/authors
+    // see only rows they own.
+    const caller = await requireStaff(ctx);
     const rows = await ctx.db.query("content").collect();
     rows.sort((a, b) => b.createdAt - a.createdAt);
-    return await enrichContent(ctx, rows);
+
+    let scoped = rows;
+    if (!isAdminRole(caller.role)) {
+      if (caller.role === "publisher") {
+        const entity = await ctx.db
+          .query("publishers")
+          .filter((q) => q.eq(q.field("name"), caller.name ?? ""))
+          .first();
+        scoped = entity ? rows.filter((r) => r.publisherId === entity._id) : [];
+      } else if (caller.role === "author") {
+        const entity = await ctx.db
+          .query("authors")
+          .filter((q) => q.eq(q.field("name"), caller.name ?? ""))
+          .first();
+        scoped = entity ? rows.filter((r) => r.authorId === entity._id) : [];
+      } else {
+        scoped = [];
+      }
+    }
+    return await enrichContent(ctx, scoped);
   },
 });
 

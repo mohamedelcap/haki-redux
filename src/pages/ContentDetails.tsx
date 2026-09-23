@@ -1,6 +1,7 @@
 import { api } from "@/convex/_generated/api";
 import { SEO } from "@/components/SEO";
-import { ContentTypeIcon, TYPE_LABELS, demoAudioUrl } from "@/components/ContentCard";
+import { ContentTypeIcon, TYPE_LABELS } from "@/components/ContentCard";
+import { demoAudioUrl } from "@/lib/player";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";

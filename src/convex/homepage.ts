@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import type { Doc } from "./_generated/dataModel";
-import { requireAdmin, enrichContent, type EnrichedContent } from "./lib";
+import { requireAdmin, requireSuperAdmin, requireContentAccess, enrichContent, type EnrichedContent } from "./lib";
 
 /**
  * Homepage sections are fully dynamic: the admin creates/edits/hides sections
@@ -89,7 +89,7 @@ export const deleteSection = mutation({
   },
 });
 
-/** Admin: quick flag toggles on content (publish/featured/trending/new). */
+/** Admin: quick flag toggles on content (publish/featured/trending/new). Owner-scoped. */
 export const setFlags = mutation({
   args: {
     contentId: v.id("content"),
@@ -99,7 +99,8 @@ export const setFlags = mutation({
     isNew: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx);
+    const content = await ctx.db.get(args.contentId);
+    await requireContentAccess(ctx, content);
     const { contentId, ...patch } = args;
     const clean = Object.fromEntries(
       Object.entries(patch).filter(([, v]) => v !== undefined),

@@ -26,9 +26,40 @@ import {
 } from "react";
 import { create } from "zustand";
 
-// Silent 1-second MP3 placeholder (replace with real CDN URLs when audio is uploaded).
-export const DEMO_AUDIO =
-  "data:audio/mp3;base64,//uQxAAAAAAAAAAAAAAAAAAAAAAAAAAAWWluZXYAAAA5AAAAtAAA5AAABGBdXVlbAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+/**
+ * Valid silent placeholder audio: a tiny generated WAV (no console errors,
+ * unlike a truncated MP3). Replaced by real file URLs once audio is uploaded.
+ */
+function makeSilentWavDataUri(): string {
+  const sampleRate = 8000;
+  const seconds = 1;
+  const samples = sampleRate * seconds;
+  const buffer = new ArrayBuffer(44 + samples * 2);
+  const view = new DataView(buffer);
+  const writeStr = (offset: number, s: string) => {
+    for (let i = 0; i < s.length; i++) view.setUint8(offset + i, s.charCodeAt(i));
+  };
+  writeStr(0, "RIFF");
+  view.setUint32(4, 36 + samples * 2, true);
+  writeStr(8, "WAVE");
+  writeStr(12, "fmt ");
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true); // PCM
+  view.setUint16(22, 1, true); // mono
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 2, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  writeStr(36, "data");
+  view.setUint32(40, samples * 2, true);
+  // silence (all zeros) — no write needed
+  let binary = "";
+  const bytes = new Uint8Array(buffer);
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  return `data:audio/wav;base64,${btoa(binary)}`;
+}
+
+export const DEMO_AUDIO = makeSilentWavDataUri();
 
 export function demoAudioUrl(id?: string) {
   void id;

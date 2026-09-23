@@ -1,5 +1,5 @@
 import { formatDuration, useLang } from "@/lib/i18n";
-import { usePlayer } from "@/lib/player";
+import { usePlayer, demoAudioUrl } from "@/lib/player";
 import type { EnrichedContent } from "@/convex/lib";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -93,6 +93,14 @@ export function ContentCard({ item, className, onPlay }: CardProps) {
           src={item.coverImage || "https://images.unsplash.com/photo-1543002588-bfa74002ed7e?w=480&h=720&fit=crop&q=80"}
           alt={item.title}
           loading="lazy"
+          onError={(e) => {
+            // Broken/unreachable cover: swap to the shared fallback once.
+            const img = e.currentTarget;
+            if (!img.dataset.fallback) {
+              img.dataset.fallback = "1";
+              img.src = "https://images.unsplash.com/photo-1543002588-bfa74002ed7e?w=480&h=720&fit=crop&q=80";
+            }
+          }}
           className="size-full object-cover transition-transform duration-300 group-hover:scale-105"
         />
         <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/55 to-transparent" />
@@ -122,16 +130,7 @@ export function ContentCard({ item, className, onPlay }: CardProps) {
   );
 }
 
-/** Build a demo audio URL — silent placeholder that works without real files. */
-export function demoAudioUrl(id: string) {
-  void id;
-  return DEMO_AUDIO;
-}
 
-export { DEMO_AUDIO };
-
-const DEMO_AUDIO =
-  "data:audio/mp3;base64,//uQxAAAAAAAAAAAAAAAAAAAAAAAAAAAWWluZXYAAAA5AAAAtAAA5AAABGBdXVlbAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
 
 /** Horizontal scrollable section with arrows. */
 export function SectionRow({

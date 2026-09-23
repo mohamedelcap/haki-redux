@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { query, mutation } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
-import { requireAdmin } from "./lib";
+import { requireAdmin, requireStaff, requireSuperAdmin } from "./lib";
 import { challengeStatusValidator } from "./schema";
 
 // ---------------- Statistics ----------------
@@ -9,7 +9,7 @@ import { challengeStatusValidator } from "./schema";
 export const stats = query({
   args: {},
   handler: async (ctx) => {
-    await requireAdmin(ctx);
+    await requireStaff(ctx);
     const [content, users, plans, subs] = await Promise.all([
       ctx.db.query("content").collect(),
       ctx.db.query("users").collect(),
@@ -62,7 +62,7 @@ function entityArgs(extra: any = {}) {
 export const listEntity = query({
   args: { table: v.union(...entityTables.map((t) => v.literal(t))) },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx);
+    await requireStaff(ctx);
     return await ctx.db.query(args.table).collect();
   },
 });

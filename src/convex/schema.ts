@@ -2,18 +2,28 @@ import { authTables } from "@convex-dev/auth/server";
 import { defineSchema, defineTable } from "convex/server";
 import { Infer, v } from "convex/values";
 
-// default user roles. can add / remove based on the project as needed
+// Platform roles: super_admin > admin > publisher > author > user
 export const ROLES = {
+  SUPER_ADMIN: "super_admin",
   ADMIN: "admin",
+  PUBLISHER: "publisher",
+  AUTHOR: "author",
   USER: "user",
+  // legacy value kept for existing rows
   MEMBER: "member",
 } as const;
 
 export const roleValidator = v.union(
+  v.literal(ROLES.SUPER_ADMIN),
   v.literal(ROLES.ADMIN),
+  v.literal(ROLES.PUBLISHER),
+  v.literal(ROLES.AUTHOR),
   v.literal(ROLES.USER),
   v.literal(ROLES.MEMBER),
 );
+
+/** Roles allowed into the admin dashboard at all. */
+export const STAFF_ROLES = [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.PUBLISHER, ROLES.AUTHOR] as const;
 export type Role = Infer<typeof roleValidator>;
 
 export const CONTENT_TYPES = [

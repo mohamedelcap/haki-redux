@@ -7,11 +7,20 @@ import { requireAdmin, getCurrentUser } from "./lib";
 export const hasAnyAdmin = query({
   args: {},
   handler: async (ctx) => {
-    const admin = await ctx.db
+    // Any staff-level role counts — the bootstrap gate opens once for the very
+    // first team member and closes afterwards.
+    const staff = await ctx.db
       .query("users")
-      .filter((q: any) => q.eq(q.field("role"), "admin"))
+      .filter((q: any) =>
+        q.or(
+          q.eq(q.field("role"), "super_admin"),
+          q.eq(q.field("role"), "admin"),
+          q.eq(q.field("role"), "publisher"),
+          q.eq(q.field("role"), "author"),
+        ),
+      )
       .first();
-    return admin !== null;
+    return staff !== null;
   },
 });
 
@@ -22,32 +31,46 @@ export const hasAnyAdmin = query({
 export const bootstrapAdmin = mutation({
   args: {},
   handler: async (ctx) => {
-    const admin = await ctx.db
+    const staff = await ctx.db
       .query("users")
-      .filter((q: any) => q.eq(q.field("role"), "admin"))
+      .filter((q: any) =>
+        q.or(
+          q.eq(q.field("role"), "super_admin"),
+          q.eq(q.field("role"), "admin"),
+          q.eq(q.field("role"), "publisher"),
+          q.eq(q.field("role"), "author"),
+        ),
+      )
       .first();
-    if (admin) return { promoted: false };
+    if (staff) return { promoted: false };
     const user = await getCurrentUser(ctx);
     if (!user) return { promoted: false };
-    await ctx.db.patch(user._id, { role: "admin" });
+    await ctx.db.patch(user._id, { role: "super_admin" });
     return { promoted: true };
   },
 });
 
 /**
- * Bootstrap guard: allows the FIRST seed run before any admin exists.
- * Once at least one admin user exists, seeding requires admin privileges.
+ * Bootstrap guard: allows the FIRST seed run before any staff exists.
+ * Once at least one staff member exists, seeding requires admin privileges.
  */
 async function requireSeedAccess(ctx: any) {
-  const admins = await ctx.db
+  const staff = await ctx.db
     .query("users")
-    .filter((q: any) => q.eq(q.field("role"), "admin"))
+    .filter((q: any) =>
+      q.or(
+        q.eq(q.field("role"), "super_admin"),
+        q.eq(q.field("role"), "admin"),
+        q.eq(q.field("role"), "publisher"),
+        q.eq(q.field("role"), "author"),
+      ),
+    )
     .take(1);
-  if (admins.length === 0) {
+  if (staff.length === 0) {
     const user = await getCurrentUser(ctx);
     if (user) {
       // First authenticated user bootstraps into the admin role.
-      await ctx.db.patch(user._id, { role: "admin" });
+      await ctx.db.patch(user._id, { role: "super_admin" });
     }
     return;
   }

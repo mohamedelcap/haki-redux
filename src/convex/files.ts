@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { mutation } from "./_generated/server";
-import { requireAdmin, getCurrentUser } from "./lib";
+import { requireContentAccess, getCurrentUser } from "./lib";
+import type { Doc } from "./_generated/dataModel";
 
 /**
  * Generate a short-lived upload URL for direct browser → Convex storage upload.
@@ -16,14 +17,15 @@ export const generateUploadUrl = mutation({
   },
 });
 
-/** Save an uploaded cover image and attach it to a content row (admin only). */
+/** Save an uploaded cover image and attach it to a content row (owner or admin). */
 export const saveCover = mutation({
   args: {
     storageId: v.id("_storage"),
     contentId: v.id("content"),
   },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx);
+    const content = await ctx.db.get(args.contentId);
+    await requireContentAccess(ctx, content);
     const url = await ctx.storage.getUrl(args.storageId);
     if (!url) throw new Error("الملف غير موجود في التخزين");
     await ctx.db.patch(args.contentId, { coverImage: url });
@@ -42,7 +44,18 @@ export const saveAudio = mutation({
     ),
   },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx);
+    // Resolve the owning content row for any target kind.
+    let contentRow: Doc<"content"> | null = null;
+    if (args.target.kind === "content") {
+      contentRow = await ctx.db.get(args.target.contentId);
+    } else if (args.target.kind === "chapter") {
+      const ch = await ctx.db.get(args.target.chapterId);
+      contentRow = ch ? await ctx.db.get(ch.contentId) : null;
+    } else {
+      const ep = await ctx.db.get(args.target.episodeId);
+      contentRow = ep ? await ctx.db.get(ep.contentId) : null;
+    }
+    await requireContentAccess(ctx, contentRow);
     const url = await ctx.storage.getUrl(args.storageId);
     if (!url) throw new Error("الملف غير موجود في التخزين");
     if (args.target.kind === "content") {

@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { query, mutation } from "./_generated/server";
-import { requireAdmin } from "./lib";
+import { requireAdmin, requireContentAccess, requireSuperAdmin, isAdminRole } from "./lib";
 import {
   contentTypeValidator,
   contentStatusValidator,
@@ -30,7 +30,7 @@ export const upsertContent = mutation({
     categoryIds: v.optional(v.array(v.id("categories"))),
   },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx);
+    const caller = await requireAdmin(ctx);
     const now = Date.now();
     const {
       id,
@@ -43,6 +43,35 @@ export const upsertContent = mutation({
       coverImage,
       ...data
     } = args;
+
+    // Ownership model: publishers/authors may only touch their own rows.
+    if (id) {
+      const existing = await ctx.db.get(id);
+      await requireContentAccess(ctx, existing);
+      // Non-admin callers cannot change ownership fields.
+      if (!isAdminRole(caller.role)) {
+        if (authorId !== undefined || publisherId !== undefined) {
+          throw new Error("تغيير مالك المحتوى يتطلب صلاحيات الإدارة");
+        }
+      }
+    } else if (!isAdminRole(caller.role)) {
+      // New rows: publisher/author create content owned by their entity.
+      if (caller.role === "publisher") {
+        const entity = await ctx.db
+          .query("publishers")
+          .filter((q) => q.eq(q.field("name"), caller.name ?? ""))
+          .first();
+        if (!entity) throw new Error("لم يتم ربط حسابك بدار نشر — تواصل مع الإدارة");
+        args.publisherId = entity._id;
+      } else if (caller.role === "author") {
+        const entity = await ctx.db
+          .query("authors")
+          .filter((q) => q.eq(q.field("name"), caller.name ?? ""))
+          .first();
+        if (!entity) throw new Error("لم يتم ربط حسابك بملف مؤلف — تواصل مع الإدارة");
+        args.authorId = entity._id;
+      }
+    }
     if (id) {
       await ctx.db.patch(id, {
         ...data,
@@ -98,7 +127,8 @@ export const upsertContent = mutation({
 export const deleteContent = mutation({
   args: { id: v.id("content") },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx);
+    const existing = await ctx.db.get(args.id);
+    await requireContentAccess(ctx, existing);
     const links = await ctx.db
       .query("content_categories")
       .withIndex("by_content", (q) => q.eq("contentId", args.id))
@@ -130,7 +160,8 @@ export const upsertChapter = mutation({
     duration: v.number(),
   },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx);
+    const parent = await ctx.db.get(args.contentId);
+    await requireContentAccess(ctx, parent);
     const { id, ...data } = args;
     if (id) {
       await ctx.db.patch(id, data);
@@ -143,7 +174,10 @@ export const upsertChapter = mutation({
 export const deleteChapter = mutation({
   args: { id: v.id("chapters") },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx);
+    const chapter = await ctx.db.get(args.id);
+    if (!chapter) throw new Error("الفصل غير موجود");
+    const parent = await ctx.db.get(chapter.contentId);
+    await requireContentAccess(ctx, parent);
     await ctx.db.delete(args.id);
   },
 });
@@ -161,7 +195,8 @@ export const upsertEpisode = mutation({
     publishDate: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx);
+    const parent = await ctx.db.get(args.contentId);
+    await requireContentAccess(ctx, parent);
     const { id, ...data } = args;
     if (id) {
       await ctx.db.patch(id, data);
@@ -174,7 +209,10 @@ export const upsertEpisode = mutation({
 export const deleteEpisode = mutation({
   args: { id: v.id("episodes") },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx);
+    const episode = await ctx.db.get(args.id);
+    if (!episode) throw new Error("الحلقة غير موجودة");
+    const parent = await ctx.db.get(episode.contentId);
+    await requireContentAccess(ctx, parent);
     await ctx.db.delete(args.id);
   },
 });
@@ -194,7 +232,7 @@ export const upsertChallenge = mutation({
     isActive: v.boolean(),
   },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx);
+    await requireSuperAdmin(ctx);
     const { id, ...data } = args;
     if (id) {
       await ctx.db.patch(id, data);
@@ -207,7 +245,7 @@ export const upsertChallenge = mutation({
 export const deleteChallenge = mutation({
   args: { id: v.id("challenges") },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx);
+    await requireSuperAdmin(ctx);
     await ctx.db.delete(args.id);
   },
 });
@@ -226,7 +264,7 @@ export const upsertLiveStream = mutation({
     isLive: v.boolean(),
   },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx);
+    await requireSuperAdmin(ctx);
     const { id, ...data } = args;
     if (id) {
       await ctx.db.patch(id, data);
@@ -239,7 +277,7 @@ export const upsertLiveStream = mutation({
 export const deleteLiveStream = mutation({
   args: { id: v.id("live_streams") },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx);
+    await requireSuperAdmin(ctx);
     await ctx.db.delete(args.id);
   },
 });
@@ -249,7 +287,7 @@ export const deleteLiveStream = mutation({
 export const listSettings = query({
   args: {},
   handler: async (ctx) => {
-    await requireAdmin(ctx);
+    await requireSuperAdmin(ctx);
     return await ctx.db.query("settings").collect();
   },
 });
@@ -257,7 +295,7 @@ export const listSettings = query({
 export const setSetting = mutation({
   args: { key: v.string(), value: v.string() },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx);
+    await requireSuperAdmin(ctx);
     const existing = await ctx.db
       .query("settings")
       .withIndex("by_key", (q) => q.eq("key", args.key))

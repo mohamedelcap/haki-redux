@@ -1279,12 +1279,29 @@ function SubmissionsManager({ L }: { L: (ar: string, en: string) => string }) {
 // ============ Users ============
 
 function UsersManager({ L }: { L: (ar: string, en: string) => string }) {
+  const me = useQuery(api.adminUsers.me, {});
   const users = useQuery(api.adminUsers.listUsers, {});
   const setRole = useMutation(api.adminUsers.setUserRole);
+  const canAssignSuper = me?.role === "super_admin";
+
+  const roleLabels: Record<string, string> = {
+    super_admin: L("مدير النظام", "Super Admin"),
+    admin: L("مدير", "Admin"),
+    publisher: L("ناشر", "Publisher"),
+    author: L("مؤلف", "Author"),
+    user: L("مستخدم", "User"),
+    member: L("مستخدم (قديم)", "User (legacy)"),
+  };
 
   return (
     <div>
       <h2 className="text-xl font-black">{L("المستخدمون", "Users")}</h2>
+      <p className="mt-1 text-sm text-muted-foreground">
+        {L(
+          "الأدوار: مدير النظام يدير كل شيء، المدير يدير المحتوى والمستخدمين، الناشر يدير محتوى داره فقط، المؤلف يدير أعماله فقط.",
+          "Roles: Super Admin runs everything, Admin manages content & users, Publisher manages only their imprint, Author only their works.",
+        )}
+      </p>
       {users === undefined ? (
         <Skeleton className="mt-6 h-48 rounded-2xl" />
       ) : (
@@ -1294,7 +1311,6 @@ function UsersManager({ L }: { L: (ar: string, en: string) => string }) {
               <THead>
                 <TR>
                   <TH>{L("المستخدم", "User")}</TH>
-                  <TH>{L("الباقة", "Plan")}</TH>
                   <TH>{L("الدور", "Role")}</TH>
                 </TR>
               </THead>
@@ -1302,19 +1318,29 @@ function UsersManager({ L }: { L: (ar: string, en: string) => string }) {
                 {users.map((u) => (
                   <TR key={u._id}>
                     <TD>
-                      <p className="text-sm font-bold">{u.name ?? "—"}</p>
+                      <p className="text-sm font-bold">
+                        {u.name ?? "—"}
+                        {u._id === me?._id && (
+                          <span className="ms-2 text-xs font-semibold text-primary">({L("أنت", "you")})</span>
+                        )}
+                      </p>
                       <p className="text-xs text-muted-foreground" dir="ltr">{u.email ?? "—"}</p>
                     </TD>
-                    <TD>{u.planName ?? L("مجاني", "Free")}</TD>
                     <TD>
-                      <Select value={u.role ?? "user"} onValueChange={(v) => setRole({ userId: u._id, role: v as any })}>
-                        <SelectTrigger className="h-8 w-24"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="user">user</SelectItem>
-                          <SelectItem value="member">member</SelectItem>
-                          <SelectItem value="admin">admin</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      {u._id === me?._id ? (
+                        <Badge variant="secondary">{roleLabels[u.role ?? "user"] ?? u.role}</Badge>
+                      ) : (
+                        <Select value={u.role ?? "user"} onValueChange={(v) => setRole({ userId: u._id, role: v as any })}>
+                          <SelectTrigger className="h-8 w-28"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="user">{roleLabels.user}</SelectItem>
+                            <SelectItem value="author">{roleLabels.author}</SelectItem>
+                            <SelectItem value="publisher">{roleLabels.publisher}</SelectItem>
+                            <SelectItem value="admin">{roleLabels.admin}</SelectItem>
+                            {canAssignSuper && <SelectItem value="super_admin">{roleLabels.super_admin}</SelectItem>}
+                          </SelectContent>
+                        </Select>
+                      )}
                     </TD>
                   </TR>
                 ))}
@@ -1436,13 +1462,16 @@ function AdminGate() {
     );
   }
 
-  if (user && user.role !== "admin") {
+  const role = user?.role;
+  const staff = role === "super_admin" || role === "admin" || role === "publisher" || role === "author";
+
+  if (user && !staff) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-3 p-6 text-center">
         <Shield className="size-10 text-muted-foreground" />
-        <p className="text-lg font-bold">هذه الصفحة للمديرين فقط</p>
+        <p className="text-lg font-bold">هذه الصفحة لفريق الإدارة فقط</p>
         <p className="text-sm text-muted-foreground">
-          للوصول إلى لوحة التحكم، يجب أن يكون حسابك بدور "admin". يمكن للمدير الحالي ترقية حسابك من تبويب المستخدمين.
+          حسابك بدور "مستخدم" ولا يملك صلاحية الوصول إلى لوحة التحكم. تواصل مع الإدارة إذا كنت تحتاج صلاحيات ناشر أو مؤلف أو مدير.
         </p>
         <Button onClick={() => navigate("/")}>العودة للرئيسية</Button>
       </div>
