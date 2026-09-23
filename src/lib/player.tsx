@@ -46,6 +46,8 @@ export type PlayerTrack = {
   audioUrl: string;
   /** Offset in seconds where this track begins within the content (chapter/episode mapping). */
   startOffset: number;
+  /** Absolute position (in content time) to start from — used for resume. */
+  startAt?: number;
 };
 
 type PlayerState = {
@@ -103,6 +105,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
   const stateRef = useRef({ track, isPlaying, isAuthenticated });
   stateRef.current = { track, isPlaying, isAuthenticated };
+  const lastTrackRef = useRef<PlayerTrack | null>(null);
 
   // Sync the audio element with store state
   useEffect(() => {
@@ -111,12 +114,33 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     if (!track || !track.audioUrl) {
       audio.pause();
       audio.removeAttribute("src");
+      lastTrackRef.current = null;
       return;
     }
+    // Demo audio (data URIs) loops so the player keeps its "playing" state.
+    audio.loop = track.audioUrl.startsWith("data:");
     if (audio.getAttribute("src") !== track.audioUrl) {
       audio.setAttribute("src", track.audioUrl);
       audio.load();
+      // Resume support: jump to the saved position once duration is known.
+      if (track.startAt && track.startAt > 0) {
+        const onMeta = () => {
+          audio.currentTime = Math.max(0, track.startAt! - (track.startOffset || 0));
+          audio.removeEventListener("loadedmetadata", onMeta);
+        };
+        audio.addEventListener("loadedmetadata", onMeta);
+      }
+    } else if (lastTrackRef.current !== track) {
+      // Same URL but a different track (e.g. switching chapters over demo audio):
+      // apply the within-track position directly.
+      const within = Math.max(0, (track.startAt ?? 0) - (track.startOffset || 0));
+      try {
+        audio.currentTime = within;
+      } catch {
+        /* media not seekable yet */
+      }
     }
+    lastTrackRef.current = track;
     audio.playbackRate = speed;
     audio.volume = muted ? 0 : volume;
     if (isPlaying) {

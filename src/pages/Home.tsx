@@ -124,7 +124,7 @@ export default function Home() {
           <div className="relative hidden lg:block" aria-hidden="true">
             <div className="grid grid-cols-3 gap-4">
               {[0, 1, 2].map((col) => (
-                <div className={cn("space-y-4", col === 1 && "translate-y-6", col === 2 && "translate-y-12")}>
+                <div key={col} className={cn("space-y-4", col === 1 && "translate-y-6", col === 2 && "translate-y-12")}>
                   {[0, 1].map((row) => {
                     const item = trending?.[(col * 2 + row) % Math.max(trending?.length ?? 1, 1)];
                     if (!item) return <div key={row} className="aspect-[3/4] rounded-2xl bg-muted" />;

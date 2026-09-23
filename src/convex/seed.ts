@@ -1,7 +1,38 @@
 import { v } from "convex/values";
-import { mutation } from "./_generated/server";
+import { mutation, query } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import { requireAdmin, getCurrentUser } from "./lib";
+
+/** Whether any admin user exists (used by the /admin bootstrap gate). */
+export const hasAnyAdmin = query({
+  args: {},
+  handler: async (ctx) => {
+    const admin = await ctx.db
+      .query("users")
+      .filter((q: any) => q.eq(q.field("role"), "admin"))
+      .first();
+    return admin !== null;
+  },
+});
+
+/**
+ * Promotes the first authenticated user to admin when no admin exists yet,
+ * so the dashboard can be reached instead of hitting a chicken-and-egg gate.
+ */
+export const bootstrapAdmin = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const admin = await ctx.db
+      .query("users")
+      .filter((q: any) => q.eq(q.field("role"), "admin"))
+      .first();
+    if (admin) return { promoted: false };
+    const user = await getCurrentUser(ctx);
+    if (!user) return { promoted: false };
+    await ctx.db.patch(user._id, { role: "admin" });
+    return { promoted: true };
+  },
+});
 
 /**
  * Bootstrap guard: allows the FIRST seed run before any admin exists.

@@ -40,7 +40,7 @@ import {
   Upload,
   Users,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { toast } from "sonner";
 
@@ -1233,6 +1233,26 @@ export default function AdminDashboard() {
 function AdminGate() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const hasAdmin = useQuery(api.seed.hasAnyAdmin, {});
+  const bootstrap = useMutation(api.seed.bootstrapAdmin);
+
+  // Bootstrap: if no admin exists yet, the first signed-in visitor becomes admin.
+  useEffect(() => {
+    if (user && hasAdmin === false) {
+      void bootstrap().catch(() => undefined);
+    }
+  }, [user, hasAdmin, bootstrap]);
+
+  if (user && hasAdmin === false) {
+    // Promotion is in flight — show a short pending state.
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-3 p-6 text-center">
+        <Loader2 className="size-6 animate-spin text-primary" />
+        <p className="text-sm text-muted-foreground">جارٍ تجهيز حسابك كمدير للمنصة…</p>
+      </div>
+    );
+  }
+
   if (user && user.role !== "admin") {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-3 p-6 text-center">

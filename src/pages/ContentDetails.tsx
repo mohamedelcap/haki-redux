@@ -92,11 +92,22 @@ export default function ContentDetails() {
   const startPlayback = (opts?: { chapterId?: string; fromStart?: boolean }) => {
     if (hasChapters || hasEpisodes) {
       const list = (trackList ?? []) as { _id: string; title: string; duration: number; audioUrl?: string | null }[];
-      const target = opts?.chapterId
-        ? list.find((c) => c._id === opts.chapterId)
-        : list[0];
-      const idx = target ? list.findIndex((c) => c._id === target._id) : 0;
+      let target = list[0];
+      if (opts?.chapterId) {
+        target = list.find((c) => c._id === opts.chapterId) ?? list[0];
+      } else if (!opts?.fromStart && resumePosition > 0) {
+        // Resume: pick the chapter that contains the saved position (absolute time).
+        const found = list.find((c) => {
+          const off = offsets.get(c._id) ?? 0;
+          return resumePosition >= off && resumePosition < off + c.duration;
+        });
+        if (found) target = found;
+      }
       const startOffset = target ? (offsets.get(target._id) ?? 0) : 0;
+      const withinChapter =
+        target && !opts?.fromStart && resumePosition > startOffset && resumePosition < startOffset + target.duration
+          ? resumePosition - startOffset
+          : 0;
       player.play({
         contentId: item._id,
         title: `${item.title} — ${target?.title ?? ""}`,
@@ -105,9 +116,10 @@ export default function ContentDetails() {
         narratorName: item.narratorName,
         audioUrl: target?.audioUrl || demoAudioUrl(item._id),
         startOffset,
+        startAt: startOffset + withinChapter,
       });
-      void idx;
     } else {
+      const startAt = opts?.fromStart ? 0 : resumePosition;
       player.play({
         contentId: item._id,
         title: item.title,
@@ -116,6 +128,7 @@ export default function ContentDetails() {
         narratorName: item.narratorName,
         audioUrl: item.audioUrl || demoAudioUrl(item._id),
         startOffset: 0,
+        startAt,
       });
     }
   };
@@ -260,7 +273,7 @@ export default function ContentDetails() {
             {resumePosition > 30 && (
               <button
                 type="button"
-                onClick={() => startPlayback()}
+                onClick={() => startPlayback({ fromStart: true })}
                 className="mt-3 flex w-fit items-center gap-2 text-xs font-semibold text-primary hover:underline"
               >
                 <Play className="size-3" />
@@ -286,7 +299,8 @@ export default function ContentDetails() {
             <ol className="mt-4 space-y-1.5">
               {(trackList ?? []).map((ch: any, i: number) => {
                 const offset = offsets.get(ch._id) ?? 0;
-                const isCurrent = player.track?.title.includes(ch.title);
+                const isCurrent =
+                  player.track?.contentId === item._id && player.track?.title.includes(ch.title);
                 return (
                   <li key={ch._id}>
                     <button
