@@ -27,8 +27,10 @@ import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
 import {
   ArrowLeft,
+  AudioLines,
   BarChart3,
   BookOpen,
+  Building2,
   Crown,
   FileText,
   Flame,
@@ -38,13 +40,18 @@ import {
   Loader2,
   ListMusic,
   Mic,
+  Newspaper,
+  PenLine,
   Pencil,
+  Podcast,
   Plus,
   Radio,
   Settings2,
   Shield,
   Sparkles,
   Star,
+  Tags,
+  Theater,
   Trash2,
   Trophy,
   Upload,
@@ -56,11 +63,20 @@ import { toast } from "sonner";
 
 type TabKey =
   | "overview"
-  | "content"
+  | "audiobooks"
+  | "ebooks"
+  | "drama"
+  | "microdrama"
+  | "podcasts"
+  | "magazines"
+  | "featured"
   | "tracks"
   | "homepage"
   | "media"
-  | "entities"
+  | "authors"
+  | "narrators"
+  | "publishers"
+  | "categories"
   | "plans"
   | "challenges"
   | "live"
@@ -77,15 +93,24 @@ function AdminInner() {
   const L = (ar: string, en: string) => (lang === "ar" ? ar : en);
 
   const tabs: { key: TabKey; label: string; icon: any }[] = [
-    { key: "overview", label: L("نظرة عامة", "Overview"), icon: BarChart3 },
-    { key: "content", label: L("المحتوى", "Content"), icon: Headphones },
-    { key: "tracks", label: L("الفصول والحلقات", "Tracks"), icon: ListMusic },
+    { key: "overview", label: L("نظرة عامة", "Dashboard"), icon: BarChart3 },
+    { key: "audiobooks", label: L("كتب صوتية", "Audiobooks"), icon: Headphones },
+    { key: "ebooks", label: L("كتب إلكترونية", "E-books"), icon: BookOpen },
+    { key: "drama", label: L("دراما صوتية", "Audio Drama"), icon: Theater },
+    { key: "microdrama", label: L("مايكرو دراما", "Micro Drama"), icon: Mic },
+    { key: "podcasts", label: L("بودكاست", "Podcasts"), icon: Podcast },
+    { key: "magazines", label: L("مجلات", "Magazines"), icon: Newspaper },
+    { key: "featured", label: L("المحتوى المميز", "Featured"), icon: Star },
+    { key: "tracks", label: L("الفصول والحلقات", "Episodes"), icon: ListMusic },
     { key: "homepage", label: L("الصفحة الرئيسية", "Homepage"), icon: LayoutDashboard },
     { key: "media", label: L("الوسائط", "Media"), icon: Images },
-    { key: "entities", label: L("المؤلفون والتصنيفات", "Entities"), icon: BookOpen },
-    { key: "plans", label: L("الباقات", "Plans"), icon: Crown },
+    { key: "authors", label: L("المؤلفون", "Authors"), icon: PenLine },
+    { key: "narrators", label: L("الرواة", "Narrators"), icon: AudioLines },
+    { key: "publishers", label: L("دور النشر", "Publishers"), icon: Building2 },
+    { key: "categories", label: L("التصنيفات", "Categories"), icon: Tags },
+    { key: "plans", label: L("الاشتراكات", "Subscriptions"), icon: Crown },
     { key: "challenges", label: L("التحديات", "Challenges"), icon: Trophy },
-    { key: "live", label: L("البث المباشر", "Live"), icon: Radio },
+    { key: "live", label: L("البث المباشر", "Live Streaming"), icon: Radio },
     { key: "submissions", label: L("طلبات النشر", "Submissions"), icon: FileText },
     { key: "users", label: L("المستخدمون", "Users"), icon: Users },
     { key: "settings", label: L("الإعدادات", "Settings"), icon: Settings2 },
@@ -147,11 +172,20 @@ function AdminInner() {
 
       <div className="haki-container py-8">
         {tab === "overview" && <Overview lang={lang} L={L} />}
-        {tab === "content" && <ContentManager L={L} lang={lang} />}
+        {tab === "audiobooks" && <ContentManager key="audiobooks" L={L} lang={lang} defaultType="audiobook" />}
+        {tab === "ebooks" && <ContentManager key="ebooks" L={L} lang={lang} defaultType="ebook" />}
+        {tab === "drama" && <ContentManager key="drama" L={L} lang={lang} defaultType="audio_drama" />}
+        {tab === "microdrama" && <ContentManager key="microdrama" L={L} lang={lang} defaultType="micro_drama" />}
+        {tab === "podcasts" && <ContentManager key="podcasts" L={L} lang={lang} defaultType="podcast" />}
+        {tab === "magazines" && <ContentManager key="magazines" L={L} lang={lang} defaultType="magazine" />}
+        {tab === "featured" && <ContentManager key="featured" L={L} lang={lang} featuredOnly />}
         {tab === "tracks" && <TracksManager L={L} />}
         {tab === "homepage" && <HomepageManager L={L} />}
         {tab === "media" && <MediaLibrary L={L} />}
-        {tab === "entities" && <EntityManager L={L} />}
+        {tab === "authors" && <EntityManager key="authors" L={L} initialTable="authors" />}
+        {tab === "narrators" && <EntityManager key="narrators" L={L} initialTable="narrators" />}
+        {tab === "publishers" && <EntityManager key="publishers" L={L} initialTable="publishers" />}
+        {tab === "categories" && <EntityManager key="categories" L={L} initialTable="categories" />}
         {tab === "plans" && <PlansManager L={L} lang={lang} />}
         {tab === "challenges" && <ChallengesManager L={L} />}
         {tab === "live" && <LiveManager L={L} />}
@@ -192,12 +226,11 @@ function Overview({ lang, L }: { lang: string; L: (ar: string, en: string) => st
           </div>
         ))}
       </div>
-      <SeedPanel L={L} />
     </div>
   );
 }
 
-function SeedPanel({ L }: { L: (ar: string, en: string) => string }) {
+export function SeedPanel({ L }: { L: (ar: string, en: string) => string }) {
   const seed = useMutation(api.seed.seedAll);
   const [loading, setLoading] = useState(false);
   const handleSeed = async (force: boolean) => {
@@ -242,7 +275,7 @@ function SeedPanel({ L }: { L: (ar: string, en: string) => string }) {
 
 // ============ Content manager ============
 
-function ContentManager({ L, lang }: { L: (ar: string, en: string) => string; lang: string }) {
+function ContentManager({ L, lang, defaultType, featuredOnly }: { L: (ar: string, en: string) => string; lang: string; defaultType?: string; featuredOnly?: boolean }) {
   const items = useQuery(api.content.listAllForAdmin, {});
   const categories = useQuery(api.content.listCategories, {});
   const authors = useQuery(api.content.listAuthors, {});
@@ -254,7 +287,7 @@ function ContentManager({ L, lang }: { L: (ar: string, en: string) => string; la
   const saveAudioUpload = useMutation(api.files.saveAudio);
   const saveFileUpload = useMutation(api.homepage.saveContentFile);
   const setFlags = useMutation(api.homepage.setFlags);
-  const [typeFilter, setTypeFilter] = useState<string>("all");
+  const [typeFilter, setTypeFilter] = useState<string>(defaultType ?? "all");
   const [editing, setEditing] = useState<any>(null);
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -263,7 +296,7 @@ function ContentManager({ L, lang }: { L: (ar: string, en: string) => string; la
     title: "",
     slug: "",
     description: "",
-    contentType: "audiobook",
+    contentType: defaultType ?? "audiobook",
     authorId: "",
     narratorId: "",
     publisherId: "",
@@ -390,8 +423,9 @@ function ContentManager({ L, lang }: { L: (ar: string, en: string) => string; la
                 </TR>
               </THead>
               <TBody>
-                {items
+                {(items ?? [])
                   .filter((i) => typeFilter === "all" || i.contentType === typeFilter)
+                  .filter((i) => (featuredOnly ? i.isFeatured : true))
                   .map((item) => (
                   <TR key={item._id}>
                     <TD>
@@ -738,8 +772,8 @@ function ContentManager({ L, lang }: { L: (ar: string, en: string) => string; la
 
 // ============ Entities ============
 
-function EntityManager({ L }: { L: (ar: string, en: string) => string }) {
-  const [table, setTable] = useState<"authors" | "narrators" | "publishers" | "categories">("authors");
+function EntityManager({ L, initialTable }: { L: (ar: string, en: string) => string; initialTable?: "authors" | "narrators" | "publishers" | "categories" }) {
+  const [table, setTable] = useState<"authors" | "narrators" | "publishers" | "categories">(initialTable ?? "authors");
   const items = useQuery(api.admin.listEntity, { table });
   const upsert = useMutation(api.admin.upsertEntity);
   const remove = useMutation(api.admin.deleteEntity);
