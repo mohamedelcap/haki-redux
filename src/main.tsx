@@ -1,0 +1,200 @@
+import '@vly-ai/integrations';
+import { Toaster } from "@/components/ui/sonner";
+import { RequireAuth } from "@/components/RequireAuth";
+import { VlyToolbar } from "../vly-toolbar-readonly.tsx";
+import { ConvexAuthProvider } from "@convex-dev/auth/react";
+import { ConvexReactClient } from "convex/react";
+import React, { StrictMode, lazy, Suspense, useEffect } from "react";
+import { createRoot } from "react-dom/client";
+import { BrowserRouter, Route, Routes, useLocation } from "react-router";
+import { LangProvider } from "@/lib/i18n";
+import { PlayerProvider } from "@/lib/player";
+import "./index.css";
+
+// Lazy load route components for better code splitting
+const Landing = lazy(() => import("./pages/Landing.tsx"));
+const AuthPage = lazy(() => import("./pages/Auth.tsx"));
+const Dashboard = lazy(() => import("./pages/Dashboard.tsx"));
+const NotFound = lazy(() => import("./pages/NotFound.tsx"));
+const Home = lazy(() => import("./pages/Home.tsx"));
+const Browse = lazy(() => import("./pages/Browse.tsx"));
+const SearchPage = lazy(() => import("./pages/SearchPage.tsx"));
+const ContentDetails = lazy(() => import("./pages/ContentDetails.tsx"));
+const Subscriptions = lazy(() => import("./pages/Subscriptions.tsx"));
+const Publish = lazy(() => import("./pages/Publish.tsx"));
+const Challenges = lazy(() => import("./pages/Challenges.tsx"));
+const Live = lazy(() => import("./pages/Live.tsx"));
+const About = lazy(() => import("./pages/About.tsx"));
+const Profile = lazy(() => import("./pages/Profile.tsx"));
+const Library = lazy(() => import("./pages/Library.tsx"));
+const HistoryPage = lazy(() => import("./pages/History.tsx"));
+const Settings = lazy(() => import("./pages/Settings.tsx"));
+const AdminDashboard = lazy(() => import("./pages/admin/AdminDashboard.tsx"));
+
+// Simple loading fallback for route transitions
+function RouteLoading() {
+  return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="animate-pulse text-muted-foreground">...</div>
+    </div>
+  );
+}
+
+/** Silent error boundary — if VlyToolbar crashes it renders nothing instead of
+ *  crashing the whole app (e.g. hook errors in the browser runtime). */
+class ToolbarErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean }
+> {
+  state = { hasError: false };
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  componentDidCatch(err: Error) {
+    console.warn("[VlyToolbar] Caught error, toolbar disabled:", err.message);
+  }
+  render() {
+    return this.state.hasError ? null : this.props.children;
+  }
+}
+
+/** Hard guard so runtime errors never leave the preview as a blank page. */
+class RootErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean; message: string; stack: string }
+> {
+  state = { hasError: false, message: "", stack: "" };
+  static getDerivedStateFromError(error: Error) {
+    return {
+      hasError: true,
+      message: error.message || "Unknown runtime error",
+      stack: error.stack || "",
+    };
+  }
+  componentDidCatch(err: Error) {
+    console.error("[Preview] Root crash:", err);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-background text-foreground p-6">
+          <div className="max-w-lg text-center">
+            <p className="text-sm font-semibold">Preview runtime error</p>
+            <p className="mt-2 text-xs text-muted-foreground break-words">
+              {this.state.message}
+            </p>
+            {this.state.stack && (
+              <pre className="mt-3 text-left text-[10px] leading-4 text-muted-foreground/80 max-h-40 overflow-auto rounded border border-border/60 p-2">
+                {this.state.stack}
+              </pre>
+            )}
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+const convex = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL as string);
+
+
+
+function RouteSyncer() {
+  const location = useLocation();
+  useEffect(() => {
+    window.parent.postMessage(
+      { type: "iframe-route-change", path: location.pathname },
+      "*",
+    );
+  }, [location.pathname]);
+
+  useEffect(() => {
+    function handleMessage(event: MessageEvent) {
+      if (event.data?.type === "navigate") {
+        if (event.data.direction === "back") window.history.back();
+        if (event.data.direction === "forward") window.history.forward();
+      }
+    }
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
+  }, []);
+
+  return null;
+}
+
+
+// SiteLayout must be inside Router; wraps all public pages with Header/Footer/Player
+function SiteRoutes() {
+  const SiteLayout = React.useRef(
+    lazy(() => import("./components/layout/SiteLayout")),
+  ).current;
+
+  return (
+    <Routes>
+      <Route element={<Suspense fallback={<RouteLoading />}><SiteLayout /></Suspense>}>
+        <Route path="/" element={<Home />} />
+        <Route path="/browse" element={<Browse />} />
+        <Route path="/browse/:type" element={<Browse />} />
+        <Route path="/search" element={<SearchPage />} />
+        <Route path="/content/:slug" element={<ContentDetails />} />
+        <Route path="/subscriptions" element={<Subscriptions />} />
+        <Route path="/publish" element={<Publish />} />
+        <Route path="/challenges" element={<Challenges />} />
+        <Route path="/live" element={<Live />} />
+        <Route path="/about" element={<About />} />
+        <Route
+          path="/profile"
+          element={
+            <RequireAuth
+              title="سجّل الدخول لعرض حسابك"
+              description="الملف الشخصي متاح للمستخدمين المسجلين."
+            >
+              <Profile />
+            </RequireAuth>
+          }
+        />
+        <Route path="/library" element={<Library />} />
+        <Route path="/history" element={<HistoryPage />} />
+        <Route path="/settings" element={<Settings />} />
+        <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="*" element={<NotFound />} />
+      </Route>
+      <Route
+        path="/admin"
+        element={
+          <Suspense fallback={<RouteLoading />}>
+            <AdminDashboard />
+          </Suspense>
+        }
+      />
+    </Routes>
+  );
+}
+
+createRoot(document.getElementById("root")!).render(
+  <StrictMode>
+    <RootErrorBoundary>
+      <ToolbarErrorBoundary>
+        <VlyToolbar />
+      </ToolbarErrorBoundary>
+      <ConvexAuthProvider client={convex}>
+        <LangProvider>
+          <PlayerProvider>
+            <BrowserRouter>
+              <RouteSyncer />
+              <Suspense fallback={<RouteLoading />}>
+                <Routes>
+                  <Route path="/auth" element={<AuthPage redirectAfterAuth="/" />} />
+                  <Route path="/ar/*" element={<SiteRoutes />} />
+                  <Route path="/*" element={<SiteRoutes />} />
+                </Routes>
+              </Suspense>
+            </BrowserRouter>
+            <Toaster />
+          </PlayerProvider>
+        </LangProvider>
+      </ConvexAuthProvider>
+    </RootErrorBoundary>
+  </StrictMode>,
+);
