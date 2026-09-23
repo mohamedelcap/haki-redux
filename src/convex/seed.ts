@@ -573,5 +573,7 @@ function makeCoverDataUri(title: string, paletteIdx: number) {
   const letter = encodeURIComponent(title.trim().charAt(0));
   const safeTitle = encodeURIComponent(title);
   const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='400' height='560'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='${c1}'/><stop offset='1' stop-color='${c2}'/></linearGradient></defs><rect width='400' height='560' fill='url(#g)'/><circle cx='340' cy='80' r='110' fill='rgba(255,255,255,0.08)'/><circle cx='40' cy='500' r='140' fill='rgba(0,0,0,0.10)'/><text x='200' y='250' font-size='120' text-anchor='middle' fill='rgba(255,255,255,0.92)' font-family='serif'>${letter}</text><text x='200' y='330' font-size='26' text-anchor='middle' fill='rgba(255,255,255,0.85)' font-family='sans-serif'>${safeTitle}</text></svg>`;
-  return `data:image/svg+xml,${svg}`;
+  // Must encode the whole SVG: raw '#' (hex colors, url(#g)) would be parsed as
+  // a URL fragment and truncate the data URI, breaking every cover image.
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
 }

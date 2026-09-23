@@ -10,8 +10,17 @@ export default function SiteLayout() {
   const location = useLocation();
 
   useEffect(() => {
-    window.scrollTo({ top: 0 });
-  }, [location.pathname]);
+    // If a hash is present, scroll to the anchor element instead of the top.
+    if (location.hash) {
+      const id = decodeURIComponent(location.hash.slice(1));
+      // Wait a frame so the target page has rendered its DOM.
+      requestAnimationFrame(() => {
+        document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
+      });
+    } else {
+      window.scrollTo({ top: 0 });
+    }
+  }, [location.pathname, location.hash]);
 
   return (
     <div className="flex min-h-screen flex-col">

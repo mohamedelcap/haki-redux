@@ -125,7 +125,8 @@ export function HakiLogoInline({
   return (
     <span className={cn("flex items-center gap-2", className)}>
       <HakiLogo variant={variant} size={size} hideWordmark />
-      <span className={cn("font-logo text-2xl font-bold leading-none", wordClass)}>
+      {/* extra line-height so Aref Ruqaa's calligraphic descenders are not clipped */}
+      <span className={cn("font-logo text-2xl font-bold leading-[1.5] pb-1", wordClass)}>
         حكي
       </span>
     </span>

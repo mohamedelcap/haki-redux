@@ -16,21 +16,47 @@ import { useLang } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { useQuery } from "convex/react";
 import { SearchX } from "lucide-react";
-import { useMemo, useState } from "react";
-import { useSearchParams } from "react-router";
+import { useEffect, useMemo, useState } from "react";
+import { useParams, useSearchParams } from "react-router";
 
 const TYPE_KEYS = ["audiobook", "ebook", "audio_drama", "micro_drama", "podcast", "magazine"] as const;
+
+/** Path slugs (e.g. /browse/drama) mapped to content types. */
+const SLUG_TO_TYPE: Record<string, string> = {
+  ebooks: "ebook",
+  ebook: "ebook",
+  audiobooks: "audiobook",
+  audiobook: "audiobook",
+  drama: "audio_drama",
+  "audio-drama": "audio_drama",
+  "micro-drama": "micro_drama",
+  microdrama: "micro_drama",
+  podcast: "podcast",
+  podcasts: "podcast",
+  magazines: "magazine",
+  magazine: "magazine",
+};
 
 export default function Browse() {
   const { lang, t } = useLang();
   const [searchParams] = useSearchParams();
+  const { type: typeParam } = useParams<{ type: string }>();
+  const pathType = typeParam ? SLUG_TO_TYPE[typeParam] : undefined;
   const [q, setQ] = useState("");
-  const [type, setType] = useState<string>(searchParams.get("type") ?? "all");
+  const [type, setType] = useState<string>(pathType ?? searchParams.get("type") ?? "all");
   const [categorySlug, setCategorySlug] = useState<string>(searchParams.get("category") ?? "all");
   const [authorId, setAuthorId] = useState<string>("all");
   const [narratorId, setNarratorId] = useState<string>("all");
   const [duration, setDuration] = useState<string>("all");
   const [sort, setSort] = useState<string>(searchParams.get("sort") ?? "newest");
+
+  // Sync filters when navigating between /browse/:type routes or query strings
+  // (the component instance is reused, so state must follow the new params).
+  useEffect(() => {
+    setType(pathType ?? searchParams.get("type") ?? "all");
+    setCategorySlug(searchParams.get("category") ?? "all");
+    setSort(searchParams.get("sort") ?? "newest");
+  }, [typeParam, searchParams]);
 
   const categories = useQuery(api.content.listCategories, {});
   const authors = useQuery(api.content.listAuthors, {});
