@@ -365,6 +365,10 @@ function ContentManager({ L, lang, defaultType, featuredOnly }: { L: (ar: string
     }
   };
 
+  const visible = (items ?? [])
+    .filter((i) => typeFilter === "all" || i.contentType === typeFilter)
+    .filter((i) => (featuredOnly ? i.isFeatured : true));
+
   return (
     <div>
       <div className="flex items-center justify-between">
@@ -410,6 +414,18 @@ function ContentManager({ L, lang, defaultType, featuredOnly }: { L: (ar: string
 
       {items === undefined ? (
         <Skeleton className="mt-6 h-64 rounded-2xl" />
+      ) : visible.length === 0 ? (
+        <div className="mt-6 rounded-2xl border bg-card p-10 text-center">
+          <Headphones className="mx-auto size-8 text-muted-foreground/50" />
+          <p className="mt-3 font-bold">
+            {featuredOnly
+              ? L("لا يوجد محتوى مميز بعد", "No featured content yet")
+              : L("لا يوجد محتوى في هذا القسم بعد", "No content in this section yet")}
+          </p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {L("أضف أول عنصر بزر «إضافة محتوى» أعلاه.", "Add your first item with the button above.")}
+          </p>
+        </div>
       ) : (
         <div className="mt-4 overflow-hidden rounded-2xl border bg-card">
           <div className="overflow-x-auto">
@@ -423,9 +439,7 @@ function ContentManager({ L, lang, defaultType, featuredOnly }: { L: (ar: string
                 </TR>
               </THead>
               <TBody>
-                {(items ?? [])
-                  .filter((i) => typeFilter === "all" || i.contentType === typeFilter)
-                  .filter((i) => (featuredOnly ? i.isFeatured : true))
+                {visible
                   .map((item) => (
                   <TR key={item._id}>
                     <TD>
@@ -1437,6 +1451,7 @@ function SettingsManager({ L }: { L: (ar: string, en: string) => string }) {
         <Input value={value} onChange={(e) => setValue(e.target.value)} placeholder={L("القيمة", "value")} />
         <Button type="submit" className="shrink-0 font-bold">{L("حفظ", "Save")}</Button>
       </form>
+      <SeedPanel L={L} />
     </div>
   );
 }
