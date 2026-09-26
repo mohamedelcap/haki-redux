@@ -5,6 +5,8 @@ import { AdminGate } from "@/components/AdminGate";
 import { TracksManager } from "@/pages/admin/TracksManager";
 import { HomepageManager } from "@/pages/admin/HomepageManager";
 import { MediaLibrary } from "@/pages/admin/MediaLibrary";
+import { NotificationsManager } from "@/pages/admin/NotificationsManager";
+import { PaymentMethodsManager } from "@/pages/admin/PaymentMethodsManager";
 import { SEO } from "@/components/SEO";
 import { HakiLogo } from "@/components/HakiLogo";
 import { TYPE_LABELS } from "@/components/ContentCard";
@@ -20,6 +22,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/hooks/use-auth";
@@ -27,19 +36,24 @@ import { useLang } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
 import {
+  AlertTriangle,
   ArrowLeft,
   AudioLines,
+  CirclePlus,
   BarChart3,
   BookOpen,
   Building2,
   Crown,
   FileText,
   Flame,
+  Globe,
   Headphones,
   Images,
   LayoutDashboard,
   Loader2,
   ListMusic,
+  LogOut,
+  Menu,
   Mic,
   Newspaper,
   PenLine,
@@ -48,6 +62,9 @@ import {
   Plus,
   Radio,
   Settings2,
+  Package,
+  Bell,
+  Wallet,
   Shield,
   Sparkles,
   Star,
@@ -66,6 +83,10 @@ import { toast } from "sonner";
 
 type TabKey =
   | "overview"
+  | "addContent"
+  | "allContent"
+  | "homepage"
+  | "entities"
   | "audiobooks"
   | "ebooks"
   | "drama"
@@ -74,16 +95,17 @@ type TabKey =
   | "magazines"
   | "featured"
   | "tracks"
-  | "homepage"
   | "media"
+  | "live"
+  | "submissions"
+  | "notifications"
+  | "paymentMethods"
   | "authors"
   | "narrators"
   | "publishers"
   | "categories"
   | "plans"
   | "challenges"
-  | "live"
-  | "submissions"
   | "users"
   | "access"
   | "settings";
@@ -93,145 +115,360 @@ function AdminInner() {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const [tab, setTab] = useState<TabKey>("overview");
+  const [mobileNav, setMobileNav] = useState(false);
 
   const L = (ar: string, en: string) => (lang === "ar" ? ar : en);
 
-  const tabs: { key: TabKey; label: string; icon: any }[] = [
-    { key: "overview", label: L("نظرة عامة", "Dashboard"), icon: BarChart3 },
-    { key: "audiobooks", label: L("كتب صوتية", "Audiobooks"), icon: Headphones },
-    { key: "ebooks", label: L("كتب إلكترونية", "E-books"), icon: BookOpen },
-    { key: "drama", label: L("دراما صوتية", "Audio Drama"), icon: Theater },
-    { key: "microdrama", label: L("مايكرو دراما", "Micro Drama"), icon: Mic },
-    { key: "podcasts", label: L("بودكاست", "Podcasts"), icon: Podcast },
-    { key: "magazines", label: L("مجلات", "Magazines"), icon: Newspaper },
-    { key: "featured", label: L("المحتوى المميز", "Featured"), icon: Star },
-    { key: "tracks", label: L("الفصول والحلقات", "Episodes"), icon: ListMusic },
-    { key: "homepage", label: L("الصفحة الرئيسية", "Homepage"), icon: LayoutDashboard },
-    { key: "media", label: L("الوسائط", "Media"), icon: Images },
-    { key: "authors", label: L("المؤلفون", "Authors"), icon: PenLine },
-    { key: "narrators", label: L("الرواة", "Narrators"), icon: AudioLines },
-    { key: "publishers", label: L("دور النشر", "Publishers"), icon: Building2 },
-    { key: "categories", label: L("التصنيفات", "Categories"), icon: Tags },
-    { key: "plans", label: L("الاشتراكات", "Subscriptions"), icon: Crown },
-    { key: "challenges", label: L("التحديات", "Challenges"), icon: Trophy },
-    { key: "live", label: L("البث المباشر", "Live Streaming"), icon: Radio },
-    { key: "submissions", label: L("طلبات النشر", "Submissions"), icon: FileText },
-    { key: "users", label: L("المستخدمون", "Users"), icon: Users },
-    { key: "access", label: L("الوصول والأدوار", "Access & roles"), icon: KeyRound },
-    { key: "settings", label: L("الإعدادات", "Settings"), icon: Settings2 },
+  // Sidebar groups — matching the approved admin IA:
+  // أساسي / المحتوى / إدارة المحتوى / التفاعلات والأنشطة / الإعدادات
+  const navGroups: {
+    label?: string;
+    items: { key: TabKey; label: string; icon: any }[];
+  }[] = [
+    {
+      label: L("الأساسي", "Core"),
+      items: [
+        { key: "overview", label: L("نظرة التحكم", "Dashboard"), icon: BarChart3 },
+        { key: "addContent", label: L("إضافة محتوى", "Add content"), icon: CirclePlus },
+        { key: "homepage", label: L("عرض الرئيسية", "Homepage"), icon: LayoutDashboard },
+        { key: "entities", label: L("هيكل المنصة", "Platform structure"), icon: Building2 },
+      ],
+    },
+    {
+      label: L("المحتوى", "Content"),
+      items: [
+        { key: "allContent", label: L("كل المحتوى", "All content"), icon: Package },
+        { key: "audiobooks", label: L("كتب صوتية", "Audiobooks"), icon: Trash2 },
+        { key: "ebooks", label: L("كتب إلكترونية", "E-books"), icon: BookOpen },
+        { key: "podcasts", label: L("بودكاست", "Podcasts"), icon: Podcast },
+        { key: "drama", label: L("دراما صوتية", "Audio drama"), icon: Theater },
+        { key: "microdrama", label: L("مايكرو دراما", "Micro drama"), icon: Mic },
+        { key: "magazines", label: L("مجلات", "Magazines"), icon: Newspaper },
+      ],
+    },
+    {
+      label: L("إدارة المحتوى", "Content ops"),
+      items: [
+        { key: "featured", label: L("المميز", "Featured"), icon: Star },
+        { key: "tracks", label: L("الفصول والحلقات", "Chapters & episodes"), icon: ListMusic },
+        { key: "media", label: L("الوسائط", "Media"), icon: Images },
+        { key: "live", label: L("البث المباشر", "Live streaming"), icon: Radio },
+        { key: "submissions", label: L("طلبات النشر", "Submissions"), icon: FileText },
+        { key: "notifications", label: L("الإشعارات", "Notifications"), icon: Bell },
+        { key: "users", label: L("المستخدمون", "Users"), icon: Users },
+        { key: "access", label: L("الوصول والأدوار", "Access & roles"), icon: KeyRound },
+      ],
+    },
+    {
+      label: L("التفاعلات والأنشطة", "Engagement"),
+      items: [
+        { key: "plans", label: L("الاشتراكات", "Subscriptions"), icon: Crown },
+        { key: "paymentMethods", label: L("وسائل الدفع", "Payment methods"), icon: Wallet },
+        { key: "challenges", label: L("التحديات", "Challenges"), icon: Trophy },
+      ],
+    },
+    {
+      label: L("الإعدادات", "Settings"),
+      items: [{ key: "settings", label: L("الإعدادات", "Settings"), icon: Settings2 }],
+    },
   ];
 
-  return (
-    <div className="min-h-screen bg-secondary/40">
-      <SEO title={`${L("لوحة الإدارة", "Admin")} | حكي`} />
-      {/* Admin header */}
-      <div className="border-b bg-background">
-        <div className="haki-container flex flex-wrap items-center justify-between gap-3 py-4">
-          <div className="flex items-center gap-3">
-            <Link to="/">
-              <Button variant="ghost" size="icon" aria-label="Back">
-                <ArrowLeft className="size-4" />
-              </Button>
-            </Link>
-            <div className="flex items-center gap-2.5">
-              <HakiLogo variant="outline" size={36} hideWordmark className="text-foreground" />
-              <div>
-                <h1 className="font-logo text-lg font-black leading-tight">لوحة تحكم حكي</h1>
-                <p className="text-xs text-muted-foreground" dir="ltr">{user?.email}</p>
-              </div>
-            </div>
-          </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={async () => {
-              await signOut();
-              navigate("/");
-            }}
-          >
-            {L("خروج", "Sign out")}
-          </Button>
-        </div>
-        {/* Tabs */}
-        <div className="haki-container">
-          <div className="no-scrollbar flex gap-1 overflow-x-auto pb-2">
-            {tabs.map((tb) => (
+
+
+  const sidebarNav = (
+    <nav className="flex flex-col gap-5">
+      {navGroups.map((g, gi) => (
+        <div key={gi}>
+          {g.label && (
+            <p className="mb-1.5 px-3 text-[11px] font-bold uppercase tracking-wide text-muted-foreground/70">
+              {g.label}
+            </p>
+          )}
+          <div className="space-y-0.5">
+            {g.items.map((tb) => (
               <button
                 key={tb.key}
                 type="button"
                 onClick={() => setTab(tb.key)}
                 className={cn(
-                  "flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold transition-colors",
+                  "flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-semibold transition-colors",
                   tab === tb.key
-                    ? "bg-primary text-white"
-                    : "text-muted-foreground hover:bg-muted",
+                    ? "bg-primary/10 text-primary"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground",
                 )}
               >
-                <tb.icon className="size-3.5" />
+                <tb.icon className="size-4" />
                 {tb.label}
               </button>
             ))}
           </div>
         </div>
+      ))}
+    </nav>
+  );
+
+  return (
+    <div className="min-h-screen bg-secondary/40">
+      <SEO title={`${L("لوحة الإدارة", "Admin")} | حكي`} />
+
+      {/* Mobile top bar */}
+      <div className="sticky top-0 z-40 border-b bg-background lg:hidden">
+        <div className="flex items-center justify-between gap-2 px-4 py-3">
+          <div className="flex items-center gap-2">
+            <HakiLogo variant="outline" size={32} hideWordmark className="text-foreground" />
+            <span className="font-logo text-base font-black">حكي Admin</span>
+          </div>
+          <Sheet open={mobileNav} onOpenChange={setMobileNav}>
+            <SheetTrigger asChild>
+              <Button variant="outline" size="icon" aria-label="القائمة">
+                <Menu className="size-4" />
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="right" className="w-72 overflow-y-auto">
+              <SheetHeader>
+                <SheetTitle className="text-start">{L("لوحة التحكم", "Dashboard")}</SheetTitle>
+              </SheetHeader>
+              <div
+                className="px-4 pb-6"
+                onClick={() => setMobileNav(false)}
+              >
+                {sidebarNav}
+                <div className="mt-6 space-y-2 border-t pt-4">
+                  <Link to="/" className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-muted-foreground hover:bg-muted">
+                    <Globe className="size-4" />
+                    {L("الموقع", "Site")}
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={async () => { await signOut(); navigate("/"); }}
+                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-destructive hover:bg-destructive/10"
+                  >
+                    <LogOut className="size-4" />
+                    {L("خروج", "Sign out")}
+                  </button>
+                </div>
+              </div>
+            </SheetContent>
+          </Sheet>
+        </div>
       </div>
 
-      <div className="haki-container py-8">
-        {tab === "overview" && <Overview lang={lang} L={L} />}
-        {tab === "audiobooks" && <ContentManager key="audiobooks" L={L} lang={lang} defaultType="audiobook" />}
-        {tab === "ebooks" && <ContentManager key="ebooks" L={L} lang={lang} defaultType="ebook" />}
-        {tab === "drama" && <ContentManager key="drama" L={L} lang={lang} defaultType="audio_drama" />}
-        {tab === "microdrama" && <ContentManager key="microdrama" L={L} lang={lang} defaultType="micro_drama" />}
-        {tab === "podcasts" && <ContentManager key="podcasts" L={L} lang={lang} defaultType="podcast" />}
-        {tab === "magazines" && <ContentManager key="magazines" L={L} lang={lang} defaultType="magazine" />}
-        {tab === "featured" && <ContentManager key="featured" L={L} lang={lang} featuredOnly />}
-        {tab === "tracks" && <TracksManager L={L} />}
-        {tab === "homepage" && <HomepageManager L={L} />}
-        {tab === "media" && <MediaLibrary L={L} />}
-        {tab === "authors" && <EntityManager key="authors" L={L} initialTable="authors" />}
-        {tab === "narrators" && <EntityManager key="narrators" L={L} initialTable="narrators" />}
-        {tab === "publishers" && <EntityManager key="publishers" L={L} initialTable="publishers" />}
-        {tab === "categories" && <EntityManager key="categories" L={L} initialTable="categories" />}
-        {tab === "plans" && <PlansManager L={L} lang={lang} />}
-        {tab === "challenges" && <ChallengesManager L={L} />}
-        {tab === "live" && <LiveManager L={L} />}
-        {tab === "submissions" && <SubmissionsManager L={L} />}
-        {tab === "users" && <UsersManager L={L} />}
-        {tab === "access" && <AccessManager L={L} />}
-        {tab === "settings" && <SettingsManager L={L} />}
+      <div className="mx-auto flex w-full max-w-[1440px]">
+        {/* Desktop sidebar */}
+        <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col overflow-y-auto border-e bg-background lg:flex">
+          <div className="flex items-center gap-2.5 px-4 py-4">
+            <HakiLogo variant="outline" size={36} hideWordmark className="text-foreground" />
+            <div>
+              <p className="font-logo text-base font-black leading-tight">حكي Admin</p>
+              <p className="truncate text-[11px] text-muted-foreground" dir="ltr">{user?.email}</p>
+            </div>
+          </div>
+          <div className="flex-1 overflow-y-auto px-2 pb-4">{sidebarNav}</div>
+          <div className="space-y-1 border-t px-2 py-3">
+            <Link to="/" className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-muted-foreground hover:bg-muted">
+              <Globe className="size-4" />
+              {L("الموقع", "Site")}
+            </Link>
+            <button
+              type="button"
+              onClick={async () => { await signOut(); navigate("/"); }}
+              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-destructive hover:bg-destructive/10"
+            >
+              <LogOut className="size-4" />
+              {L("خروج", "Sign out")}
+            </button>
+          </div>
+        </aside>
+
+        {/* Main content */}
+        <main className="min-w-0 flex-1 p-4 sm:p-6 lg:p-8">
+          {tab === "overview" && <Overview lang={lang} L={L} go={setTab} />}
+          {tab === "addContent" && <ContentManager key="add" L={L} lang={lang} defaultType="audiobook" autoOpen />}
+          {tab === "allContent" && <ContentManager key="all" L={L} lang={lang} defaultType="all" />}
+          {tab === "homepage" && <HomepageManager L={L} />}
+          {tab === "entities" && <EntityManager key="entities" L={L} />}
+          {tab === "audiobooks" && <ContentManager key="audiobooks" L={L} lang={lang} defaultType="audiobook" />}
+          {tab === "ebooks" && <ContentManager key="ebooks" L={L} lang={lang} defaultType="ebook" />}
+          {tab === "drama" && <ContentManager key="drama" L={L} lang={lang} defaultType="audio_drama" />}
+          {tab === "microdrama" && <ContentManager key="microdrama" L={L} lang={lang} defaultType="micro_drama" />}
+          {tab === "podcasts" && <ContentManager key="podcasts" L={L} lang={lang} defaultType="podcast" />}
+          {tab === "magazines" && <ContentManager key="magazines" L={L} lang={lang} defaultType="magazine" />}
+          {tab === "featured" && <ContentManager key="featured" L={L} lang={lang} featuredOnly />}
+          {tab === "tracks" && <TracksManager L={L} />}
+          {tab === "media" && <MediaLibrary L={L} />}
+          {tab === "plans" && <PlansManager L={L} lang={lang} />}
+          {tab === "challenges" && <ChallengesManager L={L} />}
+          {tab === "live" && <LiveManager L={L} />}
+          {tab === "submissions" && <SubmissionsManager L={L} />}
+          {tab === "notifications" && <NotificationsManager L={L} />}
+          {tab === "paymentMethods" && <PaymentMethodsManager L={L} />}
+          {tab === "users" && <UsersManager L={L} />}
+          {tab === "access" && <AccessManager L={L} />}
+          {tab === "settings" && <SettingsManager L={L} />}
+        </main>
       </div>
     </div>
   );
 }
 
+
 // ============ Overview ============
 
-function Overview({ lang, L }: { lang: string; L: (ar: string, en: string) => string }) {
+function Overview({
+  lang,
+  L,
+  go,
+}: {
+  lang: string;
+  L: (ar: string, en: string) => string;
+  go: (t: TabKey) => void;
+}) {
   const stats = useQuery(api.admin.stats, {});
+  const n = (v: number | undefined) =>
+    v === undefined ? "…" : v.toLocaleString(lang === "ar" ? "ar" : "en");
+
   const cards = [
     { label: L("المستخدمون", "Users"), value: stats?.users, icon: Users },
+    { label: L("المشتركون", "Subscribers"), value: stats?.subscribers, icon: Crown, accent: true },
     { label: L("المحتويات", "Content"), value: stats?.content, icon: Headphones },
-    { label: L("كتب صوتية", "Audiobooks"), value: stats?.audiobooks, icon: Headphones },
-    { label: L("كتب إلكترونية", "E-books"), value: stats?.ebooks, icon: BookOpen },
-    { label: L("دراما", "Drama"), value: stats?.dramas, icon: Mic },
-    { label: L("بودكاست", "Podcasts"), value: stats?.podcasts, icon: Mic },
-    { label: L("المشتركون", "Subscribers"), value: stats?.subscribers, icon: Crown },
-    { label: L("مرات الاستماع", "Total plays"), value: stats?.totalPlays, icon: BarChart3 },
-    { label: L("ساعات الاستماع (تقديري)", "Est. listen hours"), value: stats?.totalListenHours, icon: BarChart3 },
+    { label: L("طبقات النشر", "Publishing layers"), value: stats?.publishingEntities, icon: Building2 },
   ];
+
+  const quick = [
+    { tab: "addContent" as TabKey, label: L("المحتوى", "Content"), desc: L("إضافة المحتوى والتعديل", "Add & edit content"), icon: CirclePlus },
+    { tab: "challenges" as TabKey, label: L("التفاعلات والأنشطة", "Engagement"), desc: L("بث مباشر وتحديات", "Live & challenges"), icon: Trophy },
+    { tab: "users" as TabKey, label: L("المستخدمون", "Users"), desc: L("إدارة المستخدمين", "Manage users"), icon: Users },
+    { tab: "entities" as TabKey, label: L("طبقات النشر", "Publishing layers"), desc: L("مؤلف، دار نشر، راوي", "Author, publisher, narrator"), icon: Building2 },
+    { tab: "submissions" as TabKey, label: L("طلبات النشر", "Submissions"), desc: L("متابعة الطلبات", "Track requests"), icon: FileText },
+  ];
+
+  const typeLabel: Record<string, string> = {
+    audiobook: "audiobook",
+    ebook: "ebook",
+    podcast: "podcast",
+    audio_drama: "drama",
+    micro_drama: "micro",
+    magazine: "magazine",
+    live: "live",
+  };
+
   return (
     <div>
-      <h2 className="text-xl font-black">{L("إحصائيات المنصة", "Platform statistics")}</h2>
-      <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+      <h1 className="text-2xl font-black">{L("لوحة التحكم", "Dashboard")}</h1>
+
+      {/* Stat cards */}
+      <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
         {cards.map((c) => (
-          <div key={c.label} className="rounded-2xl border bg-card p-4 card-shadow">
-            <c.icon className="size-4 text-primary" />
-            <p className="mt-2 text-2xl font-black tabular-nums">
-              {c.value === undefined ? "…" : c.value.toLocaleString(lang === "ar" ? "ar" : "en")}
+          <div
+            key={c.label}
+            className={cn(
+              "rounded-2xl border bg-card p-5 text-center card-shadow",
+              c.accent && "border-primary/40",
+            )}
+          >
+            <p className={cn("text-2xl font-black tabular-nums", c.accent && "text-primary")}>
+              {n(c.value)}
             </p>
-            <p className="mt-0.5 text-xs font-semibold text-muted-foreground">{c.label}</p>
+            <p className="mt-1 text-xs font-semibold text-muted-foreground">{c.label}</p>
           </div>
         ))}
       </div>
+
+      {/* Welcome + quick access */}
+      <section className="mt-8 rounded-3xl border bg-card p-6 card-shadow">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-black">{L("مرحبًا، مدير حكي 👋", "Welcome, HAKI admin 👋")}</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {L("إدارة منصة حكي من مكان واحد", "Manage the whole HAKI platform from one place")}
+            </p>
+          </div>
+        </div>
+        <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+          {quick.map((q) => (
+            <button
+              key={q.tab}
+              type="button"
+              onClick={() => go(q.tab)}
+              className="group flex flex-col items-center gap-2 rounded-2xl border bg-secondary/50 p-4 text-center transition-all hover:card-shadow-hover"
+            >
+              <span className="flex size-10 items-center justify-center rounded-xl bg-background transition-transform group-hover:scale-110">
+                <q.icon className="size-5 text-primary" />
+              </span>
+              <span className="text-sm font-extrabold">{q.label}</span>
+              <span className="text-[11px] leading-tight text-muted-foreground">{q.desc}</span>
+            </button>
+          ))}
+          <Link
+            to="/"
+            className="group flex flex-col items-center gap-2 rounded-2xl border bg-secondary/50 p-4 text-center transition-all hover:card-shadow-hover"
+          >
+            <span className="flex size-10 items-center justify-center rounded-xl bg-background transition-transform group-hover:scale-110">
+              <Globe className="size-5 text-primary" />
+            </span>
+            <span className="text-sm font-extrabold">{L("عرض الموقع", "View site")}</span>
+            <span className="text-[11px] leading-tight text-muted-foreground">
+              {L("زيارة الموقع", "Visit the platform")}
+            </span>
+          </Link>
+        </div>
+      </section>
+
+      {/* Latest content */}
+      <section className="mt-8 rounded-3xl border bg-card p-6 card-shadow">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-black">{L("آخر المحتوى", "Latest content")}</h2>
+          <button
+            type="button"
+            onClick={() => go("addContent")}
+            className="text-sm font-bold text-primary hover:underline"
+          >
+            {L("إضافة محتوى", "Add content")}
+          </button>
+        </div>
+        {stats === undefined ? (
+          <div className="mt-4 space-y-2">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <Skeleton key={i} className="h-12 rounded-xl" />
+            ))}
+          </div>
+        ) : (stats.recentContent ?? []).length === 0 ? (
+          <p className="mt-6 text-center text-sm text-muted-foreground">
+            {L("لا يوجد محتوى بعد", "No content yet")}
+          </p>
+        ) : (
+          <div className="mt-4 overflow-x-auto">
+            <table className="w-full min-w-[560px] text-sm">
+              <thead>
+                <tr className="border-b text-start text-xs text-muted-foreground">
+                  <th className="p-3 text-start font-semibold">#</th>
+                  <th className="p-3 text-start font-semibold">{L("العنوان", "Title")}</th>
+                  <th className="p-3 text-start font-semibold">{L("المؤلف", "Author")}</th>
+                  <th className="p-3 text-start font-semibold">{L("النوع", "Type")}</th>
+                  <th className="p-3 text-start font-semibold">{L("التاريخ", "Date")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(stats.recentContent ?? []).map((row: any, i: number) => (
+                  <tr key={row._id} className="border-b last:border-0">
+                    <td className="p-3 tabular-nums text-muted-foreground">{i + 1}</td>
+                    <td className="max-w-[260px] truncate p-3 font-semibold">{row.title}</td>
+                    <td className="p-3 text-muted-foreground">{row.authorName || "—"}</td>
+                    <td className="p-3">
+                      <span className="rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-bold text-primary">
+                        {typeLabel[row.contentType] ?? row.contentType}
+                      </span>
+                    </td>
+                    <td className="p-3 tabular-nums text-muted-foreground" dir="ltr">
+                      {new Date(row.createdAt).toISOString().slice(0, 10)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
     </div>
   );
 }
@@ -281,7 +518,7 @@ export function SeedPanel({ L }: { L: (ar: string, en: string) => string }) {
 
 // ============ Content manager ============
 
-function ContentManager({ L, lang, defaultType, featuredOnly }: { L: (ar: string, en: string) => string; lang: string; defaultType?: string; featuredOnly?: boolean }) {
+function ContentManager({ L, lang, defaultType, featuredOnly, autoOpen }: { L: (ar: string, en: string) => string; lang: string; defaultType?: string; featuredOnly?: boolean; autoOpen?: boolean }) {
   const items = useQuery(api.content.listAllForAdmin, {});
   const categories = useQuery(api.content.listCategories, {});
   const authors = useQuery(api.content.listAuthors, {});
@@ -297,6 +534,30 @@ function ContentManager({ L, lang, defaultType, featuredOnly }: { L: (ar: string
   const [editing, setEditing] = useState<any>(null);
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  // "Add content" tab: open the editor immediately on mount.
+  useEffect(() => {
+    if (autoOpen && !editing) {
+      setEditing({
+        title: "",
+        slug: "",
+        description: "",
+        contentType: defaultType ?? "audiobook",
+        authorId: "",
+        narratorId: "",
+        publisherId: "",
+        coverImage: "",
+        audioUrl: "",
+        status: "published",
+        isFeatured: false,
+        isTrending: false,
+        isNew: true,
+        categoryIds: [],
+      });
+      setOpen(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoOpen]);
 
   const empty = {
     title: "",

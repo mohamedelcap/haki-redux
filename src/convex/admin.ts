@@ -3,6 +3,7 @@ import { query, mutation } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import { requireAdmin, requireStaff, requireSuperAdmin } from "./lib";
 import { challengeStatusValidator } from "./schema";
+import { enrichContent } from "./lib";
 
 // ---------------- Statistics ----------------
 
@@ -10,11 +11,15 @@ export const stats = query({
   args: {},
   handler: async (ctx) => {
     await requireStaff(ctx);
-    const [content, users, plans, subs] = await Promise.all([
+    const [content, users, plans, subs, authors, narrators, publishers, categories] = await Promise.all([
       ctx.db.query("content").collect(),
       ctx.db.query("users").collect(),
       ctx.db.query("subscription_plans").collect(),
       ctx.db.query("subscriptions").collect(),
+      ctx.db.query("authors").collect(),
+      ctx.db.query("narrators").collect(),
+      ctx.db.query("publishers").collect(),
+      ctx.db.query("categories").collect(),
     ]);
     const audiobooks = content.filter((c) => c.contentType === "audiobook").length;
     const ebooks = content.filter((c) => c.contentType === "ebook").length;
@@ -26,6 +31,19 @@ export const stats = query({
     const subscribers = subs.filter((s) => s.status === "active").length;
     const totalPlays = content.reduce((acc, c) => acc + c.playCount, 0);
     const totalListenSeconds = content.reduce((acc, c) => acc + c.playCount * c.duration, 0);
+
+    // Latest 8 content rows for the dashboard table.
+    content.sort((a, b) => b.createdAt - a.createdAt);
+    const recentRows = content.slice(0, 8);
+    const enriched = await enrichContent(ctx, recentRows);
+    const recentContent = enriched.map((c: any) => ({
+      _id: c._id,
+      title: c.title,
+      contentType: c.contentType,
+      createdAt: recentRows.find((r) => r._id === c._id)?.createdAt ?? 0,
+      authorName: c.authorName ?? null,
+    }));
+
     return {
       users: users.length,
       content: content.length,
@@ -37,6 +55,8 @@ export const stats = query({
       subscribers,
       totalPlays,
       totalListenHours: Math.round(totalListenSeconds / 3600),
+      publishingEntities: authors.length + narrators.length + publishers.length + categories.length,
+      recentContent,
     };
   },
 });
