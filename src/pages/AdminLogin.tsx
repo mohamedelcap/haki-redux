@@ -20,10 +20,16 @@ import { toast } from "sonner";
 
 function AdminLoginInner() {
   const { lang } = useLang();
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, user, signOut } = useAuth();
   const { signIn } = useAuthActions();
   const navigate = useNavigate();
   const L = (ar: string, en: string) => (lang === "ar" ? ar : en);
+
+  const isStaff =
+    user?.role === "super_admin" ||
+    user?.role === "admin" ||
+    user?.role === "publisher" ||
+    user?.role === "author";
 
   // Check whether the admin account has been minted yet.
   const adminStatus = useQuery(api.adminAuthStore.adminStatus, {});
@@ -35,12 +41,49 @@ function AdminLoginInner() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Already signed in as the admin? Straight to the dashboard.
+  // Already signed in as staff? Straight to the dashboard.
   useEffect(() => {
-    if (!isLoading && isAuthenticated) {
+    if (!isLoading && isAuthenticated && isStaff) {
       navigate("/admin", { replace: true });
     }
-  }, [isAuthenticated, isLoading, navigate]);
+  }, [isAuthenticated, isLoading, isStaff, navigate]);
+
+  // Signed in as a REGULAR user: offer to switch accounts instead of a
+  // redirect loop to the blocked dashboard.
+  if (!isLoading && isAuthenticated && !isStaff) {
+    return (
+      <div className="hero-gradient flex min-h-screen items-center justify-center px-4">
+        <div className="w-full max-w-sm rounded-3xl border bg-card p-8 text-center card-shadow">
+          <div className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-muted">
+            <UserRound className="size-7 text-muted-foreground" />
+          </div>
+          <h1 className="mt-4 text-xl font-black">
+            {L("أنت مسجّل بحساب عادي", "You are signed in as a regular user")}
+          </h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            {L(
+              "هذه البوابة لفريق الإدارة فقط. سجّل الخروج ثم ادخل بحساب المدير.",
+              "This gate is for administrators only. Sign out, then sign in with the admin account.",
+            )}
+          </p>
+          <div className="mt-6 flex flex-col gap-2">
+            <Button
+              className="font-bold"
+              onClick={async () => {
+                await signOut();
+                toast.success(L("تم تسجيل الخروج — أدخل بيانات المدير", "Signed out — enter admin credentials"));
+              }}
+            >
+              {L("تسجيل الخروج وتغيير الحساب", "Sign out & switch account")}
+            </Button>
+            <Button variant="ghost" onClick={() => navigate("/")}>
+              {L("العودة للموقع", "Back to site")}
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -64,8 +107,15 @@ function AdminLoginInner() {
       navigate("/admin", { replace: true });
     } catch (err: any) {
       const raw = err?.message ?? "";
+      // Uniform message for ALL credential failures (wrong user, wrong
+      // password / InvalidSecret, unknown account) — no field enumeration.
+      const invalid =
+        raw.includes("InvalidSecret") ||
+        raw.includes("InvalidAccountId") ||
+        raw.includes("Incorrect password") ||
+        raw.includes("بيانات الدخول غير صحيحة");
       setError(
-        raw.includes("Incorrect password") || raw.includes("InvalidAccountId")
+        invalid
           ? L("بيانات الدخول غير صحيحة", "Invalid credentials")
           : raw || L("تعذّر تسجيل الدخول", "Sign-in failed"),
       );
