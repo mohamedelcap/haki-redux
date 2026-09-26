@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { query, mutation } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { requireAdmin, requireContentAccess, requireSuperAdmin, isAdminRole } from "./lib";
 import {
   contentTypeValidator,
@@ -206,10 +207,9 @@ export const upsertEpisode = mutation({
 
     // New episode on a podcast → notify followers of the show.
     if (parent && parent.contentType === "podcast") {
-      await ctx.runMutation(api.podcasts.notifyFollowersOfNewEpisode, {
+      await ctx.runMutation(internal.podcastFollows.notifyFollowersInternal, {
         contentId: args.contentId,
         episodeTitle: args.title,
-        showTitle: parent.title,
       });
     }
     return episodeId;
