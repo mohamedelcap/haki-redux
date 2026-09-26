@@ -8,6 +8,7 @@ import { MediaLibrary } from "@/pages/admin/MediaLibrary";
 import { NotificationsManager } from "@/pages/admin/NotificationsManager";
 import { PaymentMethodsManager } from "@/pages/admin/PaymentMethodsManager";
 import { RoyaltiesManager } from "@/pages/admin/RoyaltiesManager";
+import { BookImporterManager } from "@/pages/admin/BookImporterManager";
 import { SEO } from "@/components/SEO";
 import { HakiLogo } from "@/components/HakiLogo";
 import { LOGO_COVER } from "@/lib/logoAsset";
@@ -165,6 +166,10 @@ function AdminInner() {
       ],
     },
     {
+      label: L("المكتبة", "Library"),
+      items: [{ key: "bookImporter", label: L("مستورد الكتب", "Book Importer"), icon: BookOpen }],
+    },
+    {
       label: L("التفاعلات والأنشطة", "Engagement"),
       items: [
         { key: "plans", label: L("الاشتراكات", "Subscriptions"), icon: Crown },
@@ -309,6 +314,7 @@ function AdminInner() {
           {tab === "notifications" && <NotificationsManager L={L} />}
           {tab === "paymentMethods" && <PaymentMethodsManager L={L} />}
           {tab === "royalties" && <RoyaltiesManager L={L} />}
+          {tab === "bookImporter" && <BookImporterManager L={L} />}
           {tab === "users" && <UsersManager L={L} />}
           {tab === "access" && <AccessManager L={L} />}
           {tab === "settings" && <SettingsManager L={L} />}

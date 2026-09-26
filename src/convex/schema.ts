@@ -129,6 +129,33 @@ const schema = defineSchema(
       audioUrl: v.optional(v.string()),
       // e-book file (PDF/EPUB) served from storage
       fileUrl: v.optional(v.string()),
+      // ---- Import provenance (Book Importer) ----
+      /** Source name, e.g. "Internet Archive". */
+      sourceName: v.optional(v.string()),
+      /** Original URL at the source. */
+      sourceUrl: v.optional(v.string()),
+      /** External identifier at the source, e.g. IA identifier. */
+      externalId: v.optional(v.string()),
+      /** Public-domain status reported by the source or the importer. */
+      rightsStatus: v.optional(v.union(
+        v.literal("public_domain"),
+        v.literal("copyrighted"),
+        v.literal("unknown"),
+        v.literal("requires_review"),
+      )),
+      /** Raw rights/license info string from the source. */
+      rightsInfo: v.optional(v.string()),
+      /** Available ebook formats detected, e.g. ["pdf","epub"]. */
+      fileFormats: v.optional(v.array(v.string())),
+      subtitle: v.optional(v.string()),
+      originalYear: v.optional(v.number()),
+      pageCount: v.optional(v.number()),
+      fileSize: v.optional(v.number()),
+      isbn: v.optional(v.string()),
+      edition: v.optional(v.string()),
+      keywords: v.optional(v.array(v.string())),
+      importedAt: v.optional(v.number()),
+      importMethod: v.optional(v.string()),
       createdAt: v.number(),
       updatedAt: v.number(),
     })
@@ -386,6 +413,78 @@ const schema = defineSchema(
       key: v.string(),
       value: v.string(),
     }).index("by_key", ["key"]),
+
+    // ---- Book Importer ----
+    /** An import run (bulk or single). */
+    import_jobs: defineTable({
+      source: v.string(),
+      /** search | collection | ids | single */
+      mode: v.string(),
+      /** Original input: URL or newline-separated identifiers/URLs. */
+      input: v.string(),
+      status: v.union(
+        v.literal("pending"),
+        v.literal("processing"),
+        v.literal("paused"),
+        v.literal("completed"),
+        v.literal("cancelled"),
+      ),
+      total: v.number(),
+      processed: v.number(),
+      succeeded: v.number(),
+      failed: v.number(),
+      /** draft | auto (publish only verified public-domain) */
+      publishMode: v.string(),
+      allowedFormats: v.optional(v.array(v.string())),
+      createdBy: v.optional(v.id("users")),
+      createdAt: v.number(),
+      updatedAt: v.number(),
+    }),
+
+    /** One queued book candidate. */
+    import_items: defineTable({
+      jobId: v.id("import_jobs"),
+      source: v.string(),
+      externalId: v.string(),
+      sourceUrl: v.optional(v.string()),
+      status: v.union(
+        v.literal("pending"),
+        v.literal("processing"),
+        v.literal("imported"),
+        v.literal("published"),
+        v.literal("draft"),
+        v.literal("requires_review"),
+        v.literal("failed"),
+        v.literal("skipped"),
+        v.literal("duplicate"),
+      ),
+      /** Full extracted metadata snapshot (JSON). */
+      metadata: v.optional(v.string()),
+      title: v.optional(v.string()),
+      author: v.optional(v.string()),
+      year: v.optional(v.number()),
+      language: v.optional(v.string()),
+      rightsStatus: v.optional(v.string()),
+      formats: v.optional(v.array(v.string())),
+      coverUrl: v.optional(v.string()),
+      fileUrls: v.optional(v.string()),
+      error: v.optional(v.string()),
+      /** Content id created (when imported). */
+      contentId: v.optional(v.id("content")),
+      /** Existing content id when a duplicate was found. */
+      duplicateOf: v.optional(v.id("content")),
+      importedBy: v.optional(v.id("users")),
+      createdAt: v.number(),
+      updatedAt: v.number(),
+    }).index("by_job", ["jobId"]).index("by_external", ["source", "externalId"]),
+
+    /** Admin-editable mapping from source subjects → internal category ids. */
+    import_category_mappings: defineTable({
+      source: v.string(),
+      /** Lowercased subject keyword from the source. */
+      subject: v.string(),
+      categoryId: v.id("categories"),
+    }).index("by_source_subject", ["source", "subject"]),
   },
   {
     schemaValidation: false,
