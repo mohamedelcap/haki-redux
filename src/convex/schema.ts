@@ -485,6 +485,28 @@ const schema = defineSchema(
       subject: v.string(),
       categoryId: v.id("categories"),
     }).index("by_source_subject", ["source", "subject"]),
+
+    /** Scheduled (background) imports configured by admins. */
+    import_schedules: defineTable({
+      name: v.string(),
+      source: v.string(),
+      /** collection | search */
+      mode: v.string(),
+      input: v.string(),
+      /** Books per run. */
+      limitPerRun: v.number(),
+      /** "daily" | "weekly" — frequency label (runs are batched by cron ticks). */
+      frequency: v.string(),
+      /** draft | auto */
+      publishMode: v.string(),
+      allowedFormats: v.optional(v.array(v.string())),
+      minRights: v.string(),
+      enabled: v.boolean(),
+      lastRunAt: v.optional(v.number()),
+      createdBy: v.optional(v.id("users")),
+      createdAt: v.number(),
+      updatedAt: v.number(),
+    }).index("by_enabled", ["enabled"]),
   },
   {
     schemaValidation: false,

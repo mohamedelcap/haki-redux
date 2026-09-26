@@ -98,3 +98,63 @@ export const rebrandImagesInternal = internalMutation({
     return { ok: true, covers, avatars, publisherLogos: logos, posters };
   },
 });
+
+/**
+ * TEMP: test-only helper used by CLI verification of the book importer.
+ * Creates a job + one pending item for a given IA identifier.
+ */
+export const bookImporterTestInternal: any = internalMutation({
+  args: { iaId: v.string(), publishMode: v.optional(v.string()) },
+  handler: async (ctx: any, args: any) => {
+    const now = Date.now();
+    const jobId = await ctx.db.insert("import_jobs", {
+      source: "internet_archive",
+      mode: "single",
+      input: "cli-test",
+      status: "processing",
+      total: 1,
+      processed: 0,
+      succeeded: 0,
+      failed: 0,
+      publishMode: args.publishMode ?? "auto",
+      createdAt: now,
+      updatedAt: now,
+    });
+    await ctx.db.insert("import_items", {
+      jobId,
+      source: "internet_archive",
+      externalId: args.iaId,
+      status: "pending",
+      createdAt: now,
+      updatedAt: now,
+    });
+    return { jobId };
+  },
+});
+
+/** TEMP: read import items of a job for CLI verification. */
+export const bookImporterReadItemInternal: any = internalMutation({
+  args: { jobId: v.id("import_jobs") },
+  handler: async (ctx: any, args: any) => {
+    const rows = await ctx.db
+      .query("import_items")
+      .withIndex("by_job", (q: any) => q.eq("jobId", args.jobId))
+      .collect();
+    const out = rows.map((r: any) => ({
+      externalId: r.externalId,
+      status: r.status,
+      title: r.title,
+      author: r.author,
+      year: r.year,
+      language: r.language,
+      rightsStatus: r.rightsStatus,
+      formats: r.formats,
+      coverStored: (r.coverUrl ?? "").includes("cloud.convex") ? "stored" : (r.coverUrl ?? "").slice(0, 50),
+      error: r.error,
+    }));
+    // cleanup job + items to keep the db clean after the test
+    for (const r of rows) await ctx.db.delete(r._id);
+    await ctx.db.delete(args.jobId);
+    return out;
+  },
+});

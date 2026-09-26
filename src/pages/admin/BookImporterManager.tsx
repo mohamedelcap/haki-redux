@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useAction, useMutation, useQuery } from "convex/react";
+import { Switch } from "@/components/ui/switch";
 import {
   BookOpen,
   Clock,
@@ -110,7 +111,18 @@ export function BookImporterManager({
       {tab === "history" && <HistoryView L={L} />}
       {tab === "sources" && <SourcesView L={L} />}
       {tab === "mapping" && <MappingView L={L} />}
-      {tab === "settings" && <SettingsView L={L} />}
+      {tab === "settings" && (
+        <div className="space-y-8">
+          <SettingsView L={L} />
+          <div>
+            <h3 className="mb-3 flex items-center gap-2 text-base font-black">
+              <Clock className="size-4 text-primary" />
+              {L("الاستيراد المجدول", "Scheduled imports")}
+            </h3>
+            <SchedulesView L={L} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -232,6 +244,8 @@ function QueueView({
     jobId ? { jobId: jobId as never } : "skip",
   );
   const setJobStatus = useMutation(api.bookImporter.setJobStatus);
+  const cancelJob = useMutation(api.bookImporter.cancelJob);
+  const deleteJob = useMutation(api.bookImporter.deleteJob);
   const skipItem = useMutation(api.bookImporter.skipItem);
   const retryItem = useMutation(api.bookImporter.retryItem);
   const publishItem = useMutation(api.bookImporter.publishItem);
@@ -250,7 +264,7 @@ function QueueView({
       for (let i = 0; i < 3; i++) {
         const pending = (items ?? []).find((it: any) => it.status === "pending");
         if (!pending) break;
-        await fetchAction({ itemId: pending._id });
+        await fetchAction({ itemId: pending._id, publishMode: job.publishMode });
       }
     } catch (e: any) {
       toast.error(e.message);
@@ -285,7 +299,16 @@ function QueueView({
                 <Pause className="size-4" />
                 {L("إيقاف مؤقت", "Pause")}
               </Button>
+              <Button size="sm" variant="ghost" className="text-destructive" onClick={() => cancelJob({ id: jobId })}>
+                <X className="size-4" />
+                {L("إلغاء", "Cancel")}
+              </Button>
             </>
+          )}
+          {job && (job.status === "completed" || job.status === "cancelled") && (
+            <Button size="sm" variant="ghost" className="text-destructive" onClick={() => { deleteJob({ id: jobId }); setSelected(null); }}>
+              {L("حذف المهمة", "Delete job")}
+            </Button>
           )}
           {job && job.status === "paused" && (
             <Button size="sm" className="font-bold" onClick={() => setJobStatus({ id: jobId, status: "processing" })}>
@@ -554,21 +577,22 @@ function HistoryView({ L }: { L: (ar: string, en: string) => string }) {
   return (
     <div className="overflow-hidden rounded-2xl border bg-card">
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[640px] text-sm">
+        <table className="w-full min-w-[760px] text-sm">
           <thead>
             <tr className="border-b bg-secondary/60 text-xs text-muted-foreground">
               <th className="p-3 text-start font-semibold">{L("الكتاب", "Book")}</th>
               <th className="p-3 text-start font-semibold">{L("المصدر", "Source")}</th>
               <th className="p-3 text-start font-semibold">{L("الحالة", "Status")}</th>
+              <th className="p-3 text-start font-semibold">{L("بواسطة", "By")}</th>
               <th className="p-3 text-start font-semibold">{L("التاريخ", "Date")}</th>
               <th className="p-3 text-start font-semibold">{L("خطأ", "Error")}</th>
             </tr>
           </thead>
           <tbody>
             {history === undefined ? (
-              <tr><td colSpan={5} className="p-6 text-center"><Loader2 className="mx-auto size-5 animate-spin text-muted-foreground" /></td></tr>
+              <tr><td colSpan={6} className="p-6 text-center"><Loader2 className="mx-auto size-5 animate-spin text-muted-foreground" /></td></tr>
             ) : history.length === 0 ? (
-              <tr><td colSpan={5} className="p-8 text-center text-muted-foreground">{L("لا سجل بعد", "No history yet")}</td></tr>
+              <tr><td colSpan={6} className="p-8 text-center text-muted-foreground">{L("لا سجل بعد", "No history yet")}</td></tr>
             ) : (
               history.map((h: any) => {
                 const badge = STATUS_BADGE[h.status] ?? STATUS_BADGE.pending;
@@ -577,6 +601,7 @@ function HistoryView({ L }: { L: (ar: string, en: string) => string }) {
                     <td className="max-w-[220px] truncate p-3 font-semibold">{h.title ?? h.externalId}</td>
                     <td className="p-3 text-muted-foreground">{h.source}</td>
                     <td className="p-3"><Badge className={badge.cls}>{L(badge.ar, h.status)}</Badge></td>
+                    <td className="p-3 text-muted-foreground">{h.importedByName ?? "—"}</td>
                     <td className="p-3 tabular-nums text-muted-foreground" dir="ltr">
                       {new Date(h.createdAt).toISOString().slice(0, 10)}
                     </td>
@@ -784,5 +809,120 @@ function SettingsView({ L }: { L: (ar: string, en: string) => string }) {
       </div>
       <Button type="submit" className="font-bold">{L("حفظ", "Save")}</Button>
     </form>
+  );
+}
+
+// ---------------- 6b. Scheduled imports ----------------
+
+function SchedulesView({ L }: { L: (ar: string, en: string) => string }) {
+  const schedules = useQuery(api.bookImporter.listSchedules, {});
+  const createSchedule = useMutation(api.bookImporter.createSchedule);
+  const setEnabled = useMutation(api.bookImporter.setScheduleEnabled);
+  const removeSchedule = useMutation(api.bookImporter.deleteSchedule);
+  const [name, setName] = useState("");
+  const [input, setInput] = useState("");
+  const [limitPerRun, setLimitPerRun] = useState("20");
+  const [frequency, setFrequency] = useState("daily");
+  const [publishMode, setPublishMode] = useState("draft");
+  const [busy, setBusy] = useState(false);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      await createSchedule({
+        name,
+        source: "internet_archive",
+        mode: "collection",
+        input,
+        limitPerRun: Number(limitPerRun) || 20,
+        frequency,
+        publishMode,
+        minRights: publishMode === "auto" ? "public_domain" : "requires_review",
+      });
+      toast.success(L("تم إنشاء الجدولة", "Schedule created"));
+      setName("");
+      setInput("");
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <form onSubmit={submit} className="grid gap-3 rounded-2xl border bg-card p-5 sm:grid-cols-2">
+        <div className="space-y-1.5">
+          <Label>{L("اسم الجدولة", "Schedule name")}</Label>
+          <Input value={name} onChange={(e) => setName(e.target.value)} required />
+        </div>
+        <div className="space-y-1.5">
+          <Label>{L("رابط المجموعة (IA)", "Collection URL (IA)")}</Label>
+          <Input value={input} onChange={(e) => setInput(e.target.value)} required dir="ltr" placeholder="https://archive.org/details/arabic_books" />
+        </div>
+        <div className="space-y-1.5">
+          <Label>{L("عدد الكتب لكل تشغيل", "Books per run")}</Label>
+          <Input type="number" min={1} max={200} value={limitPerRun} onChange={(e) => setLimitPerRun(e.target.value)} dir="ltr" />
+        </div>
+        <div className="space-y-1.5">
+          <Label>{L("التكرار", "Frequency")}</Label>
+          <Select value={frequency} onValueChange={setFrequency}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="daily">{L("يوميًا", "Daily")}</SelectItem>
+              <SelectItem value="weekly">{L("أسبوعيًا", "Weekly")}</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1.5">
+          <Label>{L("سياسة النشر", "Publish policy")}</Label>
+          <Select value={publishMode} onValueChange={setPublishMode}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="draft">{L("مسودات", "Drafts")}</SelectItem>
+              <SelectItem value="auto">{L("نشر تلقائي (ملك عام موثق فقط)", "Auto (verified PD only)")}</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex items-end">
+          <Button type="submit" className="font-bold" disabled={busy}>
+            {busy ? <Loader2 className="size-4 animate-spin" /> : <Clock className="size-4" />}
+            {L("إنشاء جدولة", "Create schedule")}
+          </Button>
+        </div>
+      </form>
+
+      <div className="space-y-2">
+        {schedules === undefined ? (
+          <Skeleton className="h-24 rounded-2xl" />
+        ) : schedules.length === 0 ? (
+          <p className="rounded-2xl border bg-card p-6 text-center text-sm text-muted-foreground">
+            {L(
+              "لا جداول بعد — تعمل الجدولة خلفيًا كل 6 ساعات دون حجب اللوحة",
+              "No schedules yet — runs in the background every 6h without blocking the dashboard",
+            )}
+          </p>
+        ) : (
+          schedules.map((s: any) => (
+            <div key={s._id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border bg-card px-4 py-3">
+              <div>
+                <p className="text-sm font-bold">{s.name}</p>
+                <p className="truncate text-xs text-muted-foreground" dir="ltr">{s.input}</p>
+              </div>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <Badge variant="secondary">{s.frequency === "weekly" ? L("أسبوعي", "Weekly") : L("يومي", "Daily")}</Badge>
+                <Badge variant="secondary">{s.limitPerRun} {L("كتاب/تشغيل", "books/run")}</Badge>
+                <Badge className={s.publishMode === "auto" ? "bg-green-600 text-white" : "bg-amber-500 text-white"}>
+                  {s.publishMode === "auto" ? L("نشر تلقائي", "Auto") : L("مسودات", "Drafts")}
+                </Badge>
+                <Switch checked={s.enabled} onCheckedChange={(v) => setEnabled({ id: s._id, enabled: v })} />
+                <Button variant="ghost" size="icon" className="text-destructive" onClick={() => removeSchedule({ id: s._id })}>×</Button>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
   );
 }

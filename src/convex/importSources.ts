@@ -96,6 +96,50 @@ export async function fetchWithLimit(url: string, timeoutMs = 15000): Promise<an
   }
 }
 
+/** Binary fetch (covers) with the same safety limits. */
+export async function fetchBlobWithLimit(
+  url: string,
+  timeoutMs = 20000,
+): Promise<{ buf: ArrayBuffer; type: string }> {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, {
+      signal: ctrl.signal,
+      headers: { "User-Agent": "HAKI-Importer/1.0 (educational public-domain import)" },
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status} من المصدر`);
+    return { buf: await res.arrayBuffer(), type: res.headers.get("content-type") ?? "image/jpeg" };
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+/**
+ * Sanitize imported metadata: strip HTML/scripts, decode entities, remove
+ * control chars, collapse whitespace. Applied to every text field before it
+ * ever reaches the database (anti-XSS for imported descriptions).
+ */
+export function sanitizeText(v: any, maxLen = 4000): string {
+  if (v == null) return "";
+  let s = Array.isArray(v) ? v.map(String).join(" ") : String(v);
+  s = s
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<iframe[\s\S]*?<\/iframe>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;|&apos;/g, "'")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  return s.slice(0, maxLen);
+}
+
 // ---------------- Rights classification ----------------
 
 /**
@@ -139,7 +183,7 @@ function toYear(v: any): number | undefined {
 
 /** Normalize an IA search doc / metadata into our common shape. */
 export function normalizeDoc(doc: any, source: SourceConfig) {
-  const id = firstOrJoin(doc?.[source.idField]) ?? "";
+  const id = sanitizeText(doc?.[source.idField], 120);
   const rights = classifyRights(doc);
   const subjectsRaw = doc?.subject;
   const subjects: string[] = Array.isArray(subjectsRaw)
@@ -153,25 +197,28 @@ export function normalizeDoc(doc: any, source: SourceConfig) {
 
   return {
     externalId: id,
-    sourceName: source.name,
+    sourceName: sanitizeText(source.name, 120),
     sourceUrl: id ? `https://archive.org/details/${id}` : undefined,
-    title: firstOrJoin(doc?.title) ?? "بدون عنوان",
-    subtitle: firstOrJoin(doc?.subtitle),
-    author: firstOrJoin(doc?.creator),
+    title: sanitizeText(doc?.title, 300) || "بدون عنوان",
+    subtitle: sanitizeText(doc?.subtitle, 300) || undefined,
+    author: sanitizeText(doc?.creator, 200) || undefined,
     authorBio: undefined as string | undefined,
-    pubDate: firstOrJoin(doc?.date),
+    pubDate: sanitizeText(doc?.date, 60) || undefined,
     originalYear: year,
-    language: firstOrJoin(doc?.language) ?? "en",
-    publisher: firstOrJoin(doc?.publisher),
-    description: firstOrJoin(doc?.description) ?? "",
-    subjects: subjects.map((s) => s.trim()).filter(Boolean).slice(0, 12),
-    keywords: subjects.slice(0, 12),
-    isbn: firstOrJoin(doc?.isbn),
-    edition: firstOrJoin(doc?.edition),
+    language: sanitizeText(doc?.language, 20) || "en",
+    publisher: sanitizeText(doc?.publisher, 200) || undefined,
+    description: sanitizeText(doc?.description),
+    subjects: subjects
+      .map((s) => sanitizeText(s, 80))
+      .filter(Boolean)
+      .slice(0, 12),
+    keywords: subjects.slice(0, 12).map((s) => sanitizeText(s, 80)).filter(Boolean),
+    isbn: sanitizeText(doc?.isbn, 40) || undefined,
+    edition: sanitizeText(doc?.edition, 120) || undefined,
     pageCount: pages,
     fileSize: size,
     rightsStatus: rights.status,
-    rightsInfo: rights.info,
+    rightsInfo: sanitizeText(rights.info, 500),
     coverUrl: id ? source.coverEndpoint.replace("{id}", id) : undefined,
     files: [] as { name: string; format: string; url: string; size?: number }[],
   };
@@ -186,17 +233,21 @@ export async function fetchIaItem(id: string, source: SourceConfig) {
 
   // Files list: filter to allowed formats, build direct download URLs.
   const files: any[] = Array.isArray(meta?.files) ? meta.files : [];
+  // Highest-quality preference: epub > pdf > others, and pick the largest
+  // cover variant available from the official services endpoint.
+  const fmtOf = (f: any) => String(f?.name ?? "").split(".").pop()?.toLowerCase() ?? "bin";
+  const quality: Record<string, number> = { epub: 5, pdf: 4, mobi: 3, djvu: 2, txt: 1 };
   norm.files = files
     .filter((f) => {
       const fmt = String(f?.format ?? "").toLowerCase();
-      const name = String(f?.name ?? "");
-      const ext = name.split(".").pop()?.toLowerCase() ?? "";
+      const ext = fmtOf(f);
       return ALLOWED_FORMATS.includes(ext) || /pdf|epub|text|mobi|djvu/.test(fmt);
     })
+    .sort((a, b) => (quality[fmtOf(b)] ?? 0) - (quality[fmtOf(a)] ?? 0))
     .slice(0, 6)
     .map((f) => ({
-      name: String(f.name),
-      format: String(f.name).split(".").pop()?.toLowerCase() ?? "bin",
+      name: sanitizeText(f.name, 200),
+      format: fmtOf(f),
       url: source.fileEndpoint
         .replace("{id}", encodeURIComponent(id))
         .replace("{filename}", encodeURIComponent(String(f.name))),

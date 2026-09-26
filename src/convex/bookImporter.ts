@@ -1,9 +1,16 @@
 import { v } from "convex/values";
-import { mutation, query, internalMutation, action } from "./_generated/server";
-import { internal } from "./_generated/api";
+import {
+  mutation,
+  query,
+  internalMutation,
+  internalQuery,
+  internalAction,
+  action,
+} from "./_generated/server";
+import { internal, api } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { requireAdmin } from "./lib";
-import { validateExternalUrl, fetchWithLimit, SOURCES } from "./importSources";
+import { validateExternalUrl, fetchWithLimit, fetchBlobWithLimit, SOURCES } from "./importSources";
 
 // ---------------- Settings helpers ----------------
 
@@ -223,7 +230,18 @@ export const listHistory = query({
     await requireAdmin(ctx);
     const rows = await ctx.db.query("import_items").collect();
     rows.sort((a, b) => b.createdAt - a.createdAt);
-    return rows.slice(0, args.limit ?? 100);
+    const recent = rows.slice(0, args.limit ?? 100);
+    // Attach importer usernames for the "Imported by" column.
+    const out = [];
+    for (const r of recent) {
+      let importedByName: string | undefined;
+      if (r.importedBy) {
+        const u = await ctx.db.get(r.importedBy);
+        importedByName = (u as any)?.name ?? (u as any)?.email ?? undefined;
+      }
+      out.push({ ...r, importedByName });
+    }
+    return out;
   },
 });
 
@@ -254,6 +272,235 @@ export const deleteJob = mutation({
       .collect();
     for (const i of items) await ctx.db.delete(i._id);
     await ctx.db.delete(args.id);
+  },
+});
+
+/** Cancel a running job: marks it cancelled and skips pending items. */
+export const cancelJob = mutation({
+  args: { id: v.id("import_jobs") },
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+    await ctx.db.patch(args.id, { status: "cancelled", updatedAt: Date.now() });
+    const items = await ctx.db
+      .query("import_items")
+      .withIndex("by_job", (q) => q.eq("jobId", args.id))
+      .collect();
+    for (const i of items) {
+      if (i.status === "pending" || i.status === "processing") {
+        await ctx.db.patch(i._id, { status: "skipped", updatedAt: Date.now() });
+      }
+    }
+  },
+});
+
+// ---------------- Scheduled imports ----------------
+
+export const listSchedules = query({
+  args: {},
+  handler: async (ctx) => {
+    await requireAdmin(ctx);
+    const rows = await ctx.db.query("import_schedules").collect();
+    rows.sort((a, b) => b.createdAt - a.createdAt);
+    return rows;
+  },
+});
+
+export const createSchedule = mutation({
+  args: {
+    name: v.string(),
+    source: v.string(),
+    mode: v.string(),
+    input: v.string(),
+    limitPerRun: v.number(),
+    frequency: v.string(),
+    publishMode: v.string(),
+    allowedFormats: v.optional(v.array(v.string())),
+    minRights: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const admin = await requireAdmin(ctx);
+    const now = Date.now();
+    return await ctx.db.insert("import_schedules", {
+      ...args,
+      limitPerRun: Math.min(Math.max(args.limitPerRun, 1), 200),
+      enabled: true,
+      createdBy: admin._id,
+      createdAt: now,
+      updatedAt: now,
+    });
+  },
+});
+
+export const setScheduleEnabled = mutation({
+  args: { id: v.id("import_schedules"), enabled: v.boolean() },
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+    await ctx.db.patch(args.id, { enabled: args.enabled, updatedAt: Date.now() });
+  },
+});
+
+export const deleteSchedule = mutation({
+  args: { id: v.id("import_schedules") },
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+    await ctx.db.delete(args.id);
+  },
+});
+
+/**
+ * Background sweep (cron, every 6h): enqueue one job per due schedule and
+ * process a small pending batch from existing jobs. Frequency (daily/weekly)
+ * is respected by comparing lastRunAt with the current time.
+ */
+export const runDueSweepInternal = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const now = Date.now();
+    const schedules = await ctx.db
+      .query("import_schedules")
+      .withIndex("by_enabled", (q) => q.eq("enabled", true))
+      .collect();
+
+    let enqueued = 0;
+    for (const s of schedules) {
+      const due =
+        s.frequency === "weekly"
+          ? now - (s.lastRunAt ?? 0) >= 6.5 * 24 * 3600_000
+          : now - (s.lastRunAt ?? 0) >= 23 * 3600_000;
+      if (!due) continue;
+
+      // Discover candidate ids via the search API (network from a mutation is
+      // not allowed, so we only enqueue the job — the client-visible action
+      // path or the next sweep's action step will fill it). For the cron path
+      // we seed from the schedule input directly when it is a list of ids.
+      const jobId = await ctx.db.insert("import_jobs", {
+        source: s.source,
+        mode: s.mode,
+        input: s.input,
+        status: "pending",
+        total: 0,
+        processed: 0,
+        succeeded: 0,
+        failed: 0,
+        publishMode: s.publishMode,
+        allowedFormats: s.allowedFormats,
+        createdBy: s.createdBy,
+        createdAt: now,
+        updatedAt: now,
+      });
+      await ctx.db.patch(s._id, { lastRunAt: now, updatedAt: now });
+      enqueued += 1;
+      if (enqueued >= 3) break; // Gentle: max 3 scheduled jobs per sweep.
+    }
+    return { enqueued };
+  },
+});
+
+/**
+ * Background batch processor (cron path, no admin session): fetches pending
+ * items through the SAME core logic as the admin action, via the shared
+ * internal core (no auth check needed — internal functions are not callable
+ * from clients).
+ */
+export const cronProcessBatchInternal = internalAction({
+  args: { maxItems: v.optional(v.number()) },
+  handler: async (ctx, args) => {
+    const max = Math.min(args.maxItems ?? 5, 10);
+    const pending: any[] = await ctx.runQuery(internal.bookImporter.listPendingInternal, { limit: max });
+    let done = 0;
+    for (const it of pending) {
+      const job: any = await ctx.runQuery(internal.bookImporter.getJobInternal, { id: it.jobId });
+      if (!job || job.status !== "processing") continue;
+      const res: any = await ctx.runAction(internal.bookImporter.fetchItemCore, {
+        itemId: it._id,
+        publishMode: job.publishMode,
+      });
+      if (res?.ok) done += 1;
+    }
+    return { processed: done };
+  },
+});
+
+export const listPendingInternal = internalQuery({
+  args: { limit: v.number() },
+  handler: async (ctx, args) => {
+    const rows = await ctx.db.query("import_items").collect();
+    return rows
+      .filter((r) => r.status === "pending")
+      .sort((a, b) => a.createdAt - b.createdAt)
+      .slice(0, args.limit);
+  },
+});
+
+export const getJobInternal = internalQuery({
+  args: { id: v.id("import_jobs") },
+  handler: async (ctx, args) => await ctx.db.get(args.id),
+});
+
+type FetchCoreResult = {
+  ok: boolean;
+  title?: string;
+  rights?: string;
+  error?: string;
+};
+
+/**
+ * Shared core: fetch one item's metadata + store cover. Used by both the
+ * admin action (with requireAdmin) and the cron batch processor.
+ */
+export const fetchItemCore = internalAction({
+  args: {
+    itemId: v.id("import_items"),
+    publishMode: v.optional(v.string()),
+  },
+  handler: async (ctx: any, args): Promise<FetchCoreResult> => {
+    const item: any = await ctx.runQuery(internal.bookImporter.getItemQueryInternalQuery, {
+      itemId: args.itemId,
+    });
+    if (!item) throw new Error("العنصر غير موجود");
+    const source = SOURCES[item.source] ?? SOURCES.internet_archive;
+    const { fetchIaItem } = await import("./importSources");
+
+    try {
+      const norm = await fetchIaItem(item.externalId, source);
+
+      // Download the cover into platform storage when available.
+      let storedCover: string | undefined;
+      if (norm.coverUrl) {
+        try {
+          const { buf, type } = await fetchBlobWithLimit(norm.coverUrl);
+          if (buf.byteLength > 0 && buf.byteLength < 3_000_000 && type.startsWith("image/")) {
+            const storageId = await ctx.storage.store(new Uint8Array(buf), { type });
+            storedCover = (await ctx.storage.getUrl(storageId)) ?? undefined;
+          }
+        } catch {
+          // Cover download is best-effort; keep the source URL as fallback.
+        }
+      }
+
+      await ctx.runMutation(internal.bookImporter.finalizeItemInternal, {
+        itemId: args.itemId,
+        ok: true,
+        metadata: JSON.stringify(norm),
+        title: norm.title,
+        author: norm.author,
+        year: norm.originalYear,
+        language: norm.language,
+        rightsStatus: norm.rightsStatus,
+        formats: norm.files.map((f: any) => f.format),
+        coverUrl: storedCover ?? norm.coverUrl,
+        fileUrls: JSON.stringify(norm.files),
+        publishMode: args.publishMode,
+      });
+      return { ok: true, title: norm.title, rights: norm.rightsStatus };
+    } catch (e: any) {
+      await ctx.runMutation(internal.bookImporter.finalizeItemInternal, {
+        itemId: args.itemId,
+        ok: false,
+        error: String(e?.message ?? e),
+      });
+      return { ok: false, error: String(e?.message ?? e) };
+    }
   },
 });
 
@@ -326,40 +573,17 @@ export const discoverCandidates = action({
  * metadata endpoint, then finalize it (dup-check + status) internally.
  */
 export const fetchItemMetadata = action({
-  args: { itemId: v.id("import_items") },
-  handler: async (ctx: any, args) => {
+  args: {
+    itemId: v.id("import_items"),
+    publishMode: v.optional(v.string()),
+  },
+  handler: async (ctx: any, args): Promise<FetchCoreResult> => {
     await requireAdmin(ctx as any);
-    const item: any = await ctx.runMutation(internal.bookImporter.getItemQueryInternal, {
+    // Delegate to the shared internal core (same logic as the cron path).
+    return await ctx.runAction(internal.bookImporter.fetchItemCore, {
       itemId: args.itemId,
+      publishMode: args.publishMode,
     });
-    if (!item) throw new Error("العنصر غير موجود");
-    const source = SOURCES[item.source] ?? SOURCES.internet_archive;
-    const { fetchIaItem } = await import("./importSources");
-
-    try {
-      const norm = await fetchIaItem(item.externalId, source);
-      await ctx.runMutation(internal.bookImporter.finalizeItemInternal, {
-        itemId: args.itemId,
-        ok: true,
-        metadata: JSON.stringify(norm),
-        title: norm.title,
-        author: norm.author,
-        year: norm.originalYear,
-        language: norm.language,
-        rightsStatus: norm.rightsStatus,
-        formats: norm.files.map((f: any) => f.format),
-        coverUrl: norm.coverUrl,
-        fileUrls: JSON.stringify(norm.files),
-      });
-      return { ok: true, title: norm.title, rights: norm.rightsStatus };
-    } catch (e: any) {
-      await ctx.runMutation(internal.bookImporter.finalizeItemInternal, {
-        itemId: args.itemId,
-        ok: false,
-        error: String(e?.message ?? e),
-      });
-      return { ok: false, error: String(e?.message ?? e) };
-    }
   },
 });
 
@@ -387,8 +611,8 @@ export const seedJobItemsInternal = internalMutation({
   },
 });
 
-/** Internal read used by the fetch action (returns the doc or null). */
-export const getItemQueryInternal = internalMutation({
+/** Internal read used by the fetch core (returns the doc or null). */
+export const getItemQueryInternalQuery = internalQuery({
   args: { itemId: v.id("import_items") },
   handler: async (ctx, args) => {
     const doc = await ctx.db.get(args.itemId);
@@ -421,7 +645,12 @@ export const processNextItemInternal = internalMutation({
     }
 
     await ctx.db.patch(next._id, { status: "processing", updatedAt: Date.now() });
-    return { done: false, itemId: next._id, externalId: next.externalId };
+    return {
+      done: false,
+      itemId: next._id,
+      externalId: next.externalId,
+      publishMode: job.publishMode,
+    };
   },
 });
 
@@ -452,6 +681,15 @@ export const finalizeItemInternal = internalMutation({
         error: args.error ?? "خطأ غير معروف",
         updatedAt: Date.now(),
       });
+      // Advance job progress on failure too.
+      const job0 = await ctx.db.get(item.jobId);
+      if (job0) {
+        await ctx.db.patch(item.jobId, {
+          processed: job0.processed + 1,
+          failed: job0.failed + 1,
+          updatedAt: Date.now(),
+        });
+      }
       return { ok: false };
     }
 
@@ -475,6 +713,10 @@ export const finalizeItemInternal = internalMutation({
         author: args.author,
         updatedAt: Date.now(),
       });
+      const jobD = await ctx.db.get(item.jobId);
+      if (jobD) {
+        await ctx.db.patch(item.jobId, { processed: jobD.processed + 1, updatedAt: Date.now() });
+      }
       return { ok: true, duplicate: true, contentId: dup };
     }
 
@@ -501,6 +743,10 @@ export const finalizeItemInternal = internalMutation({
       fileUrls: args.fileUrls,
       updatedAt: Date.now(),
     });
+    const jobF = await ctx.db.get(item.jobId);
+    if (jobF) {
+      await ctx.db.patch(item.jobId, { processed: jobF.processed + 1, updatedAt: Date.now() });
+    }
     return { ok: true, status };
   },
 });

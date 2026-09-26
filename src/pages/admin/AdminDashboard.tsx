@@ -114,6 +114,7 @@ type TabKey =
   | "challenges"
   | "users"
   | "access"
+  | "bookImporter"
   | "settings";
 
 function AdminInner() {
