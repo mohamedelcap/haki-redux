@@ -6,6 +6,7 @@ import {
   contentTypeValidator,
   contentStatusValidator,
   challengeStatusValidator,
+  challengeGoalTypeValidator,
   submissionStatusValidator,
 } from "./schema";
 
@@ -240,6 +241,8 @@ export const upsertChallenge = mutation({
     reward: v.optional(v.string()),
     status: challengeStatusValidator,
     isActive: v.boolean(),
+    goalType: v.optional(challengeGoalTypeValidator),
+    goalTarget: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     await requireSuperAdmin(ctx);

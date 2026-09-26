@@ -148,6 +148,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const [, setTick] = useState(0);
   const { isAuthenticated } = useAuth();
   const recordListen = useMutation(api.library.recordListen);
+  const syncChallenges = useMutation(api.engagement.syncMyChallengeProgress);
 
   const stateRef = useRef({ track, isPlaying, isAuthenticated });
   stateRef.current = { track, isPlaying, isAuthenticated };
@@ -195,6 +196,13 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       audio.pause();
     }
   }, [track, isPlaying, speed, volume, muted, setIsPlaying]);
+
+  // Sync challenge progress when a listening session starts.
+  useEffect(() => {
+    if (!track || !isAuthenticated) return;
+    void syncChallenges({}).catch(() => undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [track?.contentId]);
 
   // Save listening progress every 15 seconds while playing
   useEffect(() => {

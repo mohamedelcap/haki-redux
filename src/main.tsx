@@ -24,6 +24,7 @@ const PersonPage = lazy(() => import("./pages/PersonPage.tsx"));
 const Subscriptions = lazy(() => import("./pages/Subscriptions.tsx"));
 const Publish = lazy(() => import("./pages/Publish.tsx"));
 const Challenges = lazy(() => import("./pages/Challenges.tsx"));
+const ChallengeDetails = lazy(() => import("./pages/ChallengeDetails.tsx"));
 const Live = lazy(() => import("./pages/Live.tsx"));
 const About = lazy(() => import("./pages/About.tsx"));
 const Profile = lazy(() => import("./pages/Profile.tsx"));
@@ -144,6 +145,7 @@ function SiteRoutes() {
         <Route path="/subscriptions" element={<Subscriptions />} />
         <Route path="/publish" element={<Publish />} />
         <Route path="/challenges" element={<Challenges />} />
+        <Route path="/challenges/:id" element={<ChallengeDetails />} />
         <Route path="/live" element={<Live />} />
         <Route path="/about" element={<About />} />
         <Route

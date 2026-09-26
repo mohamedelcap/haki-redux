@@ -12,6 +12,7 @@ import {
   BookOpen,
   Clock,
   Crown,
+  Flame,
   Headphones,
   History,
   Library,
@@ -34,6 +35,7 @@ function DashboardInner() {
   const notifications = useQuery(api.library.myNotifications, {});
   const sub = useQuery(api.subscriptions.mySubscription, {});
   const follows = useQuery(api.podcasts.myFollowedShows, {});
+  const myChallenges = useQuery(api.engagement.myChallenges, {});
 
   const unread = (notifications ?? []).filter((n) => !n.isRead).length;
   const libCount = myLib?.length ?? 0;
@@ -94,6 +96,36 @@ function DashboardInner() {
             </Link>
           )}
         </div>
+
+        {/* Active challenge banner */}
+        {(() => {
+          const active = (myChallenges ?? []).find((m: any) => m.status === "active" && !m.completed);
+          if (!active) return null;
+          const pct = Math.min(100, Math.round((active.progress / Math.max(active.target, 1)) * 100));
+          return (
+            <Link
+              to={`/challenges/${active.challengeId}`}
+              className="mt-6 flex items-center gap-4 rounded-2xl border border-primary/40 bg-gradient-to-l from-primary/10 via-accent/40 to-transparent p-5 transition-all hover:card-shadow-hover"
+            >
+              <div className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-primary/15">
+                <Flame className="size-6 text-primary" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="truncate font-extrabold">
+                    {L("تحديك النشط", "Your active challenge")}: {lang === "ar" ? active.name : active.nameEn || active.name}
+                  </p>
+                  <span className="shrink-0 text-sm font-black tabular-nums text-primary">
+                    {active.progress} / {active.target}
+                  </span>
+                </div>
+                <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-background/70">
+                  <div className="h-full rounded-full bg-gradient-to-r from-primary to-amber-500" style={{ width: `${pct}%` }} />
+                </div>
+              </div>
+            </Link>
+          );
+        })()}
 
         {/* Stats */}
         <div className="mt-8 grid grid-cols-2 gap-4 lg:grid-cols-4">

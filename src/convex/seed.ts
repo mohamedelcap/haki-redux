@@ -314,6 +314,8 @@ const CHALLENGES = [
     durationDays: 35,
     reward: "شهر مجاني من باقة حكي",
     baseParticipants: 1240,
+    goalType: "listen_minutes" as const,
+    goalTarget: 600,
   },
   {
     name: "أسبوع الرواية العربية",
@@ -323,6 +325,8 @@ const CHALLENGES = [
     durationDays: 7,
     reward: "كتاب صوتي مجاني",
     baseParticipants: 412,
+    goalType: "finished_works" as const,
+    goalTarget: 1,
   },
   {
     name: "ماراثون البودكاست",
@@ -332,6 +336,8 @@ const CHALLENGES = [
     durationDays: 20,
     reward: "وسام مستمع النهائي",
     baseParticipants: 890,
+    goalType: "listen_minutes" as const,
+    goalTarget: 300,
   },
   {
     name: "نادي الكتاب الإلكتروني",
@@ -341,6 +347,8 @@ const CHALLENGES = [
     durationDays: 30,
     reward: "خصم 50% على الاشتراك السنوي",
     baseParticipants: 256,
+    goalType: "rated_items" as const,
+    goalTarget: 5,
   },
 ];
 
@@ -614,6 +622,8 @@ export const seedAll = mutation({
         reward: ch.reward,
         status,
         isActive: status !== "ended",
+        goalType: ch.goalType,
+        goalTarget: ch.goalTarget,
       });
     }
 

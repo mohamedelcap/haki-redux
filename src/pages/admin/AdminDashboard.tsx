@@ -1051,7 +1051,7 @@ function ChallengesManager({ L }: { L: (ar: string, en: string) => string }) {
         <h2 className="text-xl font-black">{L("التحديات", "Challenges")}</h2>
         <Button
           className="font-bold"
-          onClick={() => setEditing({ name: "", description: "", startDate: "", endDate: "", reward: "", status: "upcoming", isActive: true })}
+          onClick={() => setEditing({ name: "", description: "", startDate: "", endDate: "", reward: "", status: "upcoming", isActive: true, goalType: "listen_minutes", goalTarget: 600 })}
         >
           <Plus className="size-4" />
           {L("تحدي جديد", "New challenge")}
@@ -1098,6 +1098,8 @@ function ChallengesManager({ L }: { L: (ar: string, en: string) => string }) {
                   reward: String(form.get("reward")) || undefined,
                   status: String(form.get("status")) as any,
                   isActive: form.get("isActive") === "on",
+                  goalType: (String(form.get("goalType")) || "listen_minutes") as any,
+                  goalTarget: Number(form.get("goalTarget")) || undefined,
                 });
                 toast.success(L("تم الحفظ", "Saved"));
                 setEditing(null);
@@ -1140,6 +1142,23 @@ function ChallengesManager({ L }: { L: (ar: string, en: string) => string }) {
                     <SelectItem value="ended">ended</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label>{L("نوع الهدف", "Goal type")}</Label>
+                <Select name="goalType" defaultValue={editing.goalType ?? "listen_minutes"}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="listen_minutes">{L("دقائق استماع", "Listen minutes")}</SelectItem>
+                    <SelectItem value="finished_works">{L("أعمال مكتملة (٩٥٪+)", "Finished works (95%+)")}</SelectItem>
+                    <SelectItem value="rated_items">{L("تقييمات مكتوبة", "Ratings written")}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>{L("قيمة الهدف", "Goal target")}</Label>
+                <Input name="goalTarget" type="number" min={1} defaultValue={editing.goalTarget ?? 600} />
               </div>
             </div>
             <label className="flex items-center gap-2 text-sm font-semibold">

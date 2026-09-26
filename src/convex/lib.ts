@@ -2,6 +2,7 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 import { ConvexError } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { QueryCtx, MutationCtx } from "./_generated/server";
+import { CONTENT_TYPES } from "./schema";
 
 /** Get the current user doc or null. */
 export async function getCurrentUser(ctx: QueryCtx | MutationCtx) {
@@ -162,4 +163,128 @@ export function formatDurationArabic(totalSeconds: number): string {
   const minutes = Math.round((totalSeconds % 3600) / 60);
   if (hours > 0) return `${hours} س ${minutes} د`;
   return `${minutes} د`;
+}
+
+// ---------------- Challenge goal helpers ----------------
+
+const CONTENT_TYPE_SET = new Set<string>(CONTENT_TYPES);
+
+/** Types counted as "finished works" for challenges: audiobooks + e-books. */
+const FINISHABLE_TYPES = new Set<string>(["audiobook", "ebook"]);
+
+/**
+ * Listening minutes for one user since a given date (epoch ms).
+ * Approximates daily totals: caps each session at its own duration and at 90
+ * minutes/day to prevent idle playback from inflating the score.
+ */
+export async function listeningMinutesSince(
+  ctx: QueryCtx,
+  userId: Id<"users">,
+  since: number,
+): Promise<number> {
+  const rows = await ctx.db
+    .query("listening_history")
+    .withIndex("by_user", (q) => q.eq("userId", userId))
+    .collect();
+  const perDay = new Map<string, number>();
+  for (const r of rows) {
+    if (r.playedAt < since) continue;
+    const day = new Date(r.playedAt).toISOString().slice(0, 10);
+    const dur = Math.min(
+      r.duration || 0,
+      r.position || 0,
+      90 * 60,
+    );
+    perDay.set(day, (perDay.get(day) ?? 0) + dur);
+  }
+  let total = 0;
+  for (const v of perDay.values()) total += Math.min(v, 90 * 60);
+  return Math.round(total / 60);
+}
+
+/** Distinct finished works since a date (content rows with matching type). */
+export async function finishedWorksSince(
+  ctx: QueryCtx,
+  userId: Id<"users">,
+  since: number,
+): Promise<number> {
+  const rows = await ctx.db
+    .query("listening_progress")
+    .withIndex("by_user", (q) => q.eq("userId", userId))
+    .collect();
+  let count = 0;
+  for (const row of rows) {
+    if (!row.duration || !row.position) continue;
+    if (row.position / Math.max(row.duration, 1) < 0.95) continue;
+  const content = await ctx.db.get(row.contentId);
+    if (!content || !FINISHABLE_TYPES.has(content.contentType)) continue;
+    if (row.updatedAt < since) continue;
+    count += 1;
+  }
+  return count;
+}
+
+/** Ratings written since a date. */
+export async function ratedItemsSince(
+  ctx: QueryCtx,
+  userId: Id<"users">,
+  since: number,
+): Promise<number> {
+  const rows = await ctx.db
+    .query("ratings")
+    .withIndex("by_user_content", (q) => q.eq("userId", userId))
+    .collect();
+  return rows.filter((r) => r.createdAt >= since).length;
+}
+
+/**
+ * Progress (0..target) of one user in one challenge, and completion state.
+ * Never writes; completion is persisted by syncChallengeParticipation.
+ */
+export async function challengeProgressForUser(
+  ctx: QueryCtx,
+  challenge: { goalType?: string | null; goalTarget?: number | null; startDate: string; endDate: string },
+  userId: Id<"users">,
+): Promise<{ progress: number; target: number; completed: boolean }> {
+  const startTs = Date.parse(`${challenge.startDate}T00:00:00Z`) || 0;
+  const target = Math.max(1, Math.round(challenge.goalTarget ?? 1));
+  const goalType = challenge.goalType ?? "listen_minutes";
+  let progress = 0;
+  if (goalType === "listen_minutes") {
+    progress = await listeningMinutesSince(ctx, userId, startTs);
+  } else if (goalType === "finished_works") {
+    progress = await finishedWorksSince(
+      ctx,
+      userId,
+      startTs,
+    );
+  } else {
+    progress = await ratedItemsSince(ctx, userId, startTs);
+  }
+  return { progress, target, completed: progress >= target };
+}
+
+/**
+ * Persist completion state for one participation row and fire a completion
+ * notification when the goal is first reached. Safe to call repeatedly.
+ */
+export async function syncChallengeParticipation(
+  ctx: MutationCtx,
+  challenge: Doc<"challenges">,
+  participant: Doc<"challenge_participants">,
+): Promise<{ progress: number; target: number; completed: boolean }> {
+  const res = await challengeProgressForUser(ctx, challenge, participant.userId);
+  if (res.completed && !participant.completedAt) {
+    await ctx.db.patch(participant._id, { completedAt: Date.now() });
+    await ctx.db.insert("notifications", {
+      userId: participant.userId,
+      title: `🏆 أكملت تحدي "${challenge.name}"`,
+      body: challenge.reward
+        ? `المكافأة: ${challenge.reward}`
+        : "أحسنت! استمر في الاستماع.",
+      isRead: false,
+      createdAt: Date.now(),
+    });
+  }
+  return res;
 }

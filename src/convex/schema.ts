@@ -22,6 +22,12 @@ export const roleValidator = v.union(
   v.literal(ROLES.MEMBER),
 );
 
+/** How a challenge goal is measured (listened minutes, finished works, ratings). */
+export const CHALLENGE_GOAL_TYPES = ["listen_minutes", "finished_works", "rated_items"] as const;
+export const challengeGoalTypeValidator = v.union(
+  ...CHALLENGE_GOAL_TYPES.map((t) => v.literal(t)),
+);
+
 /** Roles allowed into the admin dashboard at all. */
 export const STAFF_ROLES = [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.PUBLISHER, ROLES.AUTHOR] as const;
 export type Role = Infer<typeof roleValidator>;
@@ -246,13 +252,22 @@ const schema = defineSchema(
       reward: v.optional(v.string()),
       status: challengeStatusValidator,
       isActive: v.boolean(),
+      /** Goal type: what the participant must do to complete the challenge. */
+      goalType: v.optional(challengeGoalTypeValidator),
+      /** Goal target: e.g. 600 minutes, 3 works, 5 rated items. */
+      goalTarget: v.optional(v.number()),
     }),
 
     challenge_participants: defineTable({
       challengeId: v.id("challenges"),
       userId: v.id("users"),
       joinedAt: v.number(),
-    }).index("by_challenge", ["challengeId"]),
+      /** Completion time; set when progress reaches the goal. */
+      completedAt: v.optional(v.number()),
+    })
+      .index("by_challenge", ["challengeId"])
+      .index("by_user", ["userId"])
+      .index("by_user_challenge", ["userId", "challengeId"]),
 
     live_streams: defineTable({
       title: v.string(),
