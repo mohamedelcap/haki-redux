@@ -7,7 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { RatingsSection } from "@/components/RatingsSection";
-import { FollowShowButton } from "@/components/FollowShowButton";
+import { FollowPodcastButton } from "@/components/FollowPodcastButton";
 import { useAuth } from "@/hooks/use-auth";
 import { formatDuration, formatTime, useLang } from "@/lib/i18n";
 import { usePlayer } from "@/lib/player";
@@ -312,7 +312,7 @@ export default function ContentDetails() {
                 {t("share")}
               </Button>
               {item.contentType === "podcast" && (
-                <FollowShowButton contentId={item._id} />
+                <FollowPodcastButton contentId={item._id} />
               )}
             </div>
 

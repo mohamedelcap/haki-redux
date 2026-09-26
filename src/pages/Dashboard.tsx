@@ -17,6 +17,7 @@ import {
   Library,
   ListPlus,
   Play,
+  Podcast,
   Settings,
   Sparkles,
 } from "lucide-react";
@@ -32,6 +33,7 @@ function DashboardInner() {
   const history = useQuery(api.library.myHistory, {});
   const notifications = useQuery(api.library.myNotifications, {});
   const sub = useQuery(api.subscriptions.mySubscription, {});
+  const follows = useQuery(api.podcasts.myFollowedShows, {});
 
   const unread = (notifications ?? []).filter((n) => !n.isRead).length;
   const libCount = myLib?.length ?? 0;
@@ -156,6 +158,28 @@ function DashboardInner() {
             </div>
           )}
         </section>
+
+        {/* Followed podcasts */}
+        {follows !== undefined && follows.length > 0 && (
+          <section className="mt-12">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-extrabold">
+                <Podcast className="me-2 inline size-5 text-primary" />
+                {L("متابعاتي", "My follows")}
+              </h2>
+              <Link to="/browse/podcasts" className="text-sm font-semibold text-primary hover:underline">
+                {L("تصفح البودكاست", "Browse podcasts")}
+              </Link>
+            </div>
+            <div className="no-scrollbar mt-4 flex gap-4 overflow-x-auto pb-2">
+              {follows.map((c) => (
+                <div key={(c as any)._id} className="w-44 shrink-0">
+                  <ContentCard item={c as any} />
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* Quick links */}
         <section className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
