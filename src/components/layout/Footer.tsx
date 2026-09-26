@@ -1,6 +1,6 @@
 import { useLang } from "@/lib/i18n";
 import { Separator } from "@/components/ui/separator";
-import { HakiLogo, HakiLogoInline } from "@/components/HakiLogo";
+import { HakiLogoInline } from "@/components/HakiLogo";
 import { MessageCircle } from "lucide-react";
 import { Link } from "react-router";
 
@@ -36,14 +36,7 @@ export function Footer() {
         <div className="grid gap-10 md:grid-cols-4">
           <div className="space-y-4">
             <Link to="/" className="flex items-center gap-2.5">
-              <HakiLogoInline
-                variant="outline"
-                size={44}
-                wordClass={lang === "ar" ? "text-foreground" : "hidden"}
-              />
-              {lang !== "ar" && (
-                <span className="text-lg font-black tracking-wide text-foreground">HAKI</span>
-              )}
+              <HakiLogoInline size={44} />
             </Link>
             <p className="text-xs font-semibold text-muted-foreground">
               {lang === "ar" ? "منصة المحتوى الصوتي والرقمي" : "Arabic audio & digital content"}

@@ -65,14 +65,7 @@ export function Header() {
       <div className="haki-container flex h-16 items-center gap-3">
           {/* Logo — right side in RTL (first in DOM) */}
         <Link to="/" className="flex shrink-0 items-center" aria-label="حكي — الصفحة الرئيسية">
-          <HakiLogoInline
-            variant="colored"
-            size={38}
-            wordClass={lang === "ar" ? "text-foreground" : "hidden"}
-          />
-          {lang !== "ar" && (
-            <span className="text-xl font-black tracking-wide text-foreground">HAKI</span>
-          )}
+          <HakiLogoInline size={38} />
         </Link>
 
         {/* Desktop nav */}
