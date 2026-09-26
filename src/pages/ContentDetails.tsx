@@ -2,6 +2,7 @@ import { api } from "@/convex/_generated/api";
 import { SEO } from "@/components/SEO";
 import { ContentTypeIcon, TYPE_LABELS } from "@/components/ContentCard";
 import { demoAudioUrl } from "@/lib/player";
+import { LOGO_COVER } from "@/lib/logoAsset";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -196,7 +197,7 @@ export default function ContentDetails() {
         <div className="haki-container relative grid gap-8 py-10 lg:grid-cols-[280px_1fr]">
           <div className="mx-auto w-48 sm:w-56 lg:w-full lg:max-w-[280px]">
             <img
-              src={item.coverImage || "https://images.unsplash.com/photo-1543002588-bfa74002ed7e?w=480&h=720&fit=crop&q=80"}
+              src={item.coverImage || LOGO_COVER}
               alt={item.title}
               className="aspect-[3/4] w-full rounded-2xl border object-cover card-shadow"
               loading="lazy"

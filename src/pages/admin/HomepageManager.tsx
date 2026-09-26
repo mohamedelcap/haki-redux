@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useLang } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
+import { LOGO_COVER } from "@/lib/logoAsset";
 import { useMutation, useQuery } from "convex/react";
 import {
   ArrowDown,
@@ -480,7 +481,7 @@ function ManualPicker({
               )}
             >
               <img
-                src={i.coverImage || "https://images.unsplash.com/photo-1543002588-bfa74002ed7e?w=100&h=150&fit=crop&q=60"}
+                src={i.coverImage || LOGO_COVER}
                 alt=""
                 className="size-9 rounded object-cover"
                 loading="lazy"

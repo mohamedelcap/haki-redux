@@ -7,9 +7,9 @@ import { useLang } from "@/lib/i18n";
 import { useQuery } from "convex/react";
 import { ArrowLeft, BookOpen, Mic } from "lucide-react";
 import { Link, useParams } from "react-router";
+import { LOGO_COVER } from "@/lib/logoAsset";
 
-const FALLBACK_IMAGE =
-  "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=400&h=400&fit=crop&q=80";
+const FALLBACK_IMAGE = LOGO_COVER;
 
 export default function PersonPage() {
   const { kind, id } = useParams<{ kind: string; id: string }>();

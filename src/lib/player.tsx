@@ -1,6 +1,7 @@
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { formatTime, useLang } from "@/lib/i18n";
+import { LOGO_COVER } from "@/lib/logoAsset";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
@@ -323,7 +324,7 @@ function PlayerBar({
       <div className="haki-container flex items-center gap-3 py-2">
         <div className="flex min-w-0 items-center gap-3">
           <img
-            src={track.coverImage || "https://images.unsplash.com/photo-1543002588-bfa74002ed7e?w=480&h=720&fit=crop&q=80"}
+            src={track.coverImage || LOGO_COVER}
             alt=""
             className="size-11 rounded-md object-cover"
             loading="lazy"

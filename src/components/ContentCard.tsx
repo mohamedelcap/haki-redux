@@ -1,5 +1,6 @@
 import { formatDuration, useLang } from "@/lib/i18n";
 import { usePlayer, demoAudioUrl } from "@/lib/player";
+import { LOGO_COVER } from "@/lib/logoAsset";
 import type { EnrichedContent } from "@/convex/lib";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -90,7 +91,7 @@ export function ContentCard({ item, className, onPlay }: CardProps) {
     >
       <div className="relative aspect-[3/4] overflow-hidden bg-muted">
         <img
-          src={item.coverImage || "https://images.unsplash.com/photo-1543002588-bfa74002ed7e?w=480&h=720&fit=crop&q=80"}
+          src={item.coverImage || LOGO_COVER}
           alt={item.title}
           loading="lazy"
           onError={(e) => {
@@ -98,7 +99,7 @@ export function ContentCard({ item, className, onPlay }: CardProps) {
             const img = e.currentTarget;
             if (!img.dataset.fallback) {
               img.dataset.fallback = "1";
-              img.src = "https://images.unsplash.com/photo-1543002588-bfa74002ed7e?w=480&h=720&fit=crop&q=80";
+              img.src = LOGO_COVER;
             }
           }}
           className="size-full object-cover transition-transform duration-300 group-hover:scale-105"

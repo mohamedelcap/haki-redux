@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
 import { useLang } from "@/lib/i18n";
 import { usePlayer, demoAudioUrl } from "@/lib/player";
+import { LOGO_COVER } from "@/lib/logoAsset";
 import { cn } from "@/lib/utils";
 import { useQuery } from "convex/react";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -22,7 +23,7 @@ import {
 } from "lucide-react";
 import { Link } from "react-router";
 
-const FALLBACK_COVER = "https://images.unsplash.com/photo-1543002588-bfa74002ed7e?w=480&h=720&fit=crop&q=80";
+const FALLBACK_COVER = LOGO_COVER;
 
 const SECTIONS = [
   { type: "ebook", icon: BookOpen, href: "/browse/ebooks", desc: { ar: "اقرأ أحدث الإصدارات الرقمية", en: "Read the latest digital releases" } },

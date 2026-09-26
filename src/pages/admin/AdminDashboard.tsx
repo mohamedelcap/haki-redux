@@ -10,6 +10,7 @@ import { PaymentMethodsManager } from "@/pages/admin/PaymentMethodsManager";
 import { RoyaltiesManager } from "@/pages/admin/RoyaltiesManager";
 import { SEO } from "@/components/SEO";
 import { HakiLogo } from "@/components/HakiLogo";
+import { LOGO_COVER } from "@/lib/logoAsset";
 import { TYPE_LABELS } from "@/components/ContentCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -716,7 +717,7 @@ function ContentManager({ L, lang, defaultType, featuredOnly, autoOpen }: { L: (
                   <TR key={item._id}>
                     <TD>
                       <div className="flex items-center gap-2.5">
-                        <img src={item.coverImage || "https://images.unsplash.com/photo-1543002588-bfa74002ed7e?w=480&h=720&fit=crop&q=80"} alt="" className="size-9 rounded-md object-cover" />
+                        <img src={item.coverImage || LOGO_COVER} alt="" className="size-9 rounded-md object-cover" />
                         <div className="min-w-0">
                           <p className="truncate text-sm font-bold">{item.title}</p>
                           <p className="truncate text-xs text-muted-foreground">
