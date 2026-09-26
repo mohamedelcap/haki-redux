@@ -1,16 +1,9 @@
 import { cn } from "@/lib/utils";
 
 /**
- * شعار حكي | HAKI — النسخة المعتمدة من هوية المنصة.
- *
- * الشكل: ضربة كاليغرافية علوية ممتدة (الضمة)، جسم مركزي ضخم (الحاء)،
- * قوس سفلي واسع يمتد يمينًا (الكاف)، حلقة صغيرة بنقطتين (الياء)،
- * وتحته كلمة HAKI بتباعد حروف واسع — داخل بطاقة داكنة مستديرة.
- *
- * - "colored": البطاقة الداكنة مع حبر فاتح (الشكل الرسمي كما ورد في الهوية)
- * - "outline": حبر مفرّغ بـ currentColor — للخلفيات الداكنة والفوتر
- *
- * الرسم مبني على مسارات مرسومة يدويًا تحاكي ضربات القلم الحقيقية.
+ * شعار حكي | HAKI — النسخة الرسمية المعتمدة (كما وردت في ملف الهوية):
+ * خلفية برتقالية كاملة بحواف حادة + حبر أسود + كلمة HAKI أسفل الرسم.
+ * يُستخدم كما هو في كل مواضع الموقع دون تعديل على التصميم.
  */
 
 type HakiLogoProps = {
@@ -28,13 +21,12 @@ export function HakiLogo({
   className,
   hideWordmark = false,
 }: HakiLogoProps) {
-  const isOutline = variant === "outline";
+  // الشعار الرسمي يُعرض دائمًا كما هو (variant متاح للتوافق فقط ولا يغيّر التصميم).
+  void variant;
 
-  // ألوان الحبر والخلفية حسب النسخة
-  const ink = isOutline ? "currentColor" : "#EDEDEA";
-  const plate = isOutline ? "none" : "#141414";
-  const plateStroke = isOutline ? "currentColor" : "none";
-  const plateStrokeOpacity = isOutline ? 0.9 : 0;
+  // ألوان الشعار الرسمي: برتقالي + حبر أسود (كما في الملف المعتمد)
+  const ink = "#111111";
+  const plate = "#F97316";
 
   return (
     <svg
@@ -47,24 +39,12 @@ export function HakiLogo({
       role="img"
       aria-label="حكي"
     >
-      {/* البطاقة الخلفية */}
-      <rect
-        x="1.5"
-        y="1.5"
-        width="117"
-        height="117"
-        rx="24"
-        fill={plate}
-        stroke={plateStroke}
-        strokeWidth={isOutline ? 3 : 0}
-        strokeOpacity={plateStrokeOpacity}
-      />
+      {/* الخلفية البرتقالية الكاملة — حواف حادة كما في الملف الأصلي */}
+      <rect x="0" y="0" width="120" height="120" rx="0" fill={plate} />
 
-      {/* رسم حكي الكاليغرافي */}
+      {/* رسم حكي الكاليغرافي — حبر أسود */}
       <g
         fill={ink}
-        stroke={isOutline ? "currentColor" : "none"}
-        strokeWidth={isOutline ? 2.2 : 0}
         strokeLinejoin="round"
         strokeLinecap="round"
       >
@@ -87,20 +67,18 @@ export function HakiLogo({
         <circle cx="85.5" cy="99.5" r="2.4" />
       </g>
 
-      {/* كلمة HAKI */}
+      {/* كلمة HAKI — كما في الشعار الرسمي */}
       {!hideWordmark && (
         <text
           x="60"
           y="111.5"
           textAnchor="middle"
           fill={ink}
-          stroke={isOutline ? "currentColor" : "none"}
-          strokeWidth={isOutline ? 0.6 : 0}
           style={{
             fontFamily: "Inter, Cairo, sans-serif",
-            fontSize: 12.5,
-            fontWeight: 500,
-            letterSpacing: 7,
+            fontSize: 13,
+            fontWeight: 700,
+            letterSpacing: 6.5,
           }}
         >
           HAKI
