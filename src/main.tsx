@@ -9,6 +9,7 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter, Route, Routes, useLocation } from "react-router";
 import { LangProvider } from "@/lib/i18n";
 import { PlayerProvider } from "@/lib/player";
+import { ThemeProvider } from "@/lib/theme";
 import "./index.css";
 
 // Lazy load route components for better code splitting
@@ -190,6 +191,7 @@ createRoot(document.getElementById("root")!).render(
         <VlyToolbar />
       </ToolbarErrorBoundary>
       <ConvexAuthProvider client={convex}>
+        <ThemeProvider>
         <LangProvider>
           <PlayerProvider>
             <BrowserRouter>
@@ -206,6 +208,7 @@ createRoot(document.getElementById("root")!).render(
             <Toaster />
           </PlayerProvider>
         </LangProvider>
+        </ThemeProvider>
       </ConvexAuthProvider>
     </RootErrorBoundary>
   </StrictMode>,

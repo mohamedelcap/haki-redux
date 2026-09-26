@@ -6,7 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useLang } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { useQuery } from "convex/react";
-import { Mic, Pause, Play, Radio, Users } from "lucide-react";
+import { CalendarClock, Clock, Mic, Pause, Play, Radio, Users } from "lucide-react";
 import { useState } from "react";
 
 const SCHEDULE = [
@@ -18,6 +18,39 @@ const SCHEDULE = [
   { day: "الخميس", name: "حكايات ما أحلوها", host: "ليان المطيري", start: "17:00", end: "18:00" },
   { day: "الجمعة", name: "قراءات مسائية", host: "سلمى الأيوبي", start: "21:00", end: "23:00" },
 ];
+
+/** نقطة LIVE نابضة — تضيء وتنطفئ كالبث الحي، تُعرض فوق العنوان. */
+export function LiveDot({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
+  const dim = size === "lg" ? "size-3.5" : size === "sm" ? "size-2" : "size-2.5";
+  return (
+    <span className="relative inline-flex" dir="ltr">
+      {/* هالة النبض المنتشرة */}
+      <span
+        className={cn(
+          "absolute inline-flex size-full rounded-full bg-red-500 opacity-70",
+          "animate-ping [animation-duration:1.4s]",
+          dim,
+        )}
+      />
+      {/* نبضة ثانية أبطأ لعمق الوميض */}
+      <span
+        className={cn(
+          "absolute inline-flex rounded-full bg-red-500 opacity-40",
+          "animate-ping [animation-duration:2.4s] [animation-delay:0.5s]",
+          dim,
+        )}
+      />
+      {/* النواة الصلبة — تضيء وتخفت */}
+      <span
+        className={cn(
+          "relative inline-flex rounded-full bg-red-500 shadow-[0_0_10px_2px_rgba(239,68,68,0.65)]",
+          "animate-pulse [animation-duration:1.4s]",
+          dim,
+        )}
+      />
+    </span>
+  );
+}
 
 export default function Live() {
   const { lang, t } = useLang();
@@ -31,7 +64,16 @@ export default function Live() {
     <div className="py-10">
       <SEO title={`${t("live")} | حكي`} />
       <div className="haki-container">
-        <div className="flex items-center gap-3">
+        <div className="relative flex items-center gap-3">
+          {/* النقطة الحمراء النابضة فوق كلمة بث مباشر */}
+          <div className="absolute -top-4 start-0 flex items-center gap-1.5">
+            <LiveDot size="sm" />
+            {current && (
+              <span className="rounded-full bg-red-500/10 px-2 py-0.5 text-[10px] font-black text-red-600">
+                {L("على الهواء الآن", "ON AIR")}
+              </span>
+            )}
+          </div>
           <div className="flex size-12 items-center justify-center rounded-2xl bg-accent">
             <Radio className="size-6 text-accent-foreground" />
           </div>
@@ -59,10 +101,7 @@ export default function Live() {
               }
             >
               <Badge className="gap-1.5 bg-red-600 px-3 py-1.5 text-white hover:bg-red-600">
-                <span className="relative flex size-2">
-                  <span className="absolute inline-flex size-full animate-ping rounded-full bg-white opacity-75" />
-                  <span className="relative inline-flex size-2 rounded-full bg-white" />
-                </span>
+                <LiveDot size="sm" />
                 {t("onAirNow")}
               </Badge>
               <h2 className="mt-4 text-2xl font-black sm:text-3xl">{current.title}</h2>
@@ -112,7 +151,10 @@ export default function Live() {
                     ))}
                   </div>
                 </div>
-                <span className="text-xs font-bold text-red-600">LIVE</span>
+                <span className="flex items-center gap-1.5 text-xs font-black text-red-600">
+                  <LiveDot size="sm" />
+                  LIVE
+                </span>
               </div>
               <p className="mt-3 text-xs text-muted-foreground">
                 {L(
@@ -140,17 +182,25 @@ export default function Live() {
               {streams
                 .filter((s) => !s.isLive)
                 .map((s) => (
-                  <div key={s._id} className="overflow-hidden rounded-2xl border bg-card card-shadow">
+                  <div key={s._id} className="overflow-hidden rounded-2xl border bg-card card-shadow transition-all hover:card-shadow-hover">
                     {s.image && (
                       <div className="relative h-32 w-full overflow-hidden">
                         <img src={s.image} alt="" loading="lazy" className="size-full object-cover" />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
+                        <span className="absolute bottom-2 end-2 flex items-center gap-1.5 rounded-full bg-black/60 px-2 py-0.5 text-[10px] font-bold text-white backdrop-blur">
+                          <CalendarClock className="size-3" />
+                          {s.scheduledStart}
+                        </span>
                       </div>
                     )}
                     <div className="p-5">
                       <h3 className="font-bold">{s.title}</h3>
-                      <p className="mt-1 text-sm text-muted-foreground">{s.hostName}</p>
-                      <p className="mt-2 text-xs text-muted-foreground">
+                      <p className="mt-1 flex items-center gap-1.5 text-sm text-muted-foreground">
+                        <Mic className="size-3.5 text-primary" />
+                        {s.hostName}
+                      </p>
+                      <p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <Clock className="size-3.5" />
                         {s.scheduledStart} - {s.scheduledEnd}
                       </p>
                     </div>

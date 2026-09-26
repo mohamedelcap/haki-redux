@@ -10,6 +10,8 @@ import {
 } from "@/components/ui/sheet";
 import { useAuth } from "@/hooks/use-auth";
 import { useLang } from "@/lib/i18n";
+import { useTheme } from "@/lib/theme";
+import { LiveDot } from "@/pages/Live";
 import { HakiLogo, HakiLogoInline } from "@/components/HakiLogo";
 import { NotificationsBell } from "@/components/NotificationsBell";
 import { usePlayer } from "@/lib/player";
@@ -17,6 +19,8 @@ import { cn } from "@/lib/utils";
 import {
   CirclePlus as PublishIcon,
   Home as HomeIcon,
+  Moon,
+  Sun,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -31,6 +35,22 @@ import {
 import { Link, useNavigate } from "react-router";
 import { useEffect, useState } from "react";
 
+/** Dark/light toggle — shown for everyone, synced across the app. */
+function ThemeToggleButton() {
+  const { theme, toggle } = useTheme();
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      className="size-9"
+      aria-label={theme === "dark" ? "الوضع النهاري" : "الوضع الليلي"}
+      onClick={toggle}
+    >
+      {theme === "dark" ? <Sun className="size-4" /> : <Moon className="size-4" />}
+    </Button>
+  );
+}
+
 export function Header() {
   const { t, lang, setLang } = useLang();
   const { isAuthenticated, user, signOut } = useAuth();
@@ -38,6 +58,7 @@ export function Header() {
   const [query, setQuery] = useState("");
   const [mobileOpen, setMobileOpen] = useState(false);
   const { track } = usePlayer();
+  const { theme: themeMobile, toggle: toggleThemeMobile } = useTheme();
   const isAdmin =
     user?.role === "admin" || user?.role === "super_admin" || user?.role === "publisher" || user?.role === "author";
 
@@ -74,8 +95,11 @@ export function Header() {
             <Link
               key={item.href}
               to={item.href}
-              className="rounded-lg px-3 py-2 text-sm font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              className={cn(
+                "relative rounded-lg px-3 py-2 text-sm font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
+              )}
             >
+              {item.href === "/live" && <LiveDot size="sm" />}
               {item.label}
             </Link>
           ))}
@@ -99,6 +123,9 @@ export function Header() {
 
         {/* Actions */}
         <div className="flex shrink-0 items-center gap-1.5">
+          {/* Theme toggle (dark/light) */}
+          <ThemeToggleButton />
+
           {/* EN toggle */}
           <Button
             variant="ghost"
@@ -212,10 +239,24 @@ export function Header() {
                   <div className="my-2 h-px bg-border" />
                   <button
                     type="button"
-                    className="rounded-lg px-3 py-2.5 text-start text-sm font-semibold hover:bg-muted"
+                    className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-start text-sm font-semibold hover:bg-muted"
                     onClick={() => setLang(lang === "ar" ? "en" : "ar")}
                   >
                     {lang === "ar" ? "English" : "العربية"}
+                  </button>
+                  <button
+                    type="button"
+                    className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-start text-sm font-semibold hover:bg-muted"
+                    onClick={toggleThemeMobile}
+                  >
+                    {themeMobile === "dark" ? <Sun className="size-4" /> : <Moon className="size-4" />}
+                    {themeMobile === "dark"
+                      ? lang === "ar"
+                        ? "الوضع النهاري"
+                        : "Light mode"
+                      : lang === "ar"
+                        ? "الوضع الليلي"
+                        : "Dark mode"}
                   </button>
                 </nav>
               </SheetContent>

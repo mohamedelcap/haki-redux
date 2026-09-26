@@ -11,6 +11,7 @@ import { RoyaltiesManager } from "@/pages/admin/RoyaltiesManager";
 import { SEO } from "@/components/SEO";
 import { HakiLogo } from "@/components/HakiLogo";
 import { LOGO_COVER } from "@/lib/logoAsset";
+import { ContentTypeIcon } from "@/components/ContentCard";
 import { TYPE_LABELS } from "@/components/ContentCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -541,6 +542,10 @@ function ContentManager({ L, lang, defaultType, featuredOnly, autoOpen }: { L: (
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
 
+  // Live preview values derived from the editing form state.
+  const previewCover = editing?.coverImage ?? "";
+  const previewTitle = editing?.title ?? "";
+
   // "Add content" tab: open the editor immediately on mount.
   useEffect(() => {
     if (autoOpen && !editing) {
@@ -824,11 +829,45 @@ function ContentManager({ L, lang, defaultType, featuredOnly, autoOpen }: { L: (
         <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4">
           <form
             onSubmit={handleSave}
-            className="my-8 w-full max-w-2xl space-y-4 rounded-3xl border bg-background p-6"
+            className="my-8 grid w-full max-w-3xl gap-5 rounded-3xl border bg-background p-6 lg:grid-cols-[1fr_220px]"
           >
-            <h3 className="text-lg font-black">
-              {editing._id ? L("تعديل محتوى", "Edit content") : L("إضافة محتوى", "Add content")}
-            </h3>
+            <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-black">
+                {editing._id ? L("تعديل محتوى", "Edit content") : L("إضافة محتوى", "Add content")}
+              </h3>
+              <Button type="button" variant="ghost" size="icon" onClick={() => { setOpen(false); setEditing(null); }}>
+                ×
+              </Button>
+            </div>
+            {/* Step 1: visual type picker */}
+            <div className="space-y-1.5">
+              <Label>{L("نوع المحتوى", "Content type")}</Label>
+              <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                {Object.entries(TYPE_LABELS).map(([k, v]) => {
+                  const active = editing.contentType === k;
+                  const Icon = (props: { className?: string }) => (
+                    <ContentTypeIcon type={k} {...props} />
+                  );
+                  return (
+                    <button
+                      key={k}
+                      type="button"
+                      onClick={() => setEditing({ ...editing, contentType: k })}
+                      className={cn(
+                        "flex flex-col items-center gap-1.5 rounded-xl border p-3 text-center transition-all",
+                        active
+                          ? "border-primary bg-primary/10 text-primary"
+                          : "hover:border-primary/40 hover:bg-muted/50",
+                      )}
+                    >
+                      <Icon className="size-5" />
+                      <span className="text-[11px] font-bold leading-tight">{v[lang as "ar" | "en"]}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
             <input type="hidden" name="contentType" value={editing.contentType} />
             <input type="hidden" name="status" value={editing.status} />
             <input type="hidden" name="authorId" value={editing.authorId} />
@@ -850,17 +889,6 @@ function ContentManager({ L, lang, defaultType, featuredOnly, autoOpen }: { L: (
             </div>
             <div className="grid gap-4 sm:grid-cols-3">
               <div className="space-y-1.5">
-                <Label>{L("النوع", "Type")}</Label>
-                <Select value={editing.contentType} onValueChange={(v) => setEditing({ ...editing, contentType: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(TYPE_LABELS).map(([k, v]) => (
-                      <SelectItem key={k} value={k}>{v[lang as "ar" | "en"]}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
                 <Label>{L("الحالة", "Status")}</Label>
                 <Select value={editing.status} onValueChange={(v) => setEditing({ ...editing, status: v })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
@@ -874,6 +902,17 @@ function ContentManager({ L, lang, defaultType, featuredOnly, autoOpen }: { L: (
               <div className="space-y-1.5">
                 <Label>{L("المدة (دقائق)", "Duration (minutes)")}</Label>
                 <Input name="duration" type="number" min="0" defaultValue={0} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>{L("لغة المحتوى", "Content language")}</Label>
+                <Select value={editing.contentLang ?? "ar"} onValueChange={(v) => setEditing({ ...editing, contentLang: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ar">العربية</SelectItem>
+                    <SelectItem value="en">English</SelectItem>
+                    <SelectItem value="both">{L("ثنائية", "Bilingual")}</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
             <div className="grid gap-4 sm:grid-cols-3">
@@ -1050,6 +1089,53 @@ function ContentManager({ L, lang, defaultType, featuredOnly, autoOpen }: { L: (
                 {L("حفظ", "Save")}
               </Button>
             </div>
+            </div>
+
+            {/* Live preview sidebar */}
+            <aside className="space-y-3 lg:sticky lg:top-8 lg:self-start">
+              <Label>{L("معاينة حية", "Live preview")}</Label>
+              <div className="overflow-hidden rounded-xl border bg-card card-shadow">
+                <img
+                  src={previewCover || LOGO_COVER}
+                  alt=""
+                  className="aspect-[3/4] w-full object-cover"
+                  onError={(e) => { (e.currentTarget as HTMLImageElement).src = LOGO_COVER; }}
+                />
+              </div>
+              <div className="rounded-xl border bg-card p-3">
+                <p className="truncate text-sm font-bold">
+                  {previewTitle || L("عنوان العمل…", "Work title…")}
+                </p>
+                <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                  {authors?.find((a) => a._id === editing.authorId)?.name ??
+                    narrators?.find((n) => n._id === editing.narratorId)?.name ??
+                    L("بدون مؤلف", "No author")}
+                </p>
+                <span className="mt-2 inline-block rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary">
+                  {TYPE_LABELS[editing.contentType]?.[lang as "ar" | "en"] ?? editing.contentType}
+                </span>
+                <div className="mt-2 flex flex-wrap gap-1">
+                  {editing.isFeatured && (
+                    <span className="rounded-full bg-accent px-2 py-0.5 text-[10px] font-bold text-accent-foreground">★</span>
+                  )}
+                  {editing.isTrending && (
+                    <span className="rounded-full bg-accent px-2 py-0.5 text-[10px] font-bold text-accent-foreground">🔥</span>
+                  )}
+                  {editing.isNew && (
+                    <span className="rounded-full bg-accent px-2 py-0.5 text-[10px] font-bold text-accent-foreground">NEW</span>
+                  )}
+                  {editing.status === "draft" && (
+                    <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-bold text-muted-foreground">draft</span>
+                  )}
+                </div>
+              </div>
+              <p className="text-[11px] leading-relaxed text-muted-foreground">
+                {L(
+                  "تتحدث المعاينة تلقائيًا أثناء الكتابة — هكذا سيظهر العمل في المتجر.",
+                  "Preview updates as you type — this is how the work will appear in the store.",
+                )}
+              </p>
+            </aside>
           </form>
         </div>
       )}

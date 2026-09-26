@@ -7,10 +7,117 @@ import { useAuth } from "@/hooks/use-auth";
 import { useLang } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { useAction, useMutation, useQuery } from "convex/react";
-import { Check, Crown, Sparkles } from "lucide-react";
+import {
+  BadgeCheck,
+  Banknote,
+  Check,
+  Crown,
+  CreditCard,
+  Smartphone,
+  Sparkles,
+  Wallet,
+} from "lucide-react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { PAYMENT_METHODS, type PayMethod } from "@/lib/paymentMethodsList";
+import { Loader2 } from "lucide-react";
+
+function MethodIcon({ icon }: { icon: PayMethod["icon"] }) {
+  const cls = "size-5";
+  switch (icon) {
+    case "card":
+      return <CreditCard className={cls} />;
+    case "wallet":
+      return <Wallet className={cls} />;
+    case "bank":
+      return <Banknote className={cls} />;
+    case "mobile":
+      return <Smartphone className={cls} />;
+    default:
+      return <CreditCard className={cls} />;
+  }
+}
+
+/** Payment-method picker shown before confirming a paid plan. */
+function PaymentMethodPicker({
+  lang,
+  selected,
+  onSelect,
+  enabled,
+}: {
+  lang: "ar" | "en";
+  selected: string;
+  onSelect: (k: string) => void;
+  enabled: Record<string, boolean> | null;
+}) {
+  const L = (ar: string, en: string) => (lang === "ar" ? ar : en);
+  const methods = PAYMENT_METHODS.filter(
+    (m) => m.key === "stripe" || m.key === "bankTransfer" || enabled?.[m.key] !== false,
+  );
+  const arab = methods.filter((m) => m.region === "arab");
+  const intl = methods.filter((m) => m.region === "international");
+
+  const card = (m: PayMethod) => (
+    <button
+      key={m.key}
+      type="button"
+      onClick={() => onSelect(m.key)}
+      className={cn(
+        "flex w-full items-start gap-3 rounded-2xl border p-4 text-start transition-all",
+        selected === m.key
+          ? "border-primary bg-primary/5 shadow-sm shadow-primary/10"
+          : "hover:border-primary/40 hover:bg-muted/40",
+      )}
+    >
+      <span
+        className={cn(
+          "flex size-10 shrink-0 items-center justify-center rounded-xl",
+          selected === m.key ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground",
+        )}
+      >
+        <MethodIcon icon={m.icon} />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="flex items-center gap-1.5 font-extrabold">
+          {L(m.ar, m.en)}
+          {selected === m.key && <BadgeCheck className="size-4 text-primary" />}
+        </span>
+        <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">
+          {L(m.descAr, m.descEn)}
+        </span>
+        {m.badges && (
+          <span className="mt-1.5 flex flex-wrap gap-1">
+            {m.badges.map((b) => (
+              <span
+                key={b}
+                className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-black tracking-wide text-muted-foreground"
+                dir="ltr"
+              >
+                {b}
+              </span>
+            ))}
+          </span>
+        )}
+      </span>
+    </button>
+  );
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h3 className="text-sm font-black">{L("وسائل الدفع الدولية", "International methods")}</h3>
+        <div className="mt-2 grid gap-2.5 sm:grid-cols-2">{intl.map(card)}</div>
+      </div>
+      {arab.length > 0 && (
+        <div>
+          <h3 className="text-sm font-black">{L("وسائل الدفع العربية", "Arab regional methods")}</h3>
+          <div className="mt-2 grid gap-2.5 sm:grid-cols-2">{arab.map(card)}</div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function Subscriptions() {
   const { lang, t } = useLang();
@@ -24,6 +131,8 @@ export default function Subscriptions() {
   const createCheckout = useAction(api.payments.createCheckoutSession);
   const activateAfterCheckout = useAction(api.payments.activateAfterCheckout);
   const [paying, setPaying] = useState<string | null>(null);
+  const [selectedMethod, setSelectedMethod] = useState("stripe");
+  const [checkoutPlan, setCheckoutPlan] = useState<any>(null);
 
   // Handle return from Stripe Checkout (?success=1&session_id=...).
   useEffect(() => {
@@ -54,22 +163,59 @@ export default function Subscriptions() {
       return;
     }
     if ((mySub?.plan as any)?._id === planId) return;
+
+    const plan = (plans ?? []).find((p) => p._id === planId);
+    if (plan && plan.price > 0) {
+      // Paid plan → show the payment-method picker first.
+      setCheckoutPlan(plan);
+      return;
+    }
+
+    // Free plan → activate directly.
     setPaying(planId);
     try {
-      // Preferred path: real Stripe Checkout when the key is configured.
-      const res: any = await createCheckout({ planId: planId as any });
-      window.location.href = res.url;
+      await subscribe({ planId: planId as any });
+      toast.success(
+        lang === "ar" ? "تم تفعيل الباقة المجانية" : "Free plan activated",
+      );
+    } catch (e: any) {
+      toast.error(e.message ?? "خطأ");
+    } finally {
+      setPaying(null);
+    }
+  };
+
+  /** Continue with the chosen method from the picker dialog. */
+  const confirmCheckout = async () => {
+    if (!checkoutPlan) return;
+    setPaying(checkoutPlan._id);
+    try {
+      if (selectedMethod === "stripe" || selectedMethod === "applepay") {
+        // Card / Apple Pay → real Stripe Checkout when configured.
+        const res: any = await createCheckout({ planId: checkoutPlan._id as any });
+        window.location.href = res.url;
+        return;
+      }
+      // Manual methods (wallets / bank transfer / Fawry) — demo activation
+      // until the corresponding gateway keys are configured.
+      await subscribe({ planId: checkoutPlan._id as any });
+      toast.success(
+        lang === "ar"
+          ? "تم تسجيل اختيارك — سنتواصل معك لإتمام الدفع عبر الوسيلة المختارة"
+          : "Choice recorded — we'll contact you to complete the payment",
+      );
+      setCheckoutPlan(null);
     } catch (e: any) {
       const msg = String(e?.message ?? "");
       if (msg.includes("STRIPE_SECRET_KEY")) {
-        // Stripe not configured yet → fall back to direct activation (demo mode).
         try {
-          await subscribe({ planId: planId as any });
+          await subscribe({ planId: checkoutPlan._id as any });
           toast.success(
             lang === "ar"
               ? "تم تفعيل الاشتراك (وضع تجريبي — لم يُربط الدفع بعد)"
               : "Subscribed (demo mode — payment not wired yet)",
           );
+          setCheckoutPlan(null);
         } catch (e2: any) {
           toast.error(e2.message ?? "خطأ");
         }
@@ -192,12 +338,74 @@ export default function Subscriptions() {
           </div>
         )}
 
-        <p className="mt-8 text-center text-xs text-muted-foreground">
-          {lang === "ar"
-            ? "الدفع يُدار عبر بوابة الدفع — البنية جاهزة للربط مع مزود المدفوعات."
-            : "Payments are handled via a gateway — architecture is ready for a payment provider."}
-        </p>
+        {/* Payment trust strip */}
+        <div className="mt-10 rounded-2xl border bg-card p-5">
+          <p className="text-center text-xs font-bold text-muted-foreground">
+            {lang === "ar" ? "وسائل دفع آمنة ومتنوعة — عربية ودولية" : "Secure & diverse payment methods — regional and global"}
+          </p>
+          <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+            {PAYMENT_METHODS.map((m) => (
+              <span
+                key={m.key}
+                className="flex items-center gap-1.5 rounded-full border bg-background px-3 py-1.5 text-[11px] font-bold text-muted-foreground"
+              >
+                <MethodIcon icon={m.icon} />
+                {lang === "ar" ? m.ar : m.en}
+              </span>
+            ))}
+          </div>
+        </div>
       </div>
+
+      {/* Payment-method dialog */}
+      {checkoutPlan && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-4 sm:items-center"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setCheckoutPlan(null);
+          }}
+        >
+          <div className="w-full max-w-lg space-y-5 rounded-3xl border bg-background p-6 card-shadow">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-black">
+                  {lang === "ar" ? "اختر وسيلة الدفع" : "Choose payment method"}
+                </h3>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {lang === "ar" ? "الباقة: " : "Plan: "}
+                  <span className="font-bold text-foreground">
+                    {lang === "ar" ? checkoutPlan.name : checkoutPlan.nameEn}
+                    {" — "}
+                    {checkoutPlan.price} {checkoutPlan.currency}
+                  </span>
+                </p>
+              </div>
+              <Button variant="ghost" size="icon" onClick={() => setCheckoutPlan(null)}>×</Button>
+            </div>
+
+            <PaymentMethodPicker
+              lang={lang as "ar" | "en"}
+              selected={selectedMethod}
+              onSelect={setSelectedMethod}
+              enabled={null}
+            />
+
+            <div className="flex items-center justify-between gap-3 border-t pt-4">
+              <Button variant="ghost" onClick={() => setCheckoutPlan(null)}>
+                {lang === "ar" ? "رجوع" : "Back"}
+              </Button>
+              <Button className="min-w-40 font-bold" disabled={paying !== null} onClick={confirmCheckout}>
+                {paying ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <CreditCard className="size-4" />
+                )}
+                {lang === "ar" ? "تأكيد والدفع" : "Confirm & pay"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
