@@ -1,12 +1,12 @@
 /**
- * الشعار الرسمي لمنصة حكي (برتقالي + حبر أسود) كـ data-URI.
+ * الشعار الرسمي لمنصة حكي — ملف PNG المرفوع في قسم Assets.
  * يُستخدم في كل مواضع الموقع التي تحتاج صورة غلاف/أفاتار/احتياطية
- * بدل أي صور خارجية — هوية واحدة موحدة.
- *
- * المسارات من مكوّن HakiLogo نفسه حتى يبقى المظهر متطابقًا تمامًا.
+ * بدل أي صور خارجية — هوية واحدة موحدة كما وردت في الملف المعتمد.
  */
+export const LOGO_PNG = "/logo.png";
+export const LOGO_ASSETS_PNG = "/assets/fm2134691.png";
 
-const PATHS = [
+const LEGACY_PATHS = [
   // الضمة العلوية الممتدة
   "M44 30.5c9-4.5 22-7 33.5-6 4.5.4 9.5 1.6 12.5 3.4 1.6 1 .9 2.6-.9 2.5-4.3-.2-9.9-1.2-15.6-1.2-10.5 0-20.9 2.2-28.3 5.4-2.4 1-3.4-3-.2-4.1Z",
   // الفتحة الصغيرة على الكتف
@@ -23,15 +23,15 @@ const PATHS = [
   "M64.5 92.5c2.6-1.2 5.9-.9 8 .8 2.1 1.7 2.8 4.3 1.9 6.6-.4 1-1.8.7-1.9-.3-.2-1.7-1.3-3.2-2.9-3.9-1.6-.7-3.5-.6-5 .2-1.3.7-2-2.7-.1-3.4Z",
 ];
 
-const CIRCLES: [number, number, number][] = [
+const LEGACY_CIRCLES: [number, number, number][] = [
   [78.5, 99.5, 2.4],
   [85.5, 99.5, 2.4],
 ];
 
 function buildLogoSvg(withWordmark: boolean): string {
   const body = [
-    ...PATHS.map((d) => `<path d="${d}"/>`),
-    ...CIRCLES.map(([cx, cy, r]) => `<circle cx="${cx}" cy="${cy}" r="${r}"/>`),
+    ...LEGACY_PATHS.map((d) => `<path d="${d}"/>`),
+    ...LEGACY_CIRCLES.map(([cx, cy, r]) => `<circle cx="${cx}" cy="${cy}" r="${r}"/>`),
   ].join("");
 
   const wordmark = withWordmark
@@ -50,8 +50,11 @@ function buildLogoSvg(withWordmark: boolean): string {
 const encoded = (svg: string) =>
   `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 
-/** غلاف مربع بالشعار الرسمي (بدون كلمة HAKI — الرسم كبير وواضح). */
-export const LOGO_COVER = encoded(buildLogoSvg(false));
+/** غلاف مربع بالشعار الرسمي — ملف PNG الرسمي من قسم Assets. */
+export const LOGO_COVER = LOGO_PNG;
 
-/** غلاف بالشعار الرسمي مع كلمة HAKI (للاستخدامات الأعرض). */
+/** نسخة SVG (data-URI) — احتياطية للسياقات التي تتطلب SVG. */
+export const LOGO_SVG_URI = encoded(buildLogoSvg(false));
+
+/** غلاف بالشعار مع كلمة HAKI (SVG data-URI). */
 export const LOGO_COVER_WORDMARK = encoded(buildLogoSvg(true));

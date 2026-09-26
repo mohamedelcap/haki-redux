@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { mutation, internalMutation } from "./_generated/server";
 import { requireSuperAdmin } from "./lib";
-import { LOGO_COVER as LOGO_URI } from "../lib/logoAsset";
+const LOGO_URI = "/logo.png"; // official logo file (Assets section)
 
 const GOALS: Record<
   string,
@@ -60,35 +60,37 @@ export const rebrandImagesInternal = internalMutation({
   handler: async (ctx) => {
     const LOGO = LOGO_URI;
     let covers = 0, avatars = 0, logos = 0, posters = 0;
+    const isBranded = (v?: string | null) =>
+      !!v && (v.startsWith("http") || (v.startsWith("data:") && v.includes("F97316")));
 
     for (const c of await ctx.db.query("content").collect()) {
-      if (c.coverImage && c.coverImage.startsWith("http")) {
+      if (isBranded(c.coverImage) && c.coverImage !== LOGO) {
         await ctx.db.patch(c._id, { coverImage: LOGO });
         covers++;
       }
     }
     for (const t of ["authors", "narrators"] as const) {
       for (const row of await ctx.db.query(t).collect()) {
-        if (row.image && row.image.startsWith("http")) {
+        if (isBranded(row.image) && row.image !== LOGO) {
           await ctx.db.patch(row._id, { image: LOGO });
           avatars++;
         }
       }
     }
     for (const p of await ctx.db.query("publishers").collect()) {
-      if (p.logo && p.logo.startsWith("http")) {
+      if (isBranded(p.logo) && p.logo !== LOGO) {
         await ctx.db.patch(p._id, { logo: LOGO });
         logos++;
       }
     }
     for (const ch of await ctx.db.query("challenges").collect()) {
-      if (ch.image && ch.image.startsWith("http")) {
+      if (isBranded(ch.image) && ch.image !== LOGO) {
         await ctx.db.patch(ch._id, { image: LOGO });
         posters++;
       }
     }
     for (const ls of await ctx.db.query("live_streams").collect()) {
-      if (ls.image && ls.image.startsWith("http")) {
+      if (isBranded(ls.image) && ls.image !== LOGO) {
         await ctx.db.patch(ls._id, { image: LOGO });
         posters++;
       }
