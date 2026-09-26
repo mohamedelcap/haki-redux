@@ -38,7 +38,8 @@ export function Header() {
   const [query, setQuery] = useState("");
   const [mobileOpen, setMobileOpen] = useState(false);
   const { track } = usePlayer();
-  const isAdmin = user?.role === "admin";
+  const isAdmin =
+    user?.role === "admin" || user?.role === "super_admin" || user?.role === "publisher" || user?.role === "author";
 
   const navItems = [
     { label: t("home"), href: "/" },
@@ -206,6 +207,15 @@ export function Header() {
                       لوحة الإدارة
                     </Link>
                   )}
+                  {!isAuthenticated && (
+                    <Link
+                      to="/admin-login"
+                      onClick={() => setMobileOpen(false)}
+                      className="rounded-lg px-3 py-2.5 text-sm font-semibold text-primary hover:bg-muted"
+                    >
+                      دخول الإدارة
+                    </Link>
+                  )}
                   <div className="my-2 h-px bg-border" />
                   <button
                     type="button"
@@ -228,7 +238,8 @@ function AccountMenu() {
   const { t } = useLang();
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
-  const isAdmin = user?.role === "admin";
+  const isAdmin =
+    user?.role === "admin" || user?.role === "super_admin" || user?.role === "publisher" || user?.role === "author";
 
   return (
     <div className="flex items-center gap-1">
