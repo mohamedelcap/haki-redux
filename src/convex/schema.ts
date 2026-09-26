@@ -325,6 +325,54 @@ const schema = defineSchema(
       .index("by_content", ["contentId"])
       .index("by_user_content", ["userId", "contentId"]),
 
+    // ---- Revenue distribution (royalties) ----
+    /** Publishing contract: split of revenue attributable to a publisher's works. */
+    publisher_contracts: defineTable({
+      publisherId: v.id("publishers"),
+      /** 0..100 — must sum with publisherPercentage to 100. */
+      hakiPercentage: v.number(),
+      /** 0..100 */
+      publisherPercentage: v.number(),
+      startDate: v.string(),
+      endDate: v.optional(v.string()),
+      notes: v.optional(v.string()),
+      isActive: v.boolean(),
+      createdAt: v.number(),
+    }).index("by_publisher", ["publisherId"]),
+
+    /** A revenue pool: total amount to distribute over a period. */
+    revenue_pools: defineTable({
+      name: v.string(),
+      totalAmount: v.number(),
+      currency: v.string(),
+      periodStart: v.string(),
+      periodEnd: v.string(),
+      status: v.union(
+        v.literal("draft"),
+        v.literal("calculated"),
+        v.literal("settled"),
+      ),
+      createdAt: v.number(),
+    }),
+
+    /** One row per publisher per pool, produced by the distribution run. */
+    royalty_statements: defineTable({
+      poolId: v.id("revenue_pools"),
+      publisherId: v.optional(v.id("publishers")),
+      publisherName: v.optional(v.string()),
+      usageSeconds: v.number(),
+      /** 0..100 — share of total listening in the period. */
+      usageShare: v.number(),
+      /** pool.totalAmount × usageShare. */
+      grossAmount: v.number(),
+      publisherAmount: v.number(),
+      hakiAmount: v.number(),
+      publisherPercentage: v.number(),
+      hakiPercentage: v.number(),
+      workCount: v.number(),
+      hasContract: v.boolean(),
+    }).index("by_pool", ["poolId"]),
+
     podcast_follows: defineTable({
       userId: v.id("users"),
       contentId: v.id("content"),

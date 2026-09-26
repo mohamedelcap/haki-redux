@@ -7,6 +7,7 @@ import { HomepageManager } from "@/pages/admin/HomepageManager";
 import { MediaLibrary } from "@/pages/admin/MediaLibrary";
 import { NotificationsManager } from "@/pages/admin/NotificationsManager";
 import { PaymentMethodsManager } from "@/pages/admin/PaymentMethodsManager";
+import { RoyaltiesManager } from "@/pages/admin/RoyaltiesManager";
 import { SEO } from "@/components/SEO";
 import { HakiLogo } from "@/components/HakiLogo";
 import { TYPE_LABELS } from "@/components/ContentCard";
@@ -65,6 +66,7 @@ import {
   Package,
   Bell,
   Wallet,
+  Coins,
   Shield,
   Sparkles,
   Star,
@@ -105,6 +107,7 @@ type TabKey =
   | "publishers"
   | "categories"
   | "plans"
+  | "royalties"
   | "challenges"
   | "users"
   | "access"
@@ -164,6 +167,7 @@ function AdminInner() {
       items: [
         { key: "plans", label: L("الاشتراكات", "Subscriptions"), icon: Crown },
         { key: "paymentMethods", label: L("وسائل الدفع", "Payment methods"), icon: Wallet },
+        { key: "royalties", label: L("توزيع الأرباح", "Revenue distribution"), icon: Coins },
         { key: "challenges", label: L("التحديات", "Challenges"), icon: Trophy },
       ],
     },
@@ -302,6 +306,7 @@ function AdminInner() {
           {tab === "submissions" && <SubmissionsManager L={L} />}
           {tab === "notifications" && <NotificationsManager L={L} />}
           {tab === "paymentMethods" && <PaymentMethodsManager L={L} />}
+          {tab === "royalties" && <RoyaltiesManager L={L} />}
           {tab === "users" && <UsersManager L={L} />}
           {tab === "access" && <AccessManager L={L} />}
           {tab === "settings" && <SettingsManager L={L} />}
