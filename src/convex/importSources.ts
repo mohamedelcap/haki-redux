@@ -309,6 +309,19 @@ export async function fetchIaItem(id: string, source: SourceConfig) {
   const doc = { ...md, [source.idField]: id };
   const norm = normalizeDoc(doc, source);
 
+  // Project Gutenberg mirrors on IA (collection "gutenberg", descriptions
+  // starting with "Book from Project Gutenberg") are curated public-domain
+  // uploads — explicit source-declared provenance, not an assumption.
+  const cols: string[] = Array.isArray(md.collection)
+    ? md.collection.map(String)
+    : md.collection
+      ? [String(md.collection)]
+      : [];
+  if (cols.some((c) => c === "gutenberg") || /^Book from Project Gutenberg/i.test(String(md.description ?? ""))) {
+    norm.rightsStatus = "public_domain";
+    norm.rightsInfo = norm.rightsInfo || "Project Gutenberg (Internet Archive mirror) \u2014 \u0645\u0644\u0643 \u0639\u0627\u0645";
+  }
+
   // Files list: filter to allowed formats, build direct download URLs.
   const files: any[] = Array.isArray(meta?.files) ? meta.files : [];
   // Highest-quality preference: epub > pdf > others, and pick the largest

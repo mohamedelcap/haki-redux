@@ -1042,7 +1042,10 @@ export const publishItemInternal = internalMutation({
     const item = await ctx.db.get(args.itemId);
     if (!item) return { ok: false };
     if (item.contentId) return { ok: true, contentId: item.contentId };
-    if (item.status !== "published" && item.status !== "requires_review") {
+    // Auto-publish policy: verified public-domain items only (status
+    // "published" is set by finalizeItemInternal only when rightsStatus is
+    // public_domain AND publishMode is auto). Anything else waits for review.
+    if (item.status !== "published") {
       return { ok: false, reason: "not-ready" };
     }
     const meta = item.metadata ? JSON.parse(item.metadata) : {};
