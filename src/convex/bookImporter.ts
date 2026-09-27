@@ -863,6 +863,51 @@ export const fetchItemMetadata = action({
   },
 });
 
+/**
+ * Admin: process a batch RIGHT NOW instead of waiting for the 5-minute cron.
+ * Uses the exact same core (fetchItemCore + auto-publish) as the cron path,
+ * optionally scoped to one job. The UI calls it in a loop for speed.
+ */
+export const processBatchNow = action({
+  args: {
+    jobId: v.optional(v.id("import_jobs")),
+    maxItems: v.optional(v.number()),
+  },
+  handler: async (ctx: any, args) => {
+    await requireAdmin(ctx as any);
+    const max = Math.min(args.maxItems ?? 10, 20);
+    const pending: any[] = await ctx.runQuery(internal.bookImporter.listPendingInternal, {
+      limit: 60,
+    });
+    const pool = args.jobId ? pending.filter((p: any) => p.jobId === args.jobId) : pending;
+    let done = 0;
+    let published = 0;
+    for (const it of pool) {
+      if (done >= max) break;
+      const job: any = await ctx.runQuery(internal.bookImporter.getJobInternal, { id: it.jobId });
+      if (!job || job.status !== "processing") continue;
+      const res: any = await ctx.runAction(internal.bookImporter.fetchItemCore, {
+        itemId: it._id,
+        publishMode: job.publishMode,
+      });
+      if (res?.ok) {
+        done += 1;
+        if (job.publishMode === "auto") {
+          try {
+            const pub: any = await ctx.runMutation(internal.bookImporter.publishItemInternal, {
+              itemId: it._id,
+            });
+            if (pub?.ok) published += 1;
+          } catch {
+            /* publish is best-effort; the item stays for review */
+          }
+        }
+      }
+    }
+    return { processed: done, published };
+  },
+});
+
 /** Internal: discover candidates and enqueue them (no external calls here). */
 export const seedJobItemsInternal = internalMutation({
   args: { jobId: v.id("import_jobs"), ids: v.array(v.string()) },

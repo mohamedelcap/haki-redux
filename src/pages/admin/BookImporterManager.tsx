@@ -31,6 +31,7 @@ import {
   Tags,
   Upload,
   X,
+  Zap,
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -272,6 +273,8 @@ function QueueView({
   const [preview, setPreview] = useState<any>(null);
 
   const fetchAction = useAction(api.bookImporter.fetchItemMetadata);
+  const runNow = useAction(api.bookImporter.processBatchNow);
+  const [continuous, setContinuous] = useState(false);
 
   /** Batch processor loop: fetch metadata (network) → finalize (mutation). */
   const runBatch = async () => {
@@ -289,6 +292,41 @@ function QueueView({
       toast.error(e.message);
     } finally {
       setProcessing(false);
+    }
+  };
+
+  /**
+   * Process the whole queue NOW: repeatedly calls the admin batch action
+   * (same core the 5-minute cron uses) until nothing processable remains.
+   * Each round handles up to 10 items; capped at 40 rounds per click.
+   */
+  const runContinuous = async () => {
+    if (!jobId || !job) return;
+    setContinuous(true);
+    let total = 0;
+    let published = 0;
+    try {
+      await setJobStatus({ id: jobId, status: "processing" });
+      for (let round = 0; round < 40; round++) {
+        const res: any = await runNow({ jobId, maxItems: 10 });
+        total += res?.processed ?? 0;
+        published += res?.published ?? 0;
+        if (!res?.processed) break;
+      }
+      if (total > 0) {
+        toast.success(
+          L(
+            `تمت معالجة ${total} عنصرًا فورًا${published ? ` ونشر ${published} تلقائيًا` : ""}`,
+            `Processed ${total} items now${published ? ` · auto-published ${published}` : ""}`,
+          ),
+        );
+      } else {
+        toast.info(L("لا عناصر قابلة للمعالجة الآن", "Nothing left to process right now"));
+      }
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setContinuous(false);
     }
   };
 
@@ -310,7 +348,11 @@ function QueueView({
           </Select>
           {job && job.status === "processing" && (
             <>
-              <Button size="sm" className="font-bold" disabled={processing} onClick={runBatch}>
+              <Button size="sm" className="font-bold" disabled={continuous || processing} onClick={runContinuous}>
+                {continuous ? <Loader2 className="size-4 animate-spin" /> : <Zap className="size-4" />}
+                {L("معالجة فورية", "Process now")}
+              </Button>
+              <Button size="sm" variant="outline" disabled={continuous || processing} onClick={runBatch}>
                 {processing ? <Loader2 className="size-4 animate-spin" /> : <Play className="size-4" />}
                 {L("معالجة دفعة", "Process batch")}
               </Button>
@@ -339,10 +381,16 @@ function QueueView({
       )}
 
       {fixedJobId && job && job.status === "processing" && (
-        <Button size="sm" className="font-bold" disabled={processing} onClick={runBatch}>
-          {processing ? <Loader2 className="size-4 animate-spin" /> : <Play className="size-4" />}
-          {L("معالجة دفعة", "Process batch")}
-        </Button>
+        <>
+          <Button size="sm" className="font-bold" disabled={continuous || processing} onClick={runContinuous}>
+            {continuous ? <Loader2 className="size-4 animate-spin" /> : <Zap className="size-4" />}
+            {L("معالجة فورية", "Process now")}
+          </Button>
+          <Button size="sm" variant="outline" disabled={continuous || processing} onClick={runBatch}>
+            {processing ? <Loader2 className="size-4 animate-spin" /> : <Play className="size-4" />}
+            {L("معالجة دفعة", "Process batch")}
+          </Button>
+        </>
       )}
 
       {/* Progress */}
