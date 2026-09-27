@@ -28,6 +28,9 @@ export function Footer() {
     { label: lang === "ar" ? "عن حكي" : "About HAKI", href: "/about" },
     { label: lang === "ar" ? "التحديات" : "Challenges", href: "/challenges" },
     { label: lang === "ar" ? "تواصل معنا" : "Contact us", href: "/about#contact" },
+    { label: lang === "ar" ? "شروط الاستخدام" : "Terms", href: "/terms" },
+    { label: lang === "ar" ? "الخصوصية" : "Privacy", href: "/privacy" },
+    { label: lang === "ar" ? "حقوق النشر" : "Copyright", href: "/copyright" },
   ];
 
   return (

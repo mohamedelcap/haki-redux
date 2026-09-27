@@ -1,7 +1,7 @@
 import { api } from "@/convex/_generated/api";
 import { SEO } from "@/components/SEO";
 import { ContentTypeIcon, TYPE_LABELS } from "@/components/ContentCard";
-import { demoAudioUrl } from "@/lib/player";
+import { demoAudioUrl, type QueueItem } from "@/lib/player";
 import { LOGO_COVER } from "@/lib/logoAsset";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { RatingsSection } from "@/components/RatingsSection";
 import { FollowPodcastButton } from "@/components/FollowPodcastButton";
+import { AddToPlaylistButton } from "@/components/AddToPlaylistButton";
 import { useAuth } from "@/hooks/use-auth";
 import { formatDuration, formatTime, useLang } from "@/lib/i18n";
 import { usePlayer } from "@/lib/player";
@@ -23,6 +24,7 @@ import {
   Link2,
   ListPlus,
   Play,
+  ShieldCheck,
 } from "lucide-react";
 import { useMemo } from "react";
 import { Link, useParams } from "react-router";
@@ -113,16 +115,23 @@ export default function ContentDetails() {
         target && !opts?.fromStart && resumePosition > startOffset && resumePosition < startOffset + target.duration
           ? resumePosition - startOffset
           : 0;
-      player.play({
+      const mkTrack = (c: { _id: string; title: string; duration: number; audioUrl?: string | null }) => ({
         contentId: item._id,
-        title: `${item.title} — ${target?.title ?? ""}`,
+        title: `${item.title} — ${c.title}`,
         coverImage: item.coverImage,
         authorName: item.authorName,
         narratorName: item.narratorName,
-        audioUrl: target?.audioUrl || demoAudioUrl(item._id),
-        startOffset,
-        startAt: startOffset + withinChapter,
+        audioUrl: c.audioUrl || demoAudioUrl(item._id),
+        startOffset: offsets.get(c._id) ?? 0,
+        startAt: (offsets.get(c._id) ?? 0),
       });
+      const queue: QueueItem[] = list.map((c, i) => ({
+        track: mkTrack(c),
+        label: `${i + 1}/${list.length} · ${c.title}`,
+      }));
+      const chosen = mkTrack(target);
+      chosen.startAt = startOffset + withinChapter;
+      player.playWithQueue(chosen, queue);
     } else {
       const startAt = opts?.fromStart ? 0 : resumePosition;
       player.play({
@@ -294,6 +303,55 @@ export default function ContentDetails() {
               )}
             </div>
 
+            {/* Imported-book provenance & rights badge */}
+            {item.sourceName && (
+              <div className="mt-4 rounded-xl border bg-background/60 p-3 text-xs">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-bold">
+                    {lang === "ar" ? "حالة الحقوق:" : "Rights:"}
+                  </span>
+                  <Badge
+                    variant="outline"
+                    className={cn(
+                      item.rightsStatus === "public_domain" && "border-green-600/40 bg-green-600/10 text-green-700 dark:text-green-400",
+                      item.rightsStatus === "copyrighted" && "border-amber-600/40 bg-amber-600/10 text-amber-700 dark:text-amber-400",
+                      (item.rightsStatus === "unknown" || item.rightsStatus === "requires_review") && "text-muted-foreground",
+                    )}
+                  >
+                    <ShieldCheck className="size-3" />
+                    {item.rightsStatus === "public_domain"
+                      ? lang === "ar" ? "ملكية عامة" : "Public domain"
+                      : item.rightsStatus === "copyrighted"
+                        ? lang === "ar" ? "محفوظ الحقوق" : "Copyrighted"
+                        : item.rightsStatus === "requires_review"
+                          ? lang === "ar" ? "قيد المراجعة" : "Under review"
+                          : lang === "ar" ? "غير معروف" : "Unknown"}
+                  </Badge>
+                  <span className="text-muted-foreground">
+                    {lang === "ar" ? "المصدر:" : "Source:"} {item.sourceName}
+                  </span>
+                  {item.sourceUrl && (
+                    <a
+                      href={item.sourceUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-semibold text-primary hover:underline"
+                    >
+                      {lang === "ar" ? "صفحة العمل الأصلية" : "Original page"}
+                    </a>
+                  )}
+                  <Link to="/copyright" className="text-muted-foreground hover:text-primary hover:underline">
+                    {lang === "ar" ? "حقوق النشر و DMCA" : "Copyright & DMCA"}
+                  </Link>
+                </div>
+                {item.rightsInfo && (
+                  <p className="mt-1.5 truncate text-muted-foreground" title={item.rightsInfo}>
+                    {item.rightsInfo}
+                  </p>
+                )}
+              </div>
+            )}
+
             {/* Actions */}
             <div className="mt-6 flex flex-wrap items-center gap-2.5">
               <Button size="lg" className="font-bold" onClick={() => startPlayback()}>
@@ -312,6 +370,7 @@ export default function ContentDetails() {
                 <Link2 className="size-4" />
                 {t("share")}
               </Button>
+              <AddToPlaylistButton contentId={item._id} />
               {item.contentType === "podcast" && (
                 <FollowPodcastButton contentId={item._id} />
               )}

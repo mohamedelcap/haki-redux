@@ -2,6 +2,7 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 import { ConvexError } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { QueryCtx, MutationCtx } from "./_generated/server";
+import { api } from "./_generated/api";
 import { CONTENT_TYPES } from "./schema";
 
 /** Get the current user doc or null. */
@@ -285,6 +286,16 @@ export async function syncChallengeParticipation(
       isRead: false,
       createdAt: Date.now(),
     });
+    // Completion email (no-op without RESEND_API_KEY).
+    try {
+      await ctx.scheduler.runAfter(0, api.email.sendToUser, {
+        kind: "challenge" as const,
+        userId: participant.userId,
+        challengeName: challenge.name,
+      });
+    } catch {
+      /* best-effort */
+    }
   }
   return res;
 }

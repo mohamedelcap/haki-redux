@@ -7,6 +7,7 @@ import { HomepageManager } from "@/pages/admin/HomepageManager";
 import { MediaLibrary } from "@/pages/admin/MediaLibrary";
 import { NotificationsManager } from "@/pages/admin/NotificationsManager";
 import { PaymentMethodsManager } from "@/pages/admin/PaymentMethodsManager";
+import { ManualPaymentsManager } from "@/pages/admin/ManualPaymentsManager";
 import { RoyaltiesManager } from "@/pages/admin/RoyaltiesManager";
 import { BookImporterManager } from "@/pages/admin/BookImporterManager";
 import { SEO } from "@/components/SEO";
@@ -56,6 +57,7 @@ import {
   LayoutDashboard,
   Loader2,
   ListMusic,
+  ClipboardList,
   LogOut,
   Menu,
   Mic,
@@ -105,6 +107,7 @@ type TabKey =
   | "submissions"
   | "notifications"
   | "paymentMethods"
+  | "manualPayments"
   | "authors"
   | "narrators"
   | "publishers"
@@ -175,6 +178,7 @@ function AdminInner() {
       items: [
         { key: "plans", label: L("الاشتراكات", "Subscriptions"), icon: Crown },
         { key: "paymentMethods", label: L("وسائل الدفع", "Payment methods"), icon: Wallet },
+        { key: "manualPayments", label: L("طلبات الدفع اليدوي", "Manual payments"), icon: ClipboardList },
         { key: "royalties", label: L("توزيع الأرباح", "Revenue distribution"), icon: Coins },
         { key: "challenges", label: L("التحديات", "Challenges"), icon: Trophy },
       ],
@@ -314,6 +318,7 @@ function AdminInner() {
           {tab === "submissions" && <SubmissionsManager L={L} />}
           {tab === "notifications" && <NotificationsManager L={L} />}
           {tab === "paymentMethods" && <PaymentMethodsManager L={L} />}
+          {tab === "manualPayments" && <ManualPaymentsManager L={L} />}
           {tab === "royalties" && <RoyaltiesManager L={L} />}
           {tab === "bookImporter" && <BookImporterManager L={L} />}
           {tab === "users" && <UsersManager L={L} />}
@@ -995,11 +1000,11 @@ function ContentManager({ L, lang, defaultType, featuredOnly, autoOpen }: { L: (
                   label={L("أو ارفع الملف الصوتي", "Or upload an audio file")}
                   maxSizeMB={80}
                   className="w-full"
-                  onUploaded={async (storageId) => {
+                  onAudioUploaded={async (storageId, durationSeconds) => {
                     try {
                       if (editing._id) {
-                        await saveAudioUpload({ storageId: storageId as any, target: { kind: "content", contentId: editing._id as any } });
-                        toast.success(L("تم رفع الصوت وربطه", "Audio uploaded"));
+                        await saveAudioUpload({ storageId: storageId as any, target: { kind: "content", contentId: editing._id as any }, duration: durationSeconds });
+                        toast.success(L(`تم رفع الصوت (${Math.round(durationSeconds / 60)} دقيقة)`, `Audio uploaded (${Math.round(durationSeconds / 60)} min)`));
                         setOpen(false);
                         setEditing(null);
                       } else {

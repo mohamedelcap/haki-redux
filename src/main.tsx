@@ -33,6 +33,9 @@ const Profile = lazy(() => import("./pages/Profile.tsx"));
 const Library = lazy(() => import("./pages/Library.tsx"));
 const HistoryPage = lazy(() => import("./pages/History.tsx"));
 const Settings = lazy(() => import("./pages/Settings.tsx"));
+const Legal = lazy(() => import("./pages/Legal.tsx"));
+const PlaylistPage = lazy(() => import("./pages/Playlist.tsx"));
+const Studio = lazy(() => import("./pages/Studio.tsx"));
 const AdminDashboard = lazy(() => import("./pages/admin/AdminDashboard.tsx"));
 
 // Simple loading fallback for route transitions
@@ -146,6 +149,14 @@ function SiteRoutes() {
         <Route path="/narrator/:id" element={<PersonPage />} />
         <Route path="/subscriptions" element={<Subscriptions />} />
         <Route path="/publish" element={<Publish />} />
+        <Route
+          path="/studio"
+          element={
+            <RequireAuth title="الاستوديو للناشرين والمؤلفين" description="سجّل الدخول بحساب ناشر أو مؤلف.">
+              <Studio />
+            </RequireAuth>
+          }
+        />
         <Route path="/challenges" element={<Challenges />} />
         <Route path="/challenges/:id" element={<ChallengeDetails />} />
         <Route path="/live" element={<Live />} />
@@ -164,6 +175,17 @@ function SiteRoutes() {
         <Route path="/library" element={<Library />} />
         <Route path="/history" element={<HistoryPage />} />
         <Route path="/settings" element={<Settings />} />
+        <Route path="/terms" element={<Legal />} />
+        <Route path="/privacy" element={<Legal />} />
+        <Route path="/copyright" element={<Legal />} />
+        <Route
+          path="/playlists/:id"
+          element={
+            <RequireAuth title="سجّل الدخول لعرض القوائم" description="قوائمك الخاصة متاحة للمستخدمين المسجلين.">
+              <PlaylistPage />
+            </RequireAuth>
+          }
+        />
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="*" element={<NotFound />} />
       </Route>

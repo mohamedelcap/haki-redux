@@ -136,6 +136,8 @@ const DICT = {
   durationLabel: { ar: "المدة", en: "Duration" },
   sectionCount: { ar: "فصل", en: "chapters" },
   episodeCount: { ar: "حلقة", en: "episodes" },
+  topRated: { ar: "الأعلى تقييمًا", en: "Top rated" },
+  suggestions: { ar: "اقتراحات", en: "Suggestions" },
 } as const;
 
 export type TKey = keyof typeof DICT;

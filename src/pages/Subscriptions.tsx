@@ -2,6 +2,8 @@ import { api } from "@/convex/_generated/api";
 import { SEO } from "@/components/SEO";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/hooks/use-auth";
 import { useLang } from "@/lib/i18n";
@@ -130,6 +132,12 @@ export default function Subscriptions() {
   const cancelSub = useMutation(api.subscriptions.cancelMySubscription);
   const createCheckout = useAction(api.payments.createCheckoutSession);
   const activateAfterCheckout = useAction(api.payments.activateAfterCheckout);
+  const registerIntent = useMutation(api.manualPayments.registerIntent);
+  const myPayRequests = useQuery(
+    api.manualPayments.myRequests,
+    isAuthenticated ? {} : "skip",
+  );
+  const [payReference, setPayReference] = useState("");
   const [paying, setPaying] = useState<string | null>(null);
   const [selectedMethod, setSelectedMethod] = useState("stripe");
   const [checkoutPlan, setCheckoutPlan] = useState<any>(null);
@@ -196,15 +204,20 @@ export default function Subscriptions() {
         window.location.href = res.url;
         return;
       }
-      // Manual methods (wallets / bank transfer / Fawry) — demo activation
-      // until the corresponding gateway keys are configured.
-      await subscribe({ planId: checkoutPlan._id as any });
+      // Manual methods (wallets / bank transfer / Fawry) → register a payment
+      // intent for admin review; the subscription activates upon approval.
+      await registerIntent({
+        planId: checkoutPlan._id as any,
+        method: selectedMethod,
+        reference: payReference.trim() || undefined,
+      });
       toast.success(
         lang === "ar"
-          ? "تم تسجيل اختيارك — سنتواصل معك لإتمام الدفع عبر الوسيلة المختارة"
-          : "Choice recorded — we'll contact you to complete the payment",
+          ? "تم استلام طلب الدفع — سيُفعّل اشتراكك بعد مراجعة العملية"
+          : "Payment request received — your subscription activates after review",
       );
       setCheckoutPlan(null);
+      setPayReference("");
     } catch (e: any) {
       const msg = String(e?.message ?? "");
       if (msg.includes("STRIPE_SECRET_KEY")) {
@@ -389,6 +402,40 @@ export default function Subscriptions() {
               onSelect={setSelectedMethod}
               enabled={null}
             />
+
+            {selectedMethod !== "stripe" && selectedMethod !== "applepay" && (
+              <div className="space-y-1.5">
+                <Label className="text-xs">
+                  {lang === "ar"
+                    ? selectedMethod === "bankTransfer"
+                      ? "رقم الحوالة / مرجع التحويل"
+                      : "رقم عملية الدفع من التطبيق"
+                    : selectedMethod === "bankTransfer"
+                      ? "Transfer reference number"
+                      : "Payment transaction number"
+                  }
+                </Label>
+                <Input
+                  value={payReference}
+                  onChange={(e) => setPayReference(e.target.value)}
+                  dir="ltr"
+                  placeholder="123456789"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  {lang === "ar"
+                    ? "سيُفعّل الاشتراك بعد التحقق من العملية (خلال 24 ساعة عادة)."
+                    : "Subscription activates after we verify the transaction (usually within 24h)."}
+                </p>
+              </div>
+            )}
+
+            {(myPayRequests ?? []).filter((r: any) => r.status === "pending").length > 0 && (
+              <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-xs font-bold text-amber-600 dark:text-amber-400">
+                {lang === "ar"
+                  ? "⏳ لديك طلب دفع قيد المراجعة — سنبلغك عند التفعيل"
+                  : "⏳ You have a payment under review — we'll notify you once approved"}
+              </div>
+            )}
 
             <div className="flex items-center justify-between gap-3 border-t pt-4">
               <Button variant="ghost" onClick={() => setCheckoutPlan(null)}>

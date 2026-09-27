@@ -41,6 +41,7 @@ export default function Home() {
   const { isAuthenticated } = useAuth();
   // Homepage sections come from the database (managed in the admin dashboard).
   const dynamicSections = useQuery(api.homepage.getPublicSections, {});
+  const recommendations = useQuery(api.recommend.recommendForUser, { limit: 12 });
   const live = useQuery(api.engagement.getCurrentLive, {});
   const continueList = useQuery(
     api.library.continueListening,
@@ -194,6 +195,27 @@ export default function Home() {
         <>
           <SectionSkeleton /> <SectionSkeleton /> <SectionSkeleton />
         </>
+      )}
+
+      {/* ============ Suggested for you (personalized or most-played) ============ */}
+      {recommendations !== undefined && recommendations.items.length > 0 && (
+        <section className="py-6">
+          <div className="haki-container">
+            <div className="flex items-center gap-2">
+              <Sparkles className="size-5 text-primary" />
+              <h2 className="text-xl font-extrabold sm:text-2xl">
+                {recommendations.personalized
+                  ? lang === "ar" ? "مقترح لك" : "Suggested for you"
+                  : lang === "ar" ? "الأكثر استماعًا على حكي" : "Most listened on HAKI"}
+              </h2>
+            </div>
+            <div className="no-scrollbar mt-5 flex gap-4 overflow-x-auto pb-2">
+              {recommendations.items.map((item) => (
+                <ContentCard key={item._id} item={item} className="w-40 shrink-0 sm:w-44" />
+              ))}
+            </div>
+          </div>
+        </section>
       )}
 
       {/* ============ Continue listening (signed-in only) ============ */}

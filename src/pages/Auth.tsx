@@ -16,6 +16,8 @@ import {
 } from "@/components/ui/input-otp";
 
 import { useAuth } from "@/hooks/use-auth";
+import { api } from "@/convex/_generated/api";
+import { useMutation, useAction } from "convex/react";
 import { HakiLogo } from "@/components/HakiLogo";
 import {
   ArrowLeft,
@@ -46,6 +48,10 @@ type Mode = "signIn" | "signUp" | "forgot";
 function Auth({ redirectAfterAuth }: AuthProps = {}) {
   const { isLoading: authLoading, isAuthenticated, signIn } = useAuth();
   const navigate = useNavigate();
+  const checkLoginAllowed = useMutation(api.account.checkLoginAllowed);
+  const recordLoginAttempt = useMutation(api.account.recordLoginAttempt);
+  const setUsername = useMutation(api.account.setUsername);
+  const sendEmail = useAction(api.email.send);
   const [searchParams] = useSearchParams();
   const redirect = resolveRedirectAfterAuth(
     searchParams.get("returnTo"),
@@ -92,11 +98,33 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
     const formData = new FormData(event.currentTarget);
     const email = formData.get("email") as string;
     const password = formData.get("password") as string;
+    const username = (formData.get("username") as string)?.trim();
     const flow = mode === "signUp" ? "signUp" : "signIn";
     try {
+      // Rate limit: max 5 failed password attempts per minute per email.
+      await checkLoginAllowed({ email });
       await signIn("password", { email, password, flow });
+      if (mode === "signUp" && username) {
+        try {
+          await setUsername({ username });
+        } catch {
+          /* username optional — never blocks signup */
+        }
+      }
+      await recordLoginAttempt({ email, success: true });
+      if (mode === "signUp") {
+        // Fire-and-forget welcome email (no-op without RESEND_API_KEY).
+        sendEmail({ kind: "welcome", to: email }).catch(() => {});
+      }
       navigate(redirect);
-    } catch (e) {
+    } catch (e: any) {
+      try {
+        await recordLoginAttempt({ email, success: false });
+      } catch (rl: any) {
+        setError(rl.message ?? "محاولات كثيرة — انتظر دقيقة.");
+        setIsLoading(false);
+        return;
+      }
       setError(errMsg(e, "تعذّر تسجيل الدخول، حاول مرة أخرى."));
       setIsLoading(false);
     }
@@ -405,9 +433,30 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                     ? "سجّل الآن واستمع لآلاف الأعمال العربية الصوتية"
                     : "سجّل دخولك بكلمة المرور للمتابعة"}
                 </CardDescription>
+                {mode === "signUp" && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    يمكنك اختيار اسم مستخدم فريد يظهر في ملفك — اختياري.
+                  </p>
+                )}
               </CardHeader>
               <form onSubmit={handlePasswordSubmit}>
                 <CardContent className="space-y-3">
+                  {mode === "signUp" && (
+                    <div className="space-y-1.5">
+                      <Label htmlFor="username">اسم المستخدم (اختياري)</Label>
+                      <Input
+                        id="username"
+                        name="username"
+                        placeholder="book_lover99"
+                        dir="ltr"
+                        minLength={3}
+                        maxLength={20}
+                        pattern="[a-zA-Z0-9_]+"
+                        autoComplete="username"
+                        disabled={isLoading}
+                      />
+                    </div>
+                  )}
                   <div className="space-y-1.5">
                     <Label htmlFor="email">البريد الإلكتروني</Label>
                     <div className="relative">

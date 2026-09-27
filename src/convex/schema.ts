@@ -79,9 +79,13 @@ const schema = defineSchema(
       isAnonymous: v.optional(v.boolean()),
       role: v.optional(roleValidator),
       phone: v.optional(v.string()),
+      /** Unique public handle (letters/digits/underscore), set from Settings. */
+      username: v.optional(v.string()),
       // platform user preferences
       language: v.optional(v.union(v.literal("ar"), v.literal("en"))),
-    }).index("email", ["email"]),
+    })
+      .index("email", ["email"])
+      .index("by_username", ["username"]),
 
     // ---- Publishing entities ----
     authors: defineTable({
@@ -328,6 +332,9 @@ const schema = defineSchema(
       message: v.optional(v.string()),
       fileUrl: v.optional(v.string()),
       fileName: v.optional(v.string()),
+      /** Studio flow: the draft work this submission publishes upon approval. */
+      contentId: v.optional(v.id("content")),
+      submittedBy: v.optional(v.id("users")),
       status: submissionStatusValidator,
       createdAt: v.number(),
     }),
@@ -485,6 +492,55 @@ const schema = defineSchema(
       subject: v.string(),
       categoryId: v.id("categories"),
     }).index("by_source_subject", ["source", "subject"]),
+
+    /**
+     * Manual payment requests (Fawry / STC Pay / Vodafone Cash / bank transfer):
+     * user registers intent, admin reviews proof and approves → subscription.
+     */
+    manual_payments: defineTable({
+      userId: v.id("users"),
+      planId: v.id("subscription_plans"),
+      /** fawry | stcpay | vodafonecash | bankTransfer */
+      method: v.string(),
+      /** pending | approved | rejected */
+      status: v.string(),
+      /** User-submitted reference (transaction id / receipt note). */
+      reference: v.optional(v.string()),
+      amount: v.number(),
+      currency: v.string(),
+      /** Admin who approved/rejected. */
+      reviewedBy: v.optional(v.id("users")),
+      reviewedAt: v.optional(v.number()),
+      /** Subscription created upon approval. */
+      subscriptionId: v.optional(v.id("subscriptions")),
+      /** Idempotency: Stripe session id (webhook path). */
+      stripeSessionId: v.optional(v.string()),
+      createdAt: v.number(),
+      updatedAt: v.number(),
+    })
+      .index("by_status", ["status"])
+      .index("by_user", ["userId"]),
+
+    /**
+     * User-curated playlists: ordered lists of works (chapters feed the
+     * player queue in order via "play all").
+     */
+    user_playlists: defineTable({
+      name: v.string(),
+      ownerId: v.id("users"),
+      /** Ordered content ids. */
+      items: v.array(v.id("content")),
+      description: v.optional(v.string()),
+      createdAt: v.number(),
+      updatedAt: v.number(),
+    }).index("by_owner", ["ownerId"]),
+
+    /** Login rate limiting: attempts per email (5/minute, cleaned opportunistically). */
+    login_attempts: defineTable({
+      email: v.string(),
+      at: v.number(),
+      success: v.boolean(),
+    }).index("by_email", ["email"]),
 
     /** Scheduled (background) imports configured by admins. */
     import_schedules: defineTable({

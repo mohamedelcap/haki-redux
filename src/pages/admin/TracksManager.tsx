@@ -112,11 +112,12 @@ function ChaptersPanel({ contentId, L }: { contentId: string; L: (ar: string, en
                 accept=".mp3,.m4a,audio/mpeg,audio/mp4,audio/*"
                 label={L("صوت الفصل", "Chapter audio")}
                 maxSizeMB={80}
-                onUploaded={async (storageId) => {
+                onAudioUploaded={async (storageId, durationSeconds) => {
                   try {
                     await saveAudioUpload({
                       storageId: storageId as any,
                       target: { kind: "chapter", chapterId: ch._id },
+                      duration: durationSeconds,
                     });
                     toast.success(L("تم رفع صوت الفصل", "Chapter audio uploaded"));
                   } catch (e: any) {
@@ -288,11 +289,12 @@ function EpisodesPanel({ contentId, L }: { contentId: string; L: (ar: string, en
                 accept=".mp3,.m4a,audio/mpeg,audio/mp4,audio/*"
                 label={L("صوت الحلقة", "Episode audio")}
                 maxSizeMB={80}
-                onUploaded={async (storageId) => {
+                onAudioUploaded={async (storageId, durationSeconds) => {
                   try {
                     await saveAudioUpload({
                       storageId: storageId as any,
                       target: { kind: "episode", episodeId: ep._id },
+                      duration: durationSeconds,
                     });
                     toast.success(L("تم رفع صوت الحلقة", "Episode audio uploaded"));
                   } catch (e: any) {

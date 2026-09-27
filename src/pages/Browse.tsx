@@ -15,9 +15,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useLang } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { useQuery } from "convex/react";
-import { SearchX } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
-import { useParams, useSearchParams } from "react-router";
+import { Search, SearchX } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Link, useParams, useSearchParams } from "react-router";
 
 const TYPE_KEYS = ["audiobook", "ebook", "audio_drama", "micro_drama", "podcast", "magazine"] as const;
 
@@ -43,7 +43,23 @@ export default function Browse() {
   const { type: typeParam } = useParams<{ type: string }>();
   const pathType = typeParam ? SLUG_TO_TYPE[typeParam] : undefined;
   const [q, setQ] = useState("");
+  const [debouncedQ, setDebouncedQ] = useState("");
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Debounce the search box (300ms) so suggestions/results update live.
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => setDebouncedQ(q.trim()), 300);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [q]);
+  const [showSuggest, setShowSuggest] = useState(false);
   const [type, setType] = useState<string>(pathType ?? searchParams.get("type") ?? "all");
+  const suggestions = useQuery(
+    api.content.suggest,
+    debouncedQ.length >= 2 ? { q: debouncedQ, type: TYPE_KEYS.includes(type as any) ? (type as any) : undefined } : "skip",
+  );
   const [categorySlug, setCategorySlug] = useState<string>(searchParams.get("category") ?? "all");
   const [authorId, setAuthorId] = useState<string>("all");
   const [narratorId, setNarratorId] = useState<string>("all");
@@ -63,7 +79,7 @@ export default function Browse() {
   const narrators = useQuery(api.content.listNarrators, {});
 
   const results = useQuery(api.content.browse, {
-    q: q || undefined,
+    q: debouncedQ || undefined,
     contentType: TYPE_KEYS.includes(type as any) ? (type as any) : undefined,
     categorySlug: categorySlug === "all" ? undefined : categorySlug,
     authorId: authorId === "all" ? undefined : (authorId as any),
@@ -92,13 +108,43 @@ export default function Browse() {
         {/* Toolbar */}
         <div className="mt-6 space-y-3">
           <div className="relative">
+            <Search className="pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={q}
-              onChange={(e) => setQ(e.target.value)}
+              onChange={(e) => { setQ(e.target.value); setShowSuggest(true); }}
+              onFocus={() => setShowSuggest(true)}
+              onBlur={() => window.setTimeout(() => setShowSuggest(false), 150)}
               placeholder={lang === "ar" ? "ابحث في المكتبة..." : "Search the library..."}
-              className="h-11 ps-4"
+              className="h-11 ps-9"
               aria-label={t("search")}
             />
+            {/* Live suggestions (top 5, debounced) */}
+            {showSuggest && debouncedQ.length >= 2 && suggestions !== undefined && suggestions.length > 0 && (
+              <div className="absolute inset-x-0 top-full z-30 mt-1 overflow-hidden rounded-xl border bg-popover shadow-lg">
+                <p className="border-b px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+                  {t("suggestions")}
+                </p>
+                {suggestions.map((s) => (
+                  <Link
+                    key={s._id}
+                    to={`/content/${s.slug}`}
+                    className="flex items-center gap-3 px-3 py-2 transition-colors hover:bg-accent"
+                    onMouseDown={(e) => e.preventDefault()}
+                  >
+                    <img
+                      src={s.coverImage || "/logo.png"}
+                      alt=""
+                      loading="lazy"
+                      className="size-9 rounded-md object-cover"
+                    />
+                    <span className="min-w-0 flex-1 truncate text-sm font-semibold">{s.title}</span>
+                    <span className="shrink-0 text-[10px] font-bold uppercase text-muted-foreground">
+                      {TYPE_LABELS[s.contentType]?.[lang] ?? ""}
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="flex flex-wrap gap-2">
@@ -178,6 +224,7 @@ export default function Browse() {
                 <SelectContent>
                   <SelectItem value="newest">{t("newest")}</SelectItem>
                   <SelectItem value="popular">{t("mostPopular")}</SelectItem>
+                  <SelectItem value="topRated">{t("topRated")}</SelectItem>
                   <SelectItem value="title">{t("titleAz")}</SelectItem>
                 </SelectContent>
               </Select>

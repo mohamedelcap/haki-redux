@@ -235,7 +235,7 @@ export const browse = query({
     narratorId: v.optional(v.id("narrators")),
     duration: v.optional(v.union(v.literal("short"), v.literal("medium"), v.literal("long"))),
     sort: v.optional(
-      v.union(v.literal("newest"), v.literal("popular"), v.literal("title")),
+      v.union(v.literal("newest"), v.literal("popular"), v.literal("title"), v.literal("topRated")),
     ),
   },
   handler: async (ctx, args) => {
@@ -293,9 +293,66 @@ export const browse = query({
     const sort = args.sort ?? "newest";
     if (sort === "newest") out.sort((a, b) => b.createdAt - a.createdAt);
     else if (sort === "popular") out.sort((a, b) => b.playCount - a.playCount);
-    else out.sort((a, b) => a.title.localeCompare(b.title, "ar"));
+    else if (sort === "topRated") {
+      // Average rating per content from the ratings table (index-scoped reads).
+      const scores = new Map<string, { sum: number; n: number }>();
+      const ratings = await ctx.db.query("ratings").collect();
+      for (const r of ratings) {
+        const s = scores.get(r.contentId) ?? { sum: 0, n: 0 };
+        s.sum += r.value;
+        s.n += 1;
+        scores.set(r.contentId, s);
+      }
+      out.sort((a, b) => {
+        const sa = scores.get(a._id);
+        const sb = scores.get(b._id);
+        const ra = sa && sa.n > 0 ? sa.sum / sa.n : -1;
+        const rb = sb && sb.n > 0 ? sb.sum / sb.n : -1;
+        if (rb !== ra) return rb - ra;
+        return b.playCount - a.playCount;
+      });
+    } else out.sort((a, b) => a.title.localeCompare(b.title, "ar"));
 
     return out;
+  },
+});
+
+/** Live search suggestions for the browse box (top 5 matches). */
+export const suggest = query({
+  args: {
+    q: v.string(),
+    type: v.optional(contentTypeValidator),
+  },
+  handler: async (ctx, args) => {
+    const needle = args.q.trim().toLowerCase();
+    if (needle.length < 2) return [];
+    let rows: Doc<"content">[];
+    if (args.type) {
+      rows = await ctx.db
+        .query("content")
+        .withIndex("by_type_status", (q) =>
+          q.eq("contentType", args.type!).eq("status", "published"),
+        )
+        .collect();
+    } else {
+      rows = await ctx.db
+        .query("content")
+        .withIndex("by_status", (q) => q.eq("status", "published"))
+        .collect();
+    }
+    const matched = rows.filter(
+      (r) =>
+        r.title.toLowerCase().includes(needle) ||
+        r.description.toLowerCase().includes(needle),
+    );
+    matched.sort((a, b) => b.playCount - a.playCount);
+    return matched.slice(0, 5).map((r) => ({
+      _id: r._id,
+      slug: r.slug,
+      title: r.title,
+      coverImage: r.coverImage ?? null,
+      contentType: r.contentType,
+    }));
   },
 });
 

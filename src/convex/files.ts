@@ -42,6 +42,8 @@ export const saveAudio = mutation({
       v.object({ kind: v.literal("chapter"), chapterId: v.id("chapters") }),
       v.object({ kind: v.literal("episode"), episodeId: v.id("episodes") }),
     ),
+    /** Auto-extracted duration in seconds (from the uploader's metadata). */
+    duration: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     // Resolve the owning content row for any target kind.
@@ -59,11 +61,20 @@ export const saveAudio = mutation({
     const url = await ctx.storage.getUrl(args.storageId);
     if (!url) throw new Error("الملف غير موجود في التخزين");
     if (args.target.kind === "content") {
-      await ctx.db.patch(args.target.contentId, { audioUrl: url });
+      await ctx.db.patch(args.target.contentId, {
+        audioUrl: url,
+        ...(args.duration ? { duration: args.duration } : {}),
+      });
     } else if (args.target.kind === "chapter") {
-      await ctx.db.patch(args.target.chapterId, { audioUrl: url });
+      await ctx.db.patch(args.target.chapterId, {
+        audioUrl: url,
+        ...(args.duration ? { duration: args.duration } : {}),
+      });
     } else {
-      await ctx.db.patch(args.target.episodeId, { audioUrl: url });
+      await ctx.db.patch(args.target.episodeId, {
+        audioUrl: url,
+        ...(args.duration ? { duration: args.duration } : {}),
+      });
     }
     return { url };
   },

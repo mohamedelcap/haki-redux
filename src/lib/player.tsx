@@ -18,6 +18,8 @@ import {
   Play,
   RotateCcw,
   RotateCw,
+  SkipBack,
+  SkipForward,
   Timer,
   TimerOff,
   Volume2,
@@ -35,6 +37,7 @@ import {
   type ReactNode,
 } from "react";
 import { create } from "zustand";
+import { toast } from "sonner";
 
 /**
  * Valid silent placeholder audio: a tiny generated WAV (no console errors,
@@ -91,6 +94,12 @@ export type PlayerTrack = {
   startAt?: number;
 };
 
+/** A queued sibling track (next/previous chapter or episode). */
+export type QueueItem = {
+  track: PlayerTrack;
+  label: string;
+};
+
 type PlayerState = {
   track: PlayerTrack | null;
   isPlaying: boolean;
@@ -99,24 +108,38 @@ type PlayerState = {
   muted: boolean;
   /** Sleep timer: absolute end timestamp, null = off. */
   sleepTimerEnd: number | null;
+  /** Sibling tracks of the same content (chapters/episodes), in order. */
+  queue: QueueItem[];
   setTrack: (t: PlayerTrack | null) => void;
   setIsPlaying: (p: boolean) => void;
   setSpeed: (s: number) => void;
   setVolume: (v: number) => void;
   setMuted: (m: boolean) => void;
   setSleepTimer: (minutes: number | null) => void;
+  /** Set siblings so the player can auto-advance and skip prev/next. */
+  setQueue: (q: QueueItem[]) => void;
+  advance: (dir: 1 | -1) => void;
 };
 
-export const usePlayerStore = create<PlayerState>((set) => ({
+export const usePlayerStore = create<PlayerState>((set, get) => ({
   track: null,
   isPlaying: false,
   speed: 1,
   volume: 1,
   muted: false,
   sleepTimerEnd: null,
+  queue: [],
   setTrack: (track) => set({ track, isPlaying: true }),
   setIsPlaying: (isPlaying) => set({ isPlaying }),
   setSpeed: (speed) => set({ speed }),
+  setQueue: (queue) => set({ queue }),
+  advance: (dir) => {
+    const { track, queue } = get();
+    if (!track || queue.length === 0) return;
+    const idx = queue.findIndex((q) => q.track.startOffset === track.startOffset);
+    const next = queue[idx + dir];
+    if (next) set({ track: next.track, isPlaying: true });
+  },
   setVolume: (volume) => set({ volume }),
   setMuted: (muted) => set({ muted }),
   setSleepTimer: (minutes) =>
@@ -131,6 +154,10 @@ type PlayerContextValue = {
   resume: () => void;
   close: () => void;
   seek: (seconds: number) => void;
+  /** Play a track and register its siblings for auto-advance/prev/next. */
+  playWithQueue: (track: PlayerTrack, queue: QueueItem[]) => void;
+  next: () => void;
+  previous: () => void;
   track: PlayerTrack | null;
   isPlaying: boolean;
 };
@@ -150,6 +177,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const { isAuthenticated } = useAuth();
   const recordListen = useMutation(api.library.recordListen);
   const syncChallenges = useMutation(api.engagement.syncMyChallengeProgress);
+  const queue = usePlayerStore((s) => s.queue);
+  const setQueue = usePlayerStore((s) => s.setQueue);
+  const advance = usePlayerStore((s) => s.advance);
 
   const stateRef = useRef({ track, isPlaying, isAuthenticated });
   stateRef.current = { track, isPlaying, isAuthenticated };
@@ -223,6 +253,15 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   }, [track, isPlaying, recordListen]);
 
   const play = useCallback((t: PlayerTrack) => setTrack(t), [setTrack]);
+  const playWithQueue = useCallback(
+    (t: PlayerTrack, q: QueueItem[]) => {
+      setQueue(q);
+      setTrack(t);
+    },
+    [setQueue, setTrack],
+  );
+  const next = useCallback(() => advance(1), [advance]);
+  const previous = useCallback(() => advance(-1), [advance]);
   const pause = useCallback(() => setIsPlaying(false), [setIsPlaying]);
   const resume = useCallback(() => setIsPlaying(true), [setIsPlaying]);
   const close = useCallback(() => {
@@ -240,8 +279,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   );
 
   const value = useMemo<PlayerContextValue>(
-    () => ({ play, pause, resume, close, seek, track, isPlaying }),
-    [play, pause, resume, close, seek, track, isPlaying],
+    () => ({ play, playWithQueue, next, previous, pause, resume, close, seek, track, isPlaying }),
+    [play, playWithQueue, next, previous, pause, resume, close, seek, track, isPlaying],
   );
 
   return (
@@ -252,6 +291,17 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         preload="metadata"
         onTimeUpdate={() => setTick((t) => t + 1)}
         onLoadedMetadata={() => setTick((t) => t + 1)}
+        onEnded={() => {
+          // Sequential playback: only for real audio (demo loops via audio.loop).
+          if (stateRef.current.track && !stateRef.current.track.audioUrl.startsWith("data:")) {
+            const { track: cur, queue: q } = usePlayerStore.getState();
+            const idx = cur ? q.findIndex((x) => x.track.startOffset === cur.startOffset) : -1;
+            if (idx >= 0 && idx < q.length - 1) {
+              toast.info(`▶ ${q[idx + 1].label}`);
+            }
+            advance(1);
+          }
+        }}
       />
       <PlayerBar audioRef={audioRef} />
     </PlayerContext.Provider>
@@ -282,7 +332,13 @@ function PlayerBar({
   const sleepTimerEnd = usePlayerStore((s) => s.sleepTimerEnd);
   const setSleepTimer = usePlayerStore((s) => s.setSleepTimer);
   const close = usePlayer().close;
+  const { next, previous } = usePlayer();
+  const queue = usePlayerStore((s) => s.queue);
   const [, setTick] = useState(0);
+
+  const queueIdx = track ? queue.findIndex((q) => q.track.startOffset === track.startOffset) : -1;
+  const canSkipPrev = queueIdx > 0;
+  const canSkipNext = queueIdx >= 0 && queueIdx < queue.length - 1;
 
   // Sleep timer: pause playback when the countdown reaches zero.
   useEffect(() => {
@@ -341,6 +397,16 @@ function PlayerBar({
           <Button
             variant="ghost"
             size="icon"
+            aria-label="السابق"
+            disabled={!canSkipPrev}
+            onClick={previous}
+            className="hidden sm:inline-flex"
+          >
+            <SkipBack className="size-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
             aria-label="رجوع 10 ثوانٍ"
             onClick={() => seekTo(currentTime - 10)}
           >
@@ -362,6 +428,16 @@ function PlayerBar({
             className="hidden sm:inline-flex"
           >
             <RotateCw className="size-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="التالي"
+            disabled={!canSkipNext}
+            onClick={next}
+            className="hidden sm:inline-flex"
+          >
+            <SkipForward className="size-4" />
           </Button>
         </div>
 
