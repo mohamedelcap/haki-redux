@@ -456,8 +456,8 @@ export const autoDiscoverPendingInternal = internalAction({
         // Schedule input may be "languages=en" style query or free text.
         const raw = String(job.input ?? "");
         const q = raw.startsWith("languages=")
-          ? `https://gutendex.com/books?${raw}&page=1`
-          : `https://gutendex.com/books?search=${encodeURIComponent(raw)}&page=1`;
+          ? `https://gutendex.com/books/?${raw}&page=1`
+          : `https://gutendex.com/books/?search=${encodeURIComponent(raw)}&page=1`;
         const data = await fetchWithLimit(q);
         const results: any[] = data?.results ?? [];
         ids = results.map((b) => String(b.id)).filter(Boolean).slice(0, 60);
@@ -658,7 +658,7 @@ export const discoverCandidates = action({
       if (gutenbergSource) {
         // Gutendex search/collection query.
         const q = parsed.query ?? "";
-        const endpoint = `https://gutendex.com/books?${q}${q ? "&" : ""}page=1`;
+        const endpoint = `https://gutendex.com/books/${q ? `?${q}&` : ""}page=1`;
         const data = await fetchWithLimit(endpoint);
         const results: any[] = data?.results ?? [];
         const ids = results.map((b) => String(b.id)).filter(Boolean).slice(0, 200);
@@ -698,7 +698,7 @@ export const discoverCandidates = action({
         .filter(Boolean)
         .slice(0, 200);
     } else if (source === "gutenberg") {
-      const endpoint = `https://gutendex.com/books?search=${encodeURIComponent(input)}&page=1`;
+      const endpoint = `https://gutendex.com/books/?search=${encodeURIComponent(input)}&page=1`;
       const data = await fetchWithLimit(endpoint);
       const results: any[] = data?.results ?? [];
       ids = results.map((b) => String(b.id)).filter(Boolean).slice(0, 200);

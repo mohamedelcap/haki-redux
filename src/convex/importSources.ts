@@ -36,9 +36,9 @@ export const SOURCES: Record<string, SourceConfig> = {
     name: "Project Gutenberg",
     // Official Gutendex API (search): ?search=&languages=&topic=&page=
     searchEndpoint:
-      "https://gutendex.com/books?search={q}&page={page}",
+      "https://gutendex.com/books/?search={q}&page={page}",
     // Per-book metadata (official Gutendex detail shape).
-    metadataEndpoint: "https://gutendex.com/books/{id}",
+    metadataEndpoint: "https://gutendex.com/books/{id}/",
     // Direct files: https://www.gutenberg.org/ebooks/{id}.epub3.images etc.
     fileEndpoint: "https://www.gutenberg.org/ebooks/{id}.{format}",
     // Official cover: https://www.gutenberg.org/cache/epub/{id}/pg{id}.cover.medium.jpg
@@ -103,6 +103,7 @@ export async function fetchWithLimit(url: string, timeoutMs = 15000): Promise<an
   try {
     const res = await fetch(url, {
       signal: ctrl.signal,
+      redirect: "follow",
       headers: { "User-Agent": "HAKI-Importer/1.0 (educational public-domain import)" },
     });
     if (!res.ok) throw new Error(`HTTP ${res.status} من المصدر`);
@@ -110,6 +111,19 @@ export async function fetchWithLimit(url: string, timeoutMs = 15000): Promise<an
   } finally {
     clearTimeout(t);
   }
+}
+
+/** Map a human language name ("English", "عربي") to Gutendex ISO codes ("en", "ar"). */
+export function gutenbergLanguageCode(raw: string): string {
+  const s = raw.trim().toLowerCase();
+  const map: Record<string, string> = {
+    english: "en", arabic: "ar", french: "fr", german: "de", spanish: "es",
+    italian: "it", portuguese: "pt", russian: "ru", chinese: "zh", japanese: "ja",
+    turkish: "tr", persian: "fa", hebrew: "he", greek: "el", latin: "la",
+    dutch: "nl", polish: "pl", hindi: "hi", urdu: "ur", korean: "ko",
+    "\u0627\u0646\u062c\u0644\u064a\u0632\u064a": "en", "\u0639\u0631\u0628\u064a": "ar", "\u0641\u0631\u0646\u0633\u064a": "fr", "\u0623\u0644\u0645\u0627\u0646\u064a": "de", "\u0625\u0633\u0628\u0627\u0646\u064a": "es",
+  };
+  return map[s] ?? (s.length === 2 ? s : s.slice(0, 2));
 }
 
 /** Binary fetch (covers) with the same safety limits. */
@@ -410,12 +424,18 @@ export function parseImportUrl(
   const collectionMatch = u.pathname.match(/\/details\/([\w.-]+)$/);
   const qp = u.searchParams.get("q") ?? u.searchParams.get("query") ?? "";
   if (collectionMatch && /^gutenberg/i.test(collectionMatch[1])) {
-    // e.g. /details/gutenberg?and[]=language:"English"
-    const lang = /language[:"\\\s]*"?([A-Za-z-]+)"?/.exec(JSON.stringify([...u.searchParams.values()]))?.[1];
+    // e.g. /details/gutenberg?and[]=language:"English" — may contain any
+    // facet filters; also catch topic/author params from the archive UI.
+    const allVals = [...u.searchParams.values()].join(" ");
+    const langRaw =
+      /language[:"\\\\\\s]*"?([A-Za-z-\u0600-\u06FF]+)"?/.exec(allVals)?.[1] ??
+      /topic[:"\\\\\\s]*"?([A-Za-z-]+)"?/.exec(allVals)?.[1];
+    // Gutendex expects ISO-639 codes ("en"), not full names ("English").
+    const langCode = langRaw ? gutenbergLanguageCode(langRaw) : undefined;
     return {
       source: "gutenberg",
       collection: "gutenberg",
-      query: lang ? `languages=${lang.toLowerCase()}` : undefined,
+      query: langCode ? `languages=${langCode}` : undefined,
       ids,
     };
   }

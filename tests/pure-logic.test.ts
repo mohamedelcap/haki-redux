@@ -200,11 +200,17 @@ describe("computeChallengeProgress", () => {
 // ---------------- Gutenberg URL parsing + normalization ----------------
 
 describe("parseImportUrl", () => {
-  it("routes the IA gutenberg collection to the gutenberg source with a language filter", () => {
+  it("routes the IA gutenberg collection to the gutenberg source with an ISO language filter", () => {
     const r = parseImportUrl('https://archive.org/details/gutenberg?and%5B%5D=language%3A%22English%22');
     expect(r.source).toBe("gutenberg");
     expect(r.collection).toBe("gutenberg");
-    expect(r.query).toContain("english");
+    // Gutendex requires ISO codes: "English" → "en" (yields 63k+ books).
+    expect(r.query).toBe("languages=en");
+  });
+
+  it("maps Arabic language names to ISO codes", () => {
+    const r = parseImportUrl('https://archive.org/details/gutenberg?and%5B%5D=language%3A%22Arabic%22');
+    expect(r.query).toBe("languages=ar");
   });
 
   it("routes gutenberg.org ebook pages to direct ids", () => {
