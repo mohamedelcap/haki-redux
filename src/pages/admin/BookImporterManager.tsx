@@ -481,6 +481,7 @@ function ReviewDialog({
           <img
             src={item.coverUrl ?? LOGO_COVER}
             alt=""
+            loading="lazy"
             className="aspect-[3/4] w-full rounded-xl border object-cover"
             onError={(e) => ((e.currentTarget as HTMLImageElement).src = LOGO_COVER)}
           />

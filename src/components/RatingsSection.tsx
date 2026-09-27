@@ -6,7 +6,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useLang } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
-import { Star, Trash2 } from "lucide-react";
+import { Star, Trash2, Flag } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -51,8 +51,29 @@ export function RatingsSection({ contentId }: { contentId: string }) {
   const reviews = useQuery(api.ratings.listForContent, { contentId: contentId as never });
   const mine = useQuery(api.ratings.getMine, { contentId: contentId as never });
 
-  const submit = useMutation(api.ratings.submit);
+  const submit = useMutation(api.moderation.submit);
   const removeMine = useMutation(api.ratings.remove);
+  const reportReview = useMutation(api.moderation.report);
+
+  const handleReport = async (ratingId: string) => {
+    if (!isAuthenticated) {
+      toast.error(L("سجّل الدخول للإبلاغ عن مراجعة", "Sign in to report a review"));
+      return;
+    }
+    const reason = window.prompt(
+      L("سبب الإبلاغ (اختياري)", "Reason for reporting (optional)"),
+    ) ?? undefined;
+    try {
+      const res = await reportReview({ ratingId: ratingId as never, reason });
+      if ((res as { duplicate?: boolean }).duplicate) {
+        toast.info(L("بلّغت عن هذه المراجعة مسبقًا", "You already reported this review"));
+      } else {
+        toast.success(L("تم إرسال البلاغ لفريق الإشراف", "Report sent to moderation team"));
+      }
+    } catch (e: any) {
+      toast.error(e.message);
+    }
+  };
 
   const [picked, setPicked] = useState<number>(0);
   const [review, setReview] = useState("");
@@ -201,6 +222,14 @@ export function RatingsSection({ contentId }: { contentId: string }) {
                     <span className="text-[10px] text-muted-foreground">
                       {formatTime(r.createdAt)}
                     </span>
+                    <button
+                      type="button"
+                      onClick={() => handleReport(r._id)}
+                      className="ms-auto flex items-center gap-1 text-[10px] text-muted-foreground transition-colors hover:text-destructive"
+                    >
+                      <Flag className="size-3" />
+                      {L("إبلاغ", "Report")}
+                    </button>
                   </div>
                 </div>
               </div>

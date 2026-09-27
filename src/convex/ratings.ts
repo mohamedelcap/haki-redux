@@ -28,9 +28,10 @@ export const listForContent = query({
       .withIndex("by_content", (q) => q.eq("contentId", args.contentId))
       .collect();
     rows.sort((a, b) => b.createdAt - a.createdAt);
+    const visible = rows.filter((r) => !r.isHidden);
 
     return await Promise.all(
-      rows.map(async (row) => {
+      visible.map(async (row) => {
         const user = await ctx.db.get(row.userId);
         return {
           _id: row._id,

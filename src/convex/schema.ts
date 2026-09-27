@@ -259,7 +259,7 @@ const schema = defineSchema(
       position: v.number(),
       duration: v.number(),
       playedAt: v.number(),
-    }).index("by_user", ["userId"]),
+    }).index("by_user", ["userId"]).index("by_playedAt", ["playedAt"]),
 
     listening_progress: defineTable({
       userId: v.id("users"),
@@ -306,6 +306,8 @@ const schema = defineSchema(
       description: v.optional(v.string()),
       image: v.optional(v.string()),
       streamUrl: v.optional(v.string()),
+      /** Embed URL for the live player (YouTube Live / Twitch only, sanitized). */
+      embedUrl: v.optional(v.string()),
       scheduledStart: v.optional(v.string()),
       scheduledEnd: v.optional(v.string()),
       isLive: v.boolean(),
@@ -345,7 +347,9 @@ const schema = defineSchema(
       body: v.optional(v.string()),
       isRead: v.boolean(),
       createdAt: v.number(),
-    }).index("by_user", ["userId"]),
+    })
+      .index("by_user", ["userId"])
+      .index("by_user_created", ["userId", "createdAt"]),
 
     ratings: defineTable({
       contentId: v.id("content"),
@@ -355,9 +359,35 @@ const schema = defineSchema(
       review: v.optional(v.string()),
       createdAt: v.number(),
       updatedAt: v.number(),
+      /** Moderation: hidden reviews are excluded from public lists. */
+      isHidden: v.optional(v.boolean()),
     })
       .index("by_content", ["contentId"])
       .index("by_user_content", ["userId", "contentId"]),
+
+    /** Community moderation: user reports against a review. */
+    admin_audit: defineTable({
+      actorId: v.id("users"),
+      actorName: v.optional(v.string()),
+      actorRole: v.optional(v.string()),
+      action: v.string(),
+      entity: v.string(),
+      entityId: v.optional(v.string()),
+      detail: v.optional(v.string()),
+      createdAt: v.number(),
+    }).index("by_created", ["createdAt"]),
+
+    /** Community moderation: user reports against a review. */
+    review_reports: defineTable({
+      ratingId: v.id("ratings"),
+      reporterId: v.id("users"),
+      reason: v.optional(v.string()),
+      status: v.union(v.literal("pending"), v.literal("resolved")),
+      createdAt: v.number(),
+      resolvedAt: v.optional(v.number()),
+    })
+      .index("by_status", ["status"])
+      .index("by_rating", ["ratingId"]),
 
     // ---- Revenue distribution (royalties) ----
     /** Publishing contract: split of revenue attributable to a publisher's works. */

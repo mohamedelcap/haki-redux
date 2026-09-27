@@ -2,14 +2,16 @@ import { v } from "convex/values";
 import { query, mutation } from "./_generated/server";
 import { requireAdmin } from "./lib";
 
-/** Recent broadcast notifications (audit view for admins). */
+/** Recent broadcast notifications (audit view for admins, paginated). */
 export const listRecent = query({
-  args: {},
-  handler: async (ctx) => {
+  args: { cursor: v.optional(v.string()) },
+  handler: async (ctx, args) => {
     await requireAdmin(ctx);
-    const rows = await ctx.db.query("notifications").collect();
-    rows.sort((a, b) => b.createdAt - a.createdAt);
-    return rows.slice(0, 50);
+    return await ctx.db
+      .query("notifications")
+      .withIndex("by_creation_time")
+      .order("desc")
+      .paginate({ numItems: 50, cursor: args.cursor ?? null });
   },
 });
 

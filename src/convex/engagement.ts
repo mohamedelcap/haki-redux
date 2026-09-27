@@ -25,13 +25,25 @@ export type ChallengeWithStats = {
   topUsers: { userId: string; name: string; image?: string; progress: number }[];
 };
 
-function statusFor(startDate: string, endDate: string): "upcoming" | "active" | "ended" {
-  const today = new Date();
+export function statusFor(startDate: string, endDate: string, now: Date = new Date()): "upcoming" | "active" | "ended" {
   const start = new Date(`${startDate}T00:00:00`);
   const end = new Date(`${endDate}T23:59:59`);
-  if (start > today) return "upcoming";
-  if (end < today) return "ended";
+  if (start > now) return "upcoming";
+  if (end < now) return "ended";
   return "active";
+}
+
+/**
+ * Pure challenge-progress math: clamps the target to >= 1 and returns
+ * completion. The value itself is measured from listening history.
+ */
+export function computeChallengeProgress(
+  progressValue: number,
+  goalTarget?: number | null,
+): { progress: number; target: number; completed: boolean } {
+  const target = Math.max(1, Math.round(goalTarget ?? 1));
+  const progress = Math.max(0, Math.round(progressValue));
+  return { progress, target, completed: progress >= target };
 }
 
 /**

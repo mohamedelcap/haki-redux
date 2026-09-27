@@ -288,7 +288,7 @@ function AccountMenu() {
       <Link to="/profile" aria-label={t("myAccount")} className="hidden sm:block">
         <Button variant="ghost" size="icon" className="rounded-full">
           {user?.image ? (
-            <img src={user.image} alt="" className="size-7 rounded-full object-cover" />
+            <img src={user.image} alt="" loading="lazy" className="size-7 rounded-full object-cover" />
           ) : (
             <UserRound className="size-5" />
           )}

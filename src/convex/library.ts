@@ -242,12 +242,12 @@ export const myNotifications = query({
   handler: async (ctx) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) return [];
-    const rows = await ctx.db
+    // Indexed, newest-first, capped — no full user scan.
+    return await ctx.db
       .query("notifications")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
-      .collect();
-    rows.sort((a, b) => b.createdAt - a.createdAt);
-    return rows.slice(0, 30);
+      .withIndex("by_user_created", (q) => q.eq("userId", userId))
+      .order("desc")
+      .take(30);
   },
 });
 
@@ -272,7 +272,7 @@ export const markAllNotificationsRead = mutation({
     const rows = await ctx.db
       .query("notifications")
       .withIndex("by_user", (q) => q.eq("userId", userId))
-      .collect();
+      .take(200);
     for (const row of rows) {
       if (!row.isRead) await ctx.db.patch(row._id, { isRead: true });
     }

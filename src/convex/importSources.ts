@@ -116,6 +116,34 @@ export async function fetchBlobWithLimit(
 }
 
 /**
+ * Community moderation helper: mask profane words (AR/EN) with asterisks,
+ * preserving word length. Pure function so it is unit-testable.
+ */
+const PROFANITY: RegExp[] = [
+  /\u0644\u0644\u0623\u062e\u0631\u0627\u0631/g, // placeholder replaced below
+];
+
+const BAD_WORDS = [
+  // English
+  "fuck", "shit", "bitch", "asshole", "bastard", "dick", "cunt", "whore", "slut",
+  // Arabic (transliteration-resistant core forms)
+  "\u0642\u062d\u0628\u0629", "\u0642\u062d\u0628", "\u0632\u0646\u064a", "\u0632\u0646\u0649",
+  "\u063a\u0628\u064a", "\u063a\u0628\u064a\u0629", "\u062d\u0645\u0627\u0631", "\u062d\u0645\u0627\u0631\u0629",
+  "\u0643\u0644\u0628", "\u0643\u0644\u0628\u0629", "\u0644\u0639\u0627\u0646\u0629", "\u0644\u0639\u0646\u0647",
+  "\u063a\u0627\u0644\u064a\u0627\u062a", "\u0633\u0627\u062d\u0631\u0629", "\u0642\u0630\u0631",
+];
+
+export function maskProfanity(input: string): string {
+  let s = input;
+  for (const w of BAD_WORDS) {
+    const re = new RegExp(w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
+    s = s.replace(re, (m) => "*".repeat(m.length));
+  }
+  void PROFANITY;
+  return s;
+}
+
+/**
  * Sanitize imported metadata: strip HTML/scripts, decode entities, remove
  * control chars, collapse whitespace. Applied to every text field before it
  * ever reaches the database (anti-XSS for imported descriptions).

@@ -8,6 +8,9 @@ import { MediaLibrary } from "@/pages/admin/MediaLibrary";
 import { NotificationsManager } from "@/pages/admin/NotificationsManager";
 import { PaymentMethodsManager } from "@/pages/admin/PaymentMethodsManager";
 import { ManualPaymentsManager } from "@/pages/admin/ManualPaymentsManager";
+import { AnalyticsPanel } from "@/pages/admin/AnalyticsPanel";
+import { ModerationManager } from "@/pages/admin/ModerationManager";
+import { AuditLogManager } from "@/pages/admin/AuditLogManager";
 import { RoyaltiesManager } from "@/pages/admin/RoyaltiesManager";
 import { BookImporterManager } from "@/pages/admin/BookImporterManager";
 import { SEO } from "@/components/SEO";
@@ -83,6 +86,9 @@ import {
   Users,
   KeyRound,
   RefreshCw,
+  History,
+  Check,
+  X,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router";
@@ -105,6 +111,9 @@ type TabKey =
   | "media"
   | "live"
   | "submissions"
+  | "analytics"
+  | "moderation"
+  | "audit"
   | "notifications"
   | "paymentMethods"
   | "manualPayments"
@@ -164,6 +173,9 @@ function AdminInner() {
         { key: "media", label: L("الوسائط", "Media"), icon: Images },
         { key: "live", label: L("البث المباشر", "Live streaming"), icon: Radio },
         { key: "submissions", label: L("طلبات النشر", "Submissions"), icon: FileText },
+        { key: "analytics", label: L("التحليلات", "Analytics"), icon: BarChart3 },
+        { key: "moderation", label: L("الإشراف", "Moderation"), icon: Shield },
+        { key: "audit", label: L("سجل التدقيق", "Audit log"), icon: History },
         { key: "notifications", label: L("الإشعارات", "Notifications"), icon: Bell },
         { key: "users", label: L("المستخدمون", "Users"), icon: Users },
         { key: "access", label: L("الوصول والأدوار", "Access & roles"), icon: KeyRound },
@@ -316,6 +328,9 @@ function AdminInner() {
           {tab === "challenges" && <ChallengesManager L={L} />}
           {tab === "live" && <LiveManager L={L} />}
           {tab === "submissions" && <SubmissionsManager L={L} />}
+          {tab === "analytics" && <AnalyticsPanel />}
+          {tab === "moderation" && <ModerationManager L={L} />}
+          {tab === "audit" && <AuditLogManager L={L} />}
           {tab === "notifications" && <NotificationsManager L={L} />}
           {tab === "paymentMethods" && <PaymentMethodsManager L={L} />}
           {tab === "manualPayments" && <ManualPaymentsManager L={L} />}
@@ -734,7 +749,7 @@ function ContentManager({ L, lang, defaultType, featuredOnly, autoOpen }: { L: (
                   <TR key={item._id}>
                     <TD>
                       <div className="flex items-center gap-2.5">
-                        <img src={item.coverImage || LOGO_COVER} alt="" className="size-9 rounded-md object-cover" />
+                        <img src={item.coverImage || LOGO_COVER} alt="" loading="lazy" className="size-9 rounded-md object-cover" />
                         <div className="min-w-0">
                           <p className="truncate text-sm font-bold">{item.title}</p>
                           <p className="truncate text-xs text-muted-foreground">
@@ -1110,6 +1125,7 @@ function ContentManager({ L, lang, defaultType, featuredOnly, autoOpen }: { L: (
                 <img
                   src={previewCover || LOGO_COVER}
                   alt=""
+                  loading="lazy"
                   className="aspect-[3/4] w-full object-cover"
                   onError={(e) => { (e.currentTarget as HTMLImageElement).src = LOGO_COVER; }}
                 />
@@ -1555,7 +1571,7 @@ function LiveManager({ L }: { L: (ar: string, en: string) => string }) {
         <h2 className="text-xl font-black">{L("البث المباشر", "Live streams")}</h2>
         <Button
           className="font-bold"
-          onClick={() => setEditing({ title: "", hostName: "", description: "", scheduledStart: "", scheduledEnd: "", streamUrl: "", isLive: false })}
+          onClick={() => setEditing({ title: "", hostName: "", description: "", scheduledStart: "", scheduledEnd: "", streamUrl: "", embedUrl: "", isLive: false })}
         >
           <Plus className="size-4" />
           {L("بث جديد", "New stream")}
@@ -1599,6 +1615,7 @@ function LiveManager({ L }: { L: (ar: string, en: string) => string }) {
                   hostName: String(form.get("hostName")),
                   description: String(form.get("description")) || undefined,
                   streamUrl: String(form.get("streamUrl")) || undefined,
+                  embedUrl: String(form.get("embedUrl")) || undefined,
                   scheduledStart: String(form.get("scheduledStart")) || undefined,
                   scheduledEnd: String(form.get("scheduledEnd")) || undefined,
                   isLive: form.get("isLive") === "on",
@@ -1637,6 +1654,10 @@ function LiveManager({ L }: { L: (ar: string, en: string) => string }) {
               <Label>{L("رابط البث (HLS/ICE)", "Stream URL (HLS/ICE)")}</Label>
               <Input name="streamUrl" defaultValue={editing.streamUrl} dir="ltr" placeholder="https://..." />
             </div>
+            <div className="space-y-1.5">
+              <Label>{L("رابط التضمين (YouTube Live / Twitch فقط)", "Embed URL (YouTube Live / Twitch only)")}</Label>
+              <Input name="embedUrl" defaultValue={editing.embedUrl} dir="ltr" placeholder="https://www.youtube.com/embed/..." />
+            </div>
             <label className="flex items-center gap-2 text-sm font-semibold">
               <input type="checkbox" name="isLive" defaultChecked={editing.isLive} />
               {L("على الهواء الآن", "On air now")}
@@ -1657,6 +1678,34 @@ function LiveManager({ L }: { L: (ar: string, en: string) => string }) {
 function SubmissionsManager({ L }: { L: (ar: string, en: string) => string }) {
   const items = useQuery(api.adminContent.listSubmissions, {});
   const update = useMutation(api.adminContent.updateSubmissionStatus);
+  const approveAuto = useMutation(api.studio.approveSubmission);
+  const rejectAuto = useMutation(api.studio.rejectSubmission);
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  const doApprove = async (id: string) => {
+    setBusyId(id);
+    try {
+      await approveAuto({ id: id as any });
+      toast.success(L("تمت الموافقة ونُشر العمل تلقائيًا", "Approved — work published automatically"));
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setBusyId(null);
+    }
+  };
+  const doReject = async (id: string) => {
+    const reason = window.prompt(L("سبب الرفض (يُرسل للناشر)", "Rejection reason (sent to the publisher)")) ?? "";
+    if (!reason.trim()) return;
+    setBusyId(id);
+    try {
+      await rejectAuto({ id: id as any, reason });
+      toast.success(L("تم الرفض وإشعار الناشر", "Rejected, publisher notified"));
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setBusyId(null);
+    }
+  };
 
   const statusColors: Record<string, string> = {
     pending: "bg-amber-100 text-amber-700",
@@ -1689,6 +1738,29 @@ function SubmissionsManager({ L }: { L: (ar: string, en: string) => string }) {
                 </div>
                 <div className="flex items-center gap-2">
                   <Badge className={statusColors[s.status]}>{s.status}</Badge>
+                  {s.status === "pending" && (
+                    <>
+                      <Button
+                        size="sm"
+                        disabled={busyId === s._id}
+                        onClick={() => doApprove(s._id)}
+                        className="gap-1 bg-green-600 text-white hover:bg-green-700"
+                      >
+                        {busyId === s._id ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
+                        {L("موافقة ونشر", "Approve \u0026 publish")}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={busyId === s._id}
+                        onClick={() => doReject(s._id)}
+                        className="gap-1 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                      >
+                        <X className="size-4" />
+                        {L("رفض", "Reject")}
+                      </Button>
+                    </>
+                  )}
                   <Select
                     value={s.status}
                     onValueChange={async (v) => {

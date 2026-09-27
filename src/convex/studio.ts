@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { requireStaff, requireAdmin, getCurrentUser, isAdminRole } from "./lib";
+import { requireStaff, requireAdmin, getCurrentUser, isAdminRole, auditLog } from "./lib";
 import { contentTypeValidator } from "./schema";
 import { api } from "./_generated/api";
 
@@ -130,6 +130,7 @@ export const approveSubmission = mutation({
 
     const now = Date.now();
     await ctx.db.patch(args.id, { status: "accepted" });
+    await auditLog(ctx, admin, "approve_submission", "publisher_submissions", { entityId: args.id, detail: sub.workTitle });
 
     if (sub.contentId) {
       await ctx.db.patch(sub.contentId, { status: "published", updatedAt: now });

@@ -28,6 +28,29 @@ export async function requireAdmin(ctx: QueryCtx | MutationCtx) {
   return user;
 }
 
+/**
+ * Write an admin-audit entry. Call from sensitive admin mutations
+ * (publish/delete, role changes, subscription activation, payment approval).
+ */
+export async function auditLog(
+  ctx: MutationCtx,
+  actor: { _id: Id<"users">; name?: string; role?: string },
+  action: string,
+  entity: string,
+  opts?: { entityId?: string; detail?: string },
+) {
+  await ctx.db.insert("admin_audit", {
+    actorId: actor._id,
+    actorName: actor.name,
+    actorRole: actor.role,
+    action,
+    entity,
+    entityId: opts?.entityId,
+    detail: opts?.detail?.slice(0, 500),
+    createdAt: Date.now(),
+  });
+}
+
 /** Throws unless the caller is admin or super_admin (user management, system settings). */
 export async function requireSuperAdmin(ctx: QueryCtx | MutationCtx) {
   const user = await getCurrentUser(ctx);

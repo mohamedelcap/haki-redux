@@ -5,6 +5,8 @@ type SEOProps = {
   description?: string;
   /** JSON-LD structured data object */
   jsonLd?: Record<string, unknown>;
+  /** OpenGraph image URL; defaults to the official logo. */
+  image?: string;
 };
 
 function upsertMeta(attr: "name" | "property", key: string, content: string) {
@@ -27,7 +29,7 @@ function upsertCanonical(href: string) {
   el.href = href;
 }
 
-export function SEO({ title, description, jsonLd }: SEOProps) {
+export function SEO({ title, description, jsonLd, image }: SEOProps) {
   useEffect(() => {
     document.title = title;
     if (description) {
@@ -35,8 +37,13 @@ export function SEO({ title, description, jsonLd }: SEOProps) {
       upsertMeta("property", "og:description", description);
       upsertMeta("name", "twitter:description", description);
     }
+    // OpenGraph image: explicit image or the official logo fallback.
+    const ogImage = image ?? `${window.location.origin}/logo.png`;
+    upsertMeta("property", "og:image", ogImage);
+    upsertMeta("name", "twitter:image", ogImage);
     upsertMeta("property", "og:title", title);
     upsertMeta("name", "twitter:title", title);
+    upsertMeta("property", "og:type", "website");
     upsertCanonical(window.location.href);
 
     let script: HTMLScriptElement | null = null;

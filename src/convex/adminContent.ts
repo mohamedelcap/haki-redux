@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { query, mutation } from "./_generated/server";
 import { internal } from "./_generated/api";
-import { requireAdmin, requireContentAccess, requireSuperAdmin, isAdminRole } from "./lib";
+import { requireAdmin, requireContentAccess, requireSuperAdmin, isAdminRole, auditLog } from "./lib";
 import {
   contentTypeValidator,
   contentStatusValidator,
@@ -130,7 +130,7 @@ export const deleteContent = mutation({
   args: { id: v.id("content") },
   handler: async (ctx, args) => {
     const existing = await ctx.db.get(args.id);
-    await requireContentAccess(ctx, existing);
+    const callerAudit = await requireContentAccess(ctx, existing);
     const links = await ctx.db
       .query("content_categories")
       .withIndex("by_content", (q) => q.eq("contentId", args.id))
@@ -146,6 +146,7 @@ export const deleteContent = mutation({
       .withIndex("by_content", (q) => q.eq("contentId", args.id))
       .collect();
     for (const e of episodes) await ctx.db.delete(e._id);
+    await auditLog(ctx, callerAudit, "delete_content", "content", { entityId: args.id, detail: existing?.title });
     await ctx.db.delete(args.id);
   },
 });
@@ -272,18 +273,36 @@ export const upsertLiveStream = mutation({
     hostName: v.string(),
     description: v.optional(v.string()),
     streamUrl: v.optional(v.string()),
+    embedUrl: v.optional(v.string()),
     scheduledStart: v.optional(v.string()),
     scheduledEnd: v.optional(v.string()),
     isLive: v.boolean(),
   },
   handler: async (ctx, args) => {
     await requireSuperAdmin(ctx);
-    const { id, ...data } = args;
+    const { id, embedUrl, ...data } = args;
+    // Sanitize embed URL: only YouTube / Twitch embed hosts are allowed.
+    let safeEmbed: string | undefined;
+    if (embedUrl) {
+      try {
+        const u = new URL(embedUrl);
+        const host = u.hostname.replace(/^www\./, "");
+        const ok =
+          host === "youtube.com" ||
+          host === "youtube-nocookie.com" ||
+          host === "m.youtube.com" ||
+          host === "player.twitch.tv";
+        if (!ok || u.protocol !== "https:") throw new Error("bad host");
+        safeEmbed = u.toString();
+      } catch {
+        throw new Error("رابط التضمين يجب أن يكون من youtube.com أو twitch.tv فقط");
+      }
+    }
     if (id) {
-      await ctx.db.patch(id, data);
+      await ctx.db.patch(id, { ...data, embedUrl: safeEmbed });
       return id;
     }
-    return await ctx.db.insert("live_streams", { ...data, listeners: 0 });
+    return await ctx.db.insert("live_streams", { ...data, embedUrl: safeEmbed, listeners: 0 });
   },
 });
 
@@ -361,7 +380,8 @@ export const updateSubmissionStatus = mutation({
     status: submissionStatusValidator,
   },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx);
+    const admin = await requireAdmin(ctx);
     await ctx.db.patch(args.id, { status: args.status });
+    await auditLog(ctx, admin, "update_submission_status", "publisher_submissions", { entityId: args.id, detail: args.status });
   },
 });

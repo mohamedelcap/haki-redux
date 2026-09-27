@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { query } from "./_generated/server";
+import { query, internalQuery } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import { enrichContent, requireStaff, isAdminRole, type EnrichedContent } from "./lib";
 import { CONTENT_TYPES, contentTypeValidator, contentStatusValidator } from "./schema";
@@ -384,6 +384,18 @@ export const listAllForAdmin = query({
       }
     }
     return await enrichContent(ctx, scoped);
+  },
+});
+
+/** Internal: published slugs for the dynamic sitemap (no auth, minimal data). */
+export const publishedSlugsInternal = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    const rows = await ctx.db
+      .query("content")
+      .withIndex("by_status", (q) => q.eq("status", "published"))
+      .collect();
+    return rows.map((r) => r.slug);
   },
 });
 

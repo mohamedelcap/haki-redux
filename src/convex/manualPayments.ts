@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query, internalMutation } from "./_generated/server";
-import { requireAdmin, getCurrentUser } from "./lib";
+import { auditLog, requireAdmin, getCurrentUser } from "./lib";
 import { internal, api } from "./_generated/api";
 
 /**
@@ -123,6 +123,7 @@ export const approve = mutation({
 
     // Notify the user their subscription is live.
     const planRow: any = plan;
+    await auditLog(ctx, admin, "approve_manual_payment", "manual_payments", { entityId: args.id, detail: planRow?.name });
     await ctx.db.insert("notifications", {
       userId: req.userId,
       title: "تم تفعيل اشتراكك 🎉",
@@ -161,6 +162,7 @@ export const reject = mutation({
       reviewedAt: now,
       updatedAt: now,
     });
+    await auditLog(ctx, admin, "reject_manual_payment", "manual_payments", { entityId: args.id, detail: args.reason });
     await ctx.db.insert("notifications", {
       userId: req.userId,
       title: "لم يُعتمد طلب الدفع",

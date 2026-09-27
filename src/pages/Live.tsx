@@ -7,7 +7,7 @@ import { useLang } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { useQuery } from "convex/react";
 import { CalendarClock, Clock, Mic, Pause, Play, Radio, Users } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 const SCHEDULE = [
   { day: "السبت", name: "قهوة الصباح", host: "مصطفى سعد", start: "08:00", end: "09:00" },
@@ -18,6 +18,100 @@ const SCHEDULE = [
   { day: "الخميس", name: "حكايات ما أحلوها", host: "ليان المطيري", start: "17:00", end: "18:00" },
   { day: "الجمعة", name: "قراءات مسائية", host: "سلمى الأيوبي", start: "21:00", end: "23:00" },
 ];
+
+function Countdown({ startHHMM }: { startHHMM?: string }) {
+  const c = useNextSessionCountdown(startHHMM);
+  const { lang } = useLang();
+  if (!c) {
+    return (
+      <p className="mt-2 text-sm text-muted-foreground">
+        {lang === "ar" ? "لا يوجد موعد محدد بعد" : "No scheduled time yet"}
+      </p>
+    );
+  }
+  return (
+    <div className="mt-2 flex items-center gap-2" dir="ltr">
+      {[
+        [c.hh, "HR"],
+        [c.mm, "MIN"],
+        [c.ss, "SEC"],
+      ].map(([v, l]) => (
+        <span
+          key={l}
+          className="flex min-w-14 flex-col items-center rounded-xl border bg-secondary px-2 py-1.5"
+        >
+          <span className="text-lg font-black tabular-nums">{v}</span>
+          <span className="text-[9px] font-bold text-muted-foreground">{l}</span>
+        </span>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Safe embed player: the URL is validated client-side AND was sanitized
+ * server-side on save (youtube.com / youtube-nocookie.com / player.twitch.tv).
+ */
+function SafeEmbed({ url, title }: { url: string; title: string }) {
+  let src: string | null = null;
+  try {
+    const u = new URL(url);
+    const host = u.hostname.replace(/^www\./, "");
+    const ok =
+      u.protocol === "https:" &&
+      (host === "youtube.com" ||
+        host === "youtube-nocookie.com" ||
+        host === "m.youtube.com" ||
+        host === "player.twitch.tv");
+    src = ok ? u.toString() : null;
+  } catch {
+    src = null;
+  }
+  if (!src) {
+    return (
+      <div className="flex aspect-video items-center justify-center rounded-2xl border bg-background/80 text-sm text-muted-foreground">
+        رابط التضمين غير مدعوم
+      </div>
+    );
+  }
+  return (
+    <div className="overflow-hidden rounded-2xl border bg-black" dir="ltr">
+      <iframe
+        src={src}
+        title={title}
+        className="aspect-video w-full"
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; picture-in-picture"
+        allowFullScreen
+        referrerPolicy="strict-origin-when-cross-origin"
+        sandbox="allow-scripts allow-same-origin allow-presentation"
+      />
+    </div>
+  );
+}
+
+/** Countdown to the next scheduled session ("HH:MM" today or tomorrow). */
+function useNextSessionCountdown(startHHMM?: string) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  return useMemo(() => {
+    if (!startHHMM || !/^\d{1,2}:\d{2}$/.test(startHHMM)) return null;
+    const [h, m] = startHHMM.split(":").map(Number);
+    const target = new Date();
+    target.setHours(h, m, 0, 0);
+    if (target.getTime() <= now) target.setDate(target.getDate() + 1);
+    let diff = Math.max(0, target.getTime() - now);
+    const hh = Math.floor(diff / 3600000);
+    diff -= hh * 3600000;
+    const mm = Math.floor(diff / 60000);
+    diff -= mm * 60000;
+    const ss = Math.floor(diff / 1000);
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return { hh: pad(hh), mm: pad(mm), ss: pad(ss) };
+  }, [startHHMM, now]);
+}
 
 /** نقطة LIVE نابضة — تضيء وتنطفئ كالبث الحي، تُعرض فوق العنوان. */
 export function LiveDot({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
@@ -56,7 +150,6 @@ export default function Live() {
   const { lang, t } = useLang();
   const streams = useQuery(api.engagement.listLiveStreams, {});
   const current = useQuery(api.engagement.getCurrentLive, {});
-  const [isPlaying, setIsPlaying] = useState(false);
 
   const L = (ar: string, en: string) => (lang === "ar" ? ar : en);
 
@@ -126,42 +219,17 @@ export default function Live() {
                 )}
               </div>
 
-              {/* Live player */}
-              <div className="mt-6 flex max-w-md items-center gap-3 rounded-2xl border bg-background/90 p-3 backdrop-blur">
-                <Button
-                  size="icon"
-                  className="rounded-full"
-                  aria-label={isPlaying ? t("pause") : t("listenNow")}
-                  onClick={() => setIsPlaying(!isPlaying)}
-                >
-                  {isPlaying ? <Pause className="size-4" /> : <Play className="size-4" />}
-                </Button>
-                <div className="flex-1">
-                  <p className="text-sm font-bold">{L("البث المباشر", "Live stream")}</p>
-                  <div className="mt-1.5 flex items-center gap-1" aria-hidden="true">
-                    {[3, 7, 5, 9, 4, 8, 6, 10, 5, 7, 4, 8, 6, 3].map((h, i) => (
-                      <span
-                        key={i}
-                        className={cn(
-                          "w-1 rounded-full bg-primary transition-all",
-                          isPlaying && "animate-pulse",
-                        )}
-                        style={{ height: isPlaying ? h * 2.2 : 5 }}
-                      />
-                    ))}
-                  </div>
+              {/* Live player: real embed if available, otherwise countdown */}
+              {current.embedUrl ? (
+                <div className="mt-6 max-w-2xl">
+                  <SafeEmbed url={current.embedUrl} title={current.title} />
                 </div>
-                <span className="flex items-center gap-1.5 text-xs font-black text-red-600">
-                  <LiveDot size="sm" />
-                  LIVE
-                </span>
-              </div>
-              <p className="mt-3 text-xs text-muted-foreground">
-                {L(
-                  "سيتم ربط المشغل بخدمة البث (HLS/ICE) عند توفر رابط البث.",
-                  "The player will be connected to a streaming service (HLS/ICE) once a stream URL is provided.",
-                )}
-              </p>
+              ) : (
+                <div className="mt-6 max-w-md rounded-2xl border bg-background/90 p-4 backdrop-blur">
+                  <p className="text-sm font-bold">{L("يبدأ البث خلال", "Stream begins in")}</p>
+                  <Countdown startHHMM={current.scheduledStart} />
+                </div>
+              )}
             </div>
           </div>
         ) : (

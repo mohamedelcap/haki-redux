@@ -3,6 +3,48 @@ import { query, mutation, internalMutation } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import { requireAdmin } from "./lib";
 
+// ---------------- Pure distribution math (unit-tested) ----------------
+
+/**
+ * Proportional split of a pool across publishers by usage seconds.
+ * Pure function so the revenue formula is unit-testable without a DB.
+ */
+export function computePoolShares(
+  totalAmount: number,
+  usage: { publisherId: string; seconds: number }[],
+  contracts: Record<string, { publisherPercentage: number; hakiPercentage: number }>,
+): {
+  publisherId: string;
+  usageSeconds: number;
+  usageShare: number;
+  grossAmount: number;
+  publisherAmount: number;
+  hakiAmount: number;
+  hasContract: boolean;
+}[] {
+  const totalSeconds = usage.reduce((a, u) => a + Math.max(0, u.seconds), 0);
+  if (totalSeconds <= 0) return [];
+  return usage
+    .filter((u) => u.seconds > 0)
+    .map((u) => {
+      const share = (u.seconds / totalSeconds) * 100;
+      const gross = (totalAmount * share) / 100;
+      const contract = contracts[u.publisherId];
+      const pShare = contract?.publisherPercentage ?? 0;
+      const hShare = contract?.hakiPercentage ?? 100;
+      return {
+        publisherId: u.publisherId,
+        usageSeconds: Math.round(u.seconds),
+        usageShare: Math.round(share * 100) / 100,
+        grossAmount: Math.round(gross * 100) / 100,
+        publisherAmount: Math.round(((gross * pShare) / 100) * 100) / 100,
+        hakiAmount: Math.round(((gross * hShare) / 100) * 100) / 100,
+        hasContract: !!contract,
+      };
+    })
+    .sort((a, b) => b.grossAmount - a.grossAmount);
+}
+
 // ---------------- Contracts ----------------
 
 /** Validate a split and create a publishing contract. */

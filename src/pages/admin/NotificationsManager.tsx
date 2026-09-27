@@ -21,6 +21,7 @@ export function NotificationsManager({
   L: (ar: string, en: string) => string;
 }) {
   const recent = useQuery(api.notifications.listRecent, {});
+  const recentPage = recent?.page ?? [];
   const broadcast = useMutation(api.notifications.broadcast);
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
@@ -90,11 +91,11 @@ export function NotificationsManager({
               <div key={i} className="h-10 animate-pulse rounded-lg bg-muted" />
             ))}
           </div>
-        ) : recent.length === 0 ? (
+        ) : recentPage.length === 0 ? (
           <p className="mt-4 text-sm text-muted-foreground">{L("لا إشعارات بعد", "Nothing sent yet")}</p>
         ) : (
           <div className="mt-4 space-y-2">
-            {recent.slice(0, 12).map((n) => (
+            {recentPage.map((n) => (
               <div key={n._id} className="flex items-center justify-between gap-3 rounded-xl border px-4 py-2.5">
                 <div className="min-w-0">
                   <p className="truncate text-sm font-bold">{n.title}</p>
