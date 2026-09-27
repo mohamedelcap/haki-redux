@@ -68,6 +68,23 @@ export const SOURCES: Record<string, SourceConfig> = {
 
 /** Allowed public formats we may link/download (legally distributed ebooks). */
 export const ALLOWED_FORMATS = ["pdf", "epub", "txt", "mobi", "djvu"];
+/** Audio formats for IA audiobook items (LibriVox etc.). */
+export const ALLOWED_AUDIO_FORMATS = ["mp3", "ogg", "m4b", "wav"];
+
+/** Parse an IA file "length" field ("85", "575.37", "01:25") into seconds. */
+export function parseIaLength(v: any): number {
+  if (v == null) return 0;
+  const s = String(v).trim();
+  if (/^\d+(\.\d+)?$/.test(s)) return Math.round(parseFloat(s));
+  const parts = s.split(":").map(Number);
+  if (parts.length === 2 && parts.every((n) => !Number.isNaN(n))) {
+    return parts[0] * 60 + parts[1];
+  }
+  if (parts.length === 3 && parts.every((n) => !Number.isNaN(n))) {
+    return parts[0] * 3600 + parts[1] * 60 + parts[2];
+  }
+  return 0;
+}
 
 // ---------------- URL safety ----------------
 
@@ -279,6 +296,9 @@ export function normalizeDoc(doc: any, source: SourceConfig) {
     rightsInfo: sanitizeText(rights.info, 500),
     coverUrl: id ? source.coverEndpoint.replace("{id}", id) : undefined,
     files: [] as { name: string; format: string; url: string; size?: number }[],
+    audioFiles: [] as { name: string; format: string; url: string; size?: number; duration: number }[],
+    isAudiobook: false as boolean,
+    audioDuration: 0 as number,
   };
 }
 
@@ -311,6 +331,48 @@ export async function fetchIaItem(id: string, source: SourceConfig) {
         .replace("{filename}", encodeURIComponent(String(f.name))),
       size: Number(f.size ?? 0) || undefined,
     }));
+
+  // ---- Audiobook support: extract chaptered MP3s (LibriVox & friends) ----
+  // IA audiobook items carry per-chapter files with `title` and `length`.
+  const audioFiles = files
+    .filter((f) => {
+      const ext = fmtOf(f);
+      const fmt = String(f?.format ?? "").toLowerCase();
+      return ALLOWED_AUDIO_FORMATS.includes(ext) || /128kbps mp3|vbr mp3|64kbps mp3|ogg/i.test(fmt);
+    })
+    // Prefer 128kbps per chapter; drop duplicate lower-quality variants by stem.
+    .filter((f) => !/_64kb\./i.test(String(f.name ?? "")))
+    .sort((a, b) => String(a.name ?? "").localeCompare(String(b.name ?? "")));
+
+  const seenStems = new Set<string>();
+  norm.audioFiles = audioFiles
+    .map((f) => {
+      const stem = String(f.name ?? "").replace(/_128kb\./i, ".").toLowerCase();
+      if (seenStems.has(stem)) return null; // VBR duplicate of the 128kb file
+      seenStems.add(stem);
+      return {
+        name: sanitizeText(f.title ?? f.name, 200),
+        format: fmtOf(f),
+        url: source.fileEndpoint
+          .replace("{id}", encodeURIComponent(id))
+          .replace("{filename}", encodeURIComponent(String(f.name))),
+        size: Number(f.size ?? 0) || undefined,
+        duration: parseIaLength(f.length),
+      };
+    })
+    .filter(Boolean)
+    .slice(0, 120) as { name: string; format: string; url: string; size?: number; duration: number }[];
+
+  // Affective flag: is this item an audiobook?
+  norm.isAudiobook = norm.audioFiles.length >= 1;
+  // Total duration in seconds for the content record.
+  norm.audioDuration = norm.audioFiles.reduce((acc, f) => acc + (f.duration ?? 0), 0);
+  if (norm.isAudiobook) {
+    norm.rightsStatus = "public_domain";
+    norm.rightsInfo =
+      norm.rightsInfo ||
+      "LibriVox / Internet Archive \u2014 public domain audiobook (\u0645\u0644\u0643 \u0639\u0627\u0645)";
+  }
 
   return norm;
 }

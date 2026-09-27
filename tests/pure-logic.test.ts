@@ -5,6 +5,7 @@ import {
   sanitizeText,
   parseImportUrl,
   normalizeGutenbergBook,
+  parseIaLength,
 } from "../src/convex/importSources";
 import { computePoolShares } from "../src/convex/royalties";
 import { computeChallengeProgress, statusFor } from "../src/convex/engagement";
@@ -275,5 +276,26 @@ describe("normalizeGutenbergBook", () => {
     const n = normalizeGutenbergBook(book);
     expect(n.coverUrl).toContain("/1342/");
     expect(n.sourceUrl).toBe("https://www.gutenberg.org/ebooks/1342");
+  });
+});
+
+// ---------------- IA audio support ----------------
+
+describe("parseIaLength", () => {
+  it("parses plain seconds", () => {
+    expect(parseIaLength("85")).toBe(85);
+    expect(parseIaLength("575.37")).toBe(575);
+    expect(parseIaLength(123)).toBe(123);
+  });
+
+  it("parses MM:SS and HH:MM:SS", () => {
+    expect(parseIaLength("01:25")).toBe(85);
+    expect(parseIaLength("1:02:03")).toBe(3723);
+  });
+
+  it("returns 0 for junk/undefined", () => {
+    expect(parseIaLength(undefined)).toBe(0);
+    expect(parseIaLength("")).toBe(0);
+    expect(parseIaLength("not-a-time")).toBe(0);
   });
 });

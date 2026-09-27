@@ -163,7 +163,9 @@ function ImportForm({ L }: { L: (ar: string, en: string) => string }) {
           <Select value={source} onValueChange={setSource}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="internet_archive">{L("أرشيف الإنترنت", "Internet Archive")}</SelectItem>
+              <SelectItem value="internet_archive">
+                {L("أرشيف الإنترنت — كتب نصية وصوتية (المصدر الرئيسي)", "Internet Archive — texts & audiobooks (primary)")}
+              </SelectItem>
               <SelectItem value="gutenberg">{L("مشروع غوتنبرغ (ملك عام)", "Project Gutenberg (public domain)")}</SelectItem>
             </SelectContent>
           </Select>
@@ -217,6 +219,13 @@ function ImportForm({ L }: { L: (ar: string, en: string) => string }) {
           />
         )}
       </div>
+
+      <p className="text-xs text-muted-foreground">
+        {L(
+          "يدعم روابط أرشيف الإنترنت كلها: مجموعات أو بحث أو كتب مفردة — ويُنشر الملك العام تلقائيًا مع الفصول الصوتية وملفات القراءة.",
+          "Any archive.org link works: collections, searches, or single items — public domain publishes automatically with audio chapters and readable files.",
+        )}
+      </p>
 
       <div className="flex items-center gap-2">
         <Button className="font-bold" disabled={busy || !input.trim()} onClick={start}>
@@ -834,7 +843,7 @@ function SchedulesView({ L }: { L: (ar: string, en: string) => string }) {
   const [input, setInput] = useState("");
   const [limitPerRun, setLimitPerRun] = useState("20");
   const [frequency, setFrequency] = useState("daily");
-  const [scheduleSource, setScheduleSource] = useState("gutenberg");
+  const [scheduleSource, setScheduleSource] = useState("internet_archive");
   const [publishMode, setPublishMode] = useState("draft");
   const [busy, setBusy] = useState(false);
 
@@ -874,8 +883,8 @@ function SchedulesView({ L }: { L: (ar: string, en: string) => string }) {
           <Select value={scheduleSource} onValueChange={setScheduleSource}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
+              <SelectItem value="internet_archive">{L("أرشيف الإنترنت — كتب وأعمال صوتية", "Internet Archive — books & audiobooks")}</SelectItem>
               <SelectItem value="gutenberg">{L("غوتنبرغ — كل الكتب ملك عام", "Gutenberg — all books public domain")}</SelectItem>
-              <SelectItem value="internet_archive">{L("أرشيف الإنترنت", "Internet Archive")}</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -886,7 +895,7 @@ function SchedulesView({ L }: { L: (ar: string, en: string) => string }) {
             onChange={(e) => setInput(e.target.value)}
             required
             dir="ltr"
-            placeholder={scheduleSource === "gutenberg" ? "languages=en  |  languages=ar  |  poetry" : "https://archive.org/details/arabic_books"}
+            placeholder={scheduleSource === "gutenberg" ? "languages=en  |  languages=ar" : "librivoxaudio AND mediatype:audio  |  collection:gutenberg  |  https://archive.org/details/arabic_books"}
           />
         </div>
         <div className="space-y-1.5">

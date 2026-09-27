@@ -525,6 +525,10 @@ const schema = defineSchema(
       /** Existing content id when a duplicate was found. */
       duplicateOf: v.optional(v.id("content")),
       importedBy: v.optional(v.id("users")),
+      /** True when the source item carries chaptered audio (LibriVox etc.). */
+      isAudiobook: v.optional(v.boolean()),
+      /** Total audio duration in seconds. */
+      audioDuration: v.optional(v.number()),
       createdAt: v.number(),
       updatedAt: v.number(),
     }).index("by_job", ["jobId"]).index("by_external", ["source", "externalId"]),

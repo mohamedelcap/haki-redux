@@ -370,24 +370,52 @@ export const ensureDefaultScheduleInternal = internalMutation({
       .query("import_schedules")
       .withIndex("by_enabled", (q) => q.eq("enabled", true))
       .collect();
-    if (existing.some((s) => s.source === "gutenberg")) return { created: false };
 
     const now = Date.now();
-    await ctx.db.insert("import_schedules", {
-      name: "\u062c\u0644\u0628 \u064a\u0648\u0645\u064a \u2014 \u063a\u0648\u062a\u0646\u0628\u0631\u063a (\u0625\u0646\u062c\u0644\u064a\u0632\u064a) \u0645\u0644\u0643 \u0639\u0627\u0645",
-      source: "gutenberg",
-      mode: "search",
-      input: "languages=en",
-      limitPerRun: 20,
-      frequency: "daily",
-      publishMode: "auto",
-      allowedFormats: ["epub", "txt", "html"],
-      minRights: "public_domain",
-      enabled: true,
-      createdBy: undefined,
-      createdAt: now,
-      updatedAt: now,
-    });
+    // Default auto-import schedules — Internet Archive first (primary source),
+    // Gutenberg second. LibriVox audiobooks publish with chapters; IA texts
+    // publish as ebooks; all public-domain verified.
+    const defaults = [
+      {
+        name: "\u062c\u0644\u0628 \u064a\u0648\u0645\u064a \u2014 \u0643\u062a\u0628 \u0635\u0648\u062a\u064a\u0629 LibriVox (\u0623\u0631\u0634\u064a\u0641 \u0627\u0644\u0625\u0646\u062a\u0631\u0646\u062a)",
+        source: "internet_archive",
+        mode: "collection",
+        input: "librivoxaudio AND mediatype:audio",
+        allowedFormats: ["mp3"],
+      },
+      {
+        name: "\u062c\u0644\u0628 \u064a\u0648\u0645\u064a \u2014 \u0643\u062a\u0628 \u0646\u0635\u064a\u0629 \u0645\u0644\u0643 \u0639\u0627\u0645 (\u0623\u0631\u0634\u064a\u0641 \u0627\u0644\u0625\u0646\u062a\u0631\u0646\u062a)",
+        source: "internet_archive",
+        mode: "collection",
+        input: "collection:gutenberg AND mediatype:texts",
+        allowedFormats: ["pdf", "epub", "txt"],
+      },
+      {
+        name: "\u062c\u0644\u0628 \u064a\u0648\u0645\u064a \u2014 \u063a\u0648\u062a\u0646\u0628\u0631\u063a (\u0625\u0646\u062c\u0644\u064a\u0632\u064a)",
+        source: "gutenberg",
+        mode: "search",
+        input: "languages=en",
+        allowedFormats: ["epub", "txt", "html"],
+      },
+    ];
+    for (const d of defaults) {
+      if (existing.some((s) => s.name === d.name)) continue;
+      await ctx.db.insert("import_schedules", {
+        name: d.name,
+        source: d.source,
+        mode: d.mode,
+        input: d.input,
+        limitPerRun: 20,
+        frequency: "daily",
+        publishMode: "auto",
+        allowedFormats: d.allowedFormats,
+        minRights: "public_domain",
+        enabled: true,
+        createdBy: undefined,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
     return { created: true };
   },
 });
@@ -462,7 +490,11 @@ export const autoDiscoverPendingInternal = internalAction({
         const results: any[] = data?.results ?? [];
         ids = results.map((b) => String(b.id)).filter(Boolean).slice(0, 60);
       } else {
-        const q = `${job.input} AND mediatype:texts`;
+        // Schedule inputs may already carry full boolean queries; only prefix
+        // bare collection names.
+        const raw = String(job.input ?? "").trim();
+        const isQuery = /AND |OR |mediatype:|collection:/.test(raw);
+        const q = isQuery ? raw : `${raw} AND mediatype:texts`;
         const endpoint = SOURCES.internet_archive.searchEndpoint
           .replace("{q}", encodeURIComponent(q))
           .replace("{page}", "1")
@@ -530,7 +562,21 @@ export const cronProcessBatchInternal = internalAction({
         itemId: it._id,
         publishMode: job.publishMode,
       });
-      if (res?.ok) done += 1;
+      if (res?.ok) {
+        done += 1;
+        // Fully-automatic path: publish verified public-domain items directly
+        // (IA audiobooks become audiobooks with chapters; Gutenberg/IA text
+        // becomes ebooks with files).
+        if (job.publishMode === "auto") {
+          try {
+            await ctx.runMutation(internal.bookImporter.publishItemInternal, {
+              itemId: it._id,
+            });
+          } catch {
+            /* publish is best-effort; the item stays for review */
+          }
+        }
+      }
     }
     return { processed: done };
   },
@@ -606,6 +652,8 @@ export const fetchItemCore = internalAction({
         coverUrl: storedCover ?? norm.coverUrl,
         fileUrls: JSON.stringify(norm.files),
         publishMode: args.publishMode,
+        isAudiobook: (norm as any).isAudiobook ?? false,
+        audioDuration: (norm as any).audioDuration ?? 0,
       });
       return { ok: true, title: norm.title, rights: norm.rightsStatus };
     } catch (e: any) {
@@ -824,6 +872,8 @@ export const finalizeItemInternal = internalMutation({
     coverUrl: v.optional(v.string()),
     fileUrls: v.optional(v.string()),
     publishMode: v.optional(v.string()),
+    isAudiobook: v.optional(v.boolean()),
+    audioDuration: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const item = await ctx.db.get(args.itemId);
@@ -895,6 +945,8 @@ export const finalizeItemInternal = internalMutation({
       formats: args.formats,
       coverUrl: args.coverUrl,
       fileUrls: args.fileUrls,
+      isAudiobook: args.isAudiobook ?? false,
+      audioDuration: args.audioDuration,
       updatedAt: Date.now(),
     });
     const jobF = await ctx.db.get(item.jobId);
@@ -902,6 +954,131 @@ export const finalizeItemInternal = internalMutation({
       await ctx.db.patch(item.jobId, { processed: jobF.processed + 1, updatedAt: Date.now() });
     }
     return { ok: true, status };
+  },
+});
+
+/**
+ * Internal publish path for the cron pipeline (no admin session): identical
+ * logic to publishItem — creates the content record (audiobook + chapters or
+ * ebook + file) for public-domain items whose job has publishMode "auto".
+ */
+export const publishItemInternal = internalMutation({
+  args: { itemId: v.id("import_items") },
+  handler: async (ctx, args) => {
+    const item = await ctx.db.get(args.itemId);
+    if (!item) return { ok: false };
+    if (item.contentId) return { ok: true, contentId: item.contentId };
+    if (item.status !== "published" && item.status !== "requires_review") {
+      return { ok: false, reason: "not-ready" };
+    }
+    const meta = item.metadata ? JSON.parse(item.metadata) : {};
+
+    const title = (item.title ?? meta.title ?? "كتاب مستورد").trim();
+    const description = (meta.description ?? "").slice(0, 4000);
+    const authorName = (item.author ?? meta.author ?? "").trim();
+
+    let authorId: Id<"authors"> | undefined;
+    if (authorName) {
+      const existing = await ctx.db
+        .query("authors")
+        .filter((q) => q.eq(q.field("name"), authorName))
+        .first();
+      if (existing) authorId = existing._id;
+      else authorId = await ctx.db.insert("authors", { name: authorName });
+    }
+
+    const categoryIds: Id<"categories">[] = [];
+    for (const s of (meta.subjects ?? []) as string[]) {
+      const mapping = await ctx.db
+        .query("import_category_mappings")
+        .withIndex("by_source_subject", (q) =>
+          q.eq("source", item.source).eq("subject", String(s).toLowerCase()),
+        )
+        .first();
+      if (mapping && !categoryIds.includes(mapping.categoryId)) {
+        categoryIds.push(mapping.categoryId);
+      }
+    }
+
+    const slugBase =
+      title
+        .toLowerCase()
+        .replace(/[^a-z0-9\u0600-\u06FF]+/g, "-")
+        .replace(/^-+|-+$/g, "")
+        .slice(0, 60) || `book-${item.externalId}`;
+    const slug = `${slugBase}-${item.externalId.slice(0, 8)}`;
+    const now = Date.now();
+
+    const audioChapters: { title: string; url: string; duration: number }[] =
+      item.isAudiobook && Array.isArray(meta.audioFiles)
+        ? meta.audioFiles
+            .filter((f: any) => f.url && (f.duration ?? 0) > 0)
+            .map((f: any) => ({ title: f.name ?? "Chapter", url: f.url, duration: f.duration ?? 0 }))
+        : [];
+    const isAudiobook = audioChapters.length > 0;
+    const totalDuration = audioChapters.reduce((a, c) => a + c.duration, 0);
+    const bestFile = isAudiobook
+      ? undefined
+      : (meta.files ?? []).find((f: any) => f.format === "pdf")?.url ?? (meta.files ?? [])[0]?.url;
+
+    const contentId = await ctx.db.insert("content", {
+      title,
+      slug,
+      description: description || (isAudiobook ? "عمل صوتي مستورد من مصدر عام." : "كتاب مستورد من مصدر عام."),
+      coverImage: item.coverUrl ?? undefined,
+      contentType: isAudiobook ? "audiobook" : "ebook",
+      authorId,
+      duration: totalDuration,
+      releaseDate: meta.pubDate,
+      status: "published",
+      isFeatured: false,
+      isTrending: false,
+      isNew: true,
+      playCount: 0,
+      fileUrl: bestFile,
+      sourceName: meta.sourceName ?? "Internet Archive",
+      sourceUrl: meta.sourceUrl ?? item.sourceUrl,
+      externalId: item.externalId,
+      rightsStatus: (item.rightsStatus ?? "public_domain") as any,
+      rightsInfo: meta.rightsInfo,
+      fileFormats: item.formats ?? [],
+      subtitle: meta.subtitle,
+      originalYear: item.year ?? meta.originalYear,
+      pageCount: meta.pageCount,
+      fileSize: meta.fileSize,
+      isbn: meta.isbn,
+      edition: meta.edition,
+      keywords: [...(meta.keywords ?? []), item.language ? `lang:${item.language}` : null].filter(
+        Boolean,
+      ) as string[],
+      importedAt: now,
+      importMethod: item.source,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    for (const categoryId of categoryIds) {
+      await ctx.db.insert("content_categories", { contentId, categoryId });
+    }
+    if (isAudiobook) {
+      for (let i = 0; i < audioChapters.length; i++) {
+        const ch = audioChapters[i];
+        await ctx.db.insert("chapters", {
+          contentId,
+          number: i + 1,
+          title: ch.title,
+          audioUrl: ch.url,
+          duration: ch.duration,
+        });
+      }
+    }
+
+    await ctx.db.patch(args.itemId, {
+      status: "published",
+      contentId,
+      updatedAt: now,
+    });
+    return { ok: true, contentId };
   },
 });
 
@@ -978,18 +1155,42 @@ export const publishItem = mutation({
     const slug = `${slugBase}-${item.externalId.slice(0, 8)}`;
 
     const now = Date.now();
-    const bestFile =
-      args.overrides?.fileUrl ??
-      (meta.files?.length ? meta.files.find((f: any) => f.format === "pdf")?.url ?? meta.files[0]?.url : undefined);
+
+    // ---- Audiobook vs ebook decision ----
+    // Audio metadata lives in fileUrls (the item snapshot JSON): entries with
+    // a duration > 0 are chapters. item.isAudiobook is the primary flag.
+    const fileSnapshot: any[] = (() => {
+      try {
+        return item.fileUrls ? JSON.parse(item.fileUrls) : (meta.files ?? []);
+      } catch {
+        return meta.files ?? [];
+      }
+    })();
+    const audioChapters: { title: string; url: string; duration: number }[] =
+      item.isAudiobook && Array.isArray(meta.audioFiles)
+        ? meta.audioFiles
+            .filter((f: any) => f.url && (f.duration ?? 0) > 0)
+            .map((f: any) => ({ title: f.name ?? "Chapter", url: f.url, duration: f.duration ?? 0 }))
+        : [];
+
+    const isAudiobook = audioChapters.length > 0;
+    const totalDuration = isAudiobook
+      ? audioChapters.reduce((a, c) => a + c.duration, 0)
+      : 0;
+
+    const bestFile = isAudiobook
+      ? undefined
+      : args.overrides?.fileUrl ??
+        (meta.files?.length ? meta.files.find((f: any) => f.format === "pdf")?.url ?? meta.files[0]?.url : undefined);
 
     const contentId = await ctx.db.insert("content", {
       title,
       slug,
-      description: description || "كتاب مستورد من مصدر عام.",
+      description: description || (isAudiobook ? "عمل صوتي مستورد من مصدر عام." : "كتاب مستورد من مصدر عام."),
       coverImage: args.overrides?.coverImage ?? item.coverUrl ?? undefined,
-      contentType: "ebook",
+      contentType: isAudiobook ? "audiobook" : "ebook",
       authorId,
-      duration: 0,
+      duration: totalDuration,
       releaseDate: meta.pubDate,
       status: args.publish ? "published" : "draft",
       isFeatured: false,
@@ -1021,6 +1222,20 @@ export const publishItem = mutation({
 
     for (const categoryId of categoryIds) {
       await ctx.db.insert("content_categories", { contentId, categoryId });
+    }
+
+    // Audiobook chapters, in source order, with durations from the IA metadata.
+    if (isAudiobook) {
+      for (let i = 0; i < audioChapters.length; i++) {
+        const ch = audioChapters[i];
+        await ctx.db.insert("chapters", {
+          contentId,
+          number: i + 1,
+          title: ch.title,
+          audioUrl: ch.url,
+          duration: ch.duration,
+        });
+      }
     }
 
     await ctx.db.patch(args.itemId, {
