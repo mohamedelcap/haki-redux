@@ -613,6 +613,20 @@ export const listPendingInternal = internalQuery({
   },
 });
 
+export const listPendingByJobInternal = internalQuery({
+  args: { jobId: v.id("import_jobs"), limit: v.number() },
+  handler: async (ctx, args) => {
+    const rows = await ctx.db
+      .query("import_items")
+      .withIndex("by_job", (q) => q.eq("jobId", args.jobId))
+      .collect();
+    return rows
+      .filter((r) => r.status === "pending")
+      .sort((a, b) => a.createdAt - b.createdAt)
+      .slice(0, args.limit);
+  },
+});
+
 export const getJobInternal = internalQuery({
   args: { id: v.id("import_jobs") },
   handler: async (ctx, args) => await ctx.db.get(args.id),
@@ -876,10 +890,13 @@ export const processBatchNow = action({
   handler: async (ctx: any, args) => {
     await requireAdmin(ctx as any);
     const max = Math.min(args.maxItems ?? 10, 20);
-    const pending: any[] = await ctx.runQuery(internal.bookImporter.listPendingInternal, {
-      limit: 60,
-    });
-    const pool = args.jobId ? pending.filter((p: any) => p.jobId === args.jobId) : pending;
+    const pending: any[] = args.jobId
+      ? await ctx.runQuery(internal.bookImporter.listPendingByJobInternal, {
+          jobId: args.jobId,
+          limit: 100,
+        })
+      : await ctx.runQuery(internal.bookImporter.listPendingInternal, { limit: 60 });
+    const pool = pending;
     let done = 0;
     let published = 0;
     for (const it of pool) {

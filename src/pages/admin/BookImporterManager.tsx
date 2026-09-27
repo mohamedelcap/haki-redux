@@ -33,7 +33,7 @@ import {
   X,
   Zap,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { LOGO_COVER } from "@/lib/logoAsset";
 
@@ -133,6 +133,7 @@ export function BookImporterManager({
 function ImportForm({ L }: { L: (ar: string, en: string) => string }) {
   const createJob = useMutation(api.bookImporter.createJob);
   const discover = useAction(api.bookImporter.discoverCandidates);
+  const runNow = useAction(api.bookImporter.processBatchNow);
   const [source, setSource] = useState("internet_archive");
   const [mode, setMode] = useState<"single" | "ids" | "collection" | "search">("ids");
   const [input, setInput] = useState("");
@@ -149,6 +150,16 @@ function ImportForm({ L }: { L: (ar: string, en: string) => string }) {
       setActiveJobId(jobId);
       const res: any = await discover({ jobId, source, mode, input });
       toast.success(L(`أُضيف ${res.count} كتاب للطابور`, `${res.count} books queued`));
+      // Kick off immediate processing (same core as the cron, no waiting).
+      void runNow({ jobId, maxItems: 5 }).catch(() => undefined);
+      if (publishMode === "auto") {
+        toast.info(
+          L(
+            "جارٍ الجلب والنشر تلقائيًا — تابع التقدم في الطابور بالأسفل",
+            "Fetching & publishing now — follow progress in the queue below",
+          ),
+        );
+      }
     } catch (e: any) {
       toast.error(e.message);
     } finally {
@@ -691,12 +702,15 @@ function SourcesView({ L }: { L: (ar: string, en: string) => string }) {
   const listSources = useAction(api.importSources.listSources);
   const [sources, setSources] = useState<any[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const loaded = useRef(false);
 
-  if (sources === null && !error) {
+  useEffect(() => {
+    if (loaded.current) return;
+    loaded.current = true;
     listSources({})
       .then(setSources)
-      .catch((e) => setError(e.message));
-  }
+      .catch((e: any) => setError(e.message));
+  }, [listSources]);
 
   return (
     <div className="space-y-3">
@@ -822,13 +836,14 @@ function SettingsView({ L }: { L: (ar: string, en: string) => string }) {
   const [formats, setFormats] = useState("pdf, epub, txt");
   const [saved, setSaved] = useState(false);
 
-  if (settings && !saved) {
+  useEffect(() => {
+    if (!settings || saved) return;
     setBatch(String(settings.batchSize));
     setPublishMode(settings.publishMode);
     setMinRights(settings.minRights);
     setFormats((settings.allowedFormats ?? []).join(", "));
     setSaved(true);
-  }
+  }, [settings, saved]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
