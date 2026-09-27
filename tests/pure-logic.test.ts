@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { classifyRights, maskProfanity, sanitizeText } from "../src/convex/importSources";
+import {
+  classifyRights,
+  maskProfanity,
+  sanitizeText,
+  parseImportUrl,
+  normalizeGutenbergBook,
+} from "../src/convex/importSources";
 import { computePoolShares } from "../src/convex/royalties";
 import { computeChallengeProgress, statusFor } from "../src/convex/engagement";
 
@@ -188,5 +194,80 @@ describe("computeChallengeProgress", () => {
     const r = computeChallengeProgress(1, null);
     expect(r.target).toBe(1);
     expect(r.completed).toBe(true);
+  });
+});
+
+// ---------------- Gutenberg URL parsing + normalization ----------------
+
+describe("parseImportUrl", () => {
+  it("routes the IA gutenberg collection to the gutenberg source with a language filter", () => {
+    const r = parseImportUrl('https://archive.org/details/gutenberg?and%5B%5D=language%3A%22English%22');
+    expect(r.source).toBe("gutenberg");
+    expect(r.collection).toBe("gutenberg");
+    expect(r.query).toContain("english");
+  });
+
+  it("routes gutenberg.org ebook pages to direct ids", () => {
+    const r = parseImportUrl("https://www.gutenberg.org/ebooks/1342");
+    expect(r.source).toBe("gutenberg");
+    expect(r.ids).toEqual(["1342"]);
+  });
+
+  it("routes gutenberg search URLs to a query", () => {
+    const r = parseImportUrl("https://www.gutenberg.org/ebooks/search/?query=poetry");
+    expect(r.source).toBe("gutenberg");
+    expect(r.query).toBe("poetry");
+  });
+
+  it("keeps plain archive.org collections on internet_archive", () => {
+    const r = parseImportUrl("https://archive.org/details/arabic_books");
+    expect(r.source).toBe("internet_archive");
+    expect(r.collection).toBe("arabic_books");
+  });
+});
+
+describe("normalizeGutenbergBook", () => {
+  const book = {
+    id: 1342,
+    title: "Pride and Prejudice",
+    authors: [{ birth_year: 1775, death_year: 1817, name: "Austen, Jane" }],
+    subjects: ["England -- Fiction", "Courtship"],
+    bookshelves: ["Best Books Ever Listings"],
+    languages: ["en"],
+    copyright: false,
+    media_type: "Text",
+    formats: {
+      "application/epub+zip": "https://www.gutenberg.org/ebooks/1342.epub3.images",
+      "application/pdf": "https://www.gutenberg.org/ebooks/1342.pdf.images",
+      "text/plain; charset=us-ascii": "https://www.gutenberg.org/ebooks/1342.txt.utf-8",
+      "text/html": "https://www.gutenberg.org/ebooks/1342.html.images",
+    },
+    summaries: ["A classic novel of manners."],
+  };
+
+  it("marks everything public domain with Gutenberg provenance", () => {
+    const n = normalizeGutenbergBook(book);
+    expect(n.rightsStatus).toBe("public_domain");
+    expect(n.sourceName).toBe("Project Gutenberg");
+    expect(n.rightsInfo).toContain("public domain");
+  });
+
+  it("maps author, language, subjects and files", () => {
+    const n = normalizeGutenbergBook(book);
+    expect(n.title).toBe("Pride and Prejudice");
+    expect(n.author).toContain("Austen");
+    expect(n.originalYear).toBe(1817);
+    expect(n.language).toBe("en");
+    expect(n.subjects).toContain("Courtship");
+    const fmts = n.files.map((f) => f.format);
+    expect(fmts).toContain("epub");
+    expect(fmts).toContain("pdf");
+    expect(fmts).toContain("txt");
+  });
+
+  it("builds cover + source urls from the book id", () => {
+    const n = normalizeGutenbergBook(book);
+    expect(n.coverUrl).toContain("/1342/");
+    expect(n.sourceUrl).toBe("https://www.gutenberg.org/ebooks/1342");
   });
 });

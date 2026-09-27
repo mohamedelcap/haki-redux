@@ -237,6 +237,20 @@ const schema = defineSchema(
       expiresAt: v.number(),
     }).index("by_user", ["userId"]),
 
+    /** E-book reading progress (last CFI location + percent) per user/content. */
+    reading_progress: defineTable({
+      userId: v.id("users"),
+      contentId: v.id("content"),
+      /** epub.js CFI string of the last location. */
+      cfi: v.optional(v.string()),
+      percent: v.number(),
+      /** Reader preferences snapshot: theme, font size, flow, font family. */
+      prefs: v.optional(v.string()),
+      updatedAt: v.number(),
+    })
+      .index("by_user_content", ["userId", "contentId"])
+      .index("by_user", ["userId"]),
+
     // ---- User library ----
     user_library: defineTable({
       userId: v.id("users"),
@@ -476,7 +490,7 @@ const schema = defineSchema(
       createdBy: v.optional(v.id("users")),
       createdAt: v.number(),
       updatedAt: v.number(),
-    }),
+    }).index("by_status", ["status"]),
 
     /** One queued book candidate. */
     import_items: defineTable({

@@ -16,6 +16,7 @@ import { usePlayer } from "@/lib/player";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
 import {
+  BookOpen,
   Bookmark,
   BookmarkCheck,
   Check,
@@ -354,6 +355,14 @@ export default function ContentDetails() {
 
             {/* Actions */}
             <div className="mt-6 flex flex-wrap items-center gap-2.5">
+              {item.contentType === "ebook" && (item.fileUrl || item.sourceUrl) && (
+                <Button size="lg" variant="secondary" className="font-bold" asChild>
+                  <Link to={`/read/${item.slug}`}>
+                    <BookOpen className="size-4" />
+                    {lang === "ar" ? "اقرأ الآن" : "Read now"}
+                  </Link>
+                </Button>
+              )}
               <Button size="lg" className="font-bold" onClick={() => startPlayback()}>
                 <Play className="size-4 fill-current" />
                 {resumePosition > 30

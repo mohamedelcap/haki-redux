@@ -26,7 +26,6 @@ import {
   Menu,
   Search,
   Search as SearchIcon,
-  Shield,
   Sparkles,
   Trophy as TrophyIcon,
   UserRound,
@@ -59,8 +58,6 @@ export function Header() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const { track } = usePlayer();
   const { theme: themeMobile, toggle: toggleThemeMobile } = useTheme();
-  const isAdmin =
-    user?.role === "admin" || user?.role === "super_admin" || user?.role === "publisher" || user?.role === "author";
 
   const navItems = [
     { label: t("home"), href: "/" },
@@ -218,15 +215,6 @@ export function Header() {
                       {t("myDashboard")}
                     </Link>
                   )}
-                  {isAdmin && (
-                    <Link
-                      to="/admin"
-                      onClick={() => setMobileOpen(false)}
-                      className="rounded-lg px-3 py-2.5 text-sm font-semibold hover:bg-muted"
-                    >
-                      لوحة الإدارة
-                    </Link>
-                  )}
                   {!isAuthenticated && (
                     <Link
                       to="/admin-login"
@@ -272,19 +260,9 @@ function AccountMenu() {
   const { t } = useLang();
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
-  const isAdmin =
-    user?.role === "admin" || user?.role === "super_admin" || user?.role === "publisher" || user?.role === "author";
 
   return (
     <div className="flex items-center gap-1">
-      {isAdmin && (
-        <Link to="/admin" className="hidden lg:inline-flex">
-          <Button variant="ghost" size="sm" className="h-9 gap-1.5">
-            <Shield className="size-4" />
-            لوحة الإدارة
-          </Button>
-        </Link>
-      )}
       <Link to="/profile" aria-label={t("myAccount")} className="hidden sm:block">
         <Button variant="ghost" size="icon" className="rounded-full">
           {user?.image ? (

@@ -132,7 +132,7 @@ export function BookImporterManager({
 function ImportForm({ L }: { L: (ar: string, en: string) => string }) {
   const createJob = useMutation(api.bookImporter.createJob);
   const discover = useAction(api.bookImporter.discoverCandidates);
-  const [source] = useState("internet_archive");
+  const [source, setSource] = useState("internet_archive");
   const [mode, setMode] = useState<"single" | "ids" | "collection" | "search">("ids");
   const [input, setInput] = useState("");
   const [publishMode, setPublishMode] = useState("draft");
@@ -158,6 +158,16 @@ function ImportForm({ L }: { L: (ar: string, en: string) => string }) {
   return (
     <div className="space-y-4 rounded-2xl border bg-card p-5 card-shadow">
       <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-1.5">
+          <Label>{L("المصدر", "Source")}</Label>
+          <Select value={source} onValueChange={setSource}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="internet_archive">{L("أرشيف الإنترنت", "Internet Archive")}</SelectItem>
+              <SelectItem value="gutenberg">{L("مشروع غوتنبرغ (ملك عام)", "Project Gutenberg (public domain)")}</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
         <div className="space-y-1.5">
           <Label>{L("نوع الإدخال", "Input type")}</Label>
           <Select value={mode} onValueChange={(v) => setMode(v as any)}>
@@ -824,6 +834,7 @@ function SchedulesView({ L }: { L: (ar: string, en: string) => string }) {
   const [input, setInput] = useState("");
   const [limitPerRun, setLimitPerRun] = useState("20");
   const [frequency, setFrequency] = useState("daily");
+  const [scheduleSource, setScheduleSource] = useState("gutenberg");
   const [publishMode, setPublishMode] = useState("draft");
   const [busy, setBusy] = useState(false);
 
@@ -833,7 +844,7 @@ function SchedulesView({ L }: { L: (ar: string, en: string) => string }) {
     try {
       await createSchedule({
         name,
-        source: "internet_archive",
+        source: scheduleSource,
         mode: "collection",
         input,
         limitPerRun: Number(limitPerRun) || 20,
@@ -859,8 +870,24 @@ function SchedulesView({ L }: { L: (ar: string, en: string) => string }) {
           <Input value={name} onChange={(e) => setName(e.target.value)} required />
         </div>
         <div className="space-y-1.5">
-          <Label>{L("رابط المجموعة (IA)", "Collection URL (IA)")}</Label>
-          <Input value={input} onChange={(e) => setInput(e.target.value)} required dir="ltr" placeholder="https://archive.org/details/arabic_books" />
+          <Label>{L("المصدر", "Source")}</Label>
+          <Select value={scheduleSource} onValueChange={setScheduleSource}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="gutenberg">{L("غوتنبرغ — كل الكتب ملك عام", "Gutenberg — all books public domain")}</SelectItem>
+              <SelectItem value="internet_archive">{L("أرشيف الإنترنت", "Internet Archive")}</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1.5">
+          <Label>{scheduleSource === "gutenberg" ? L("مدخل الجلب (لغة أو كلمات بحث)", "Pull query (language or keywords)") : L("رابط المجموعة (IA)", "Collection URL (IA)")}</Label>
+          <Input
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            required
+            dir="ltr"
+            placeholder={scheduleSource === "gutenberg" ? "languages=en  |  languages=ar  |  poetry" : "https://archive.org/details/arabic_books"}
+          />
         </div>
         <div className="space-y-1.5">
           <Label>{L("عدد الكتب لكل تشغيل", "Books per run")}</Label>

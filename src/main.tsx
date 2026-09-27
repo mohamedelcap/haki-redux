@@ -35,6 +35,7 @@ const Library = lazy(() => import("./pages/Library.tsx"));
 const HistoryPage = lazy(() => import("./pages/History.tsx"));
 const Settings = lazy(() => import("./pages/Settings.tsx"));
 const Legal = lazy(() => import("./pages/Legal.tsx"));
+const EbookReader = lazy(() => import("./pages/EbookReader.tsx"));
 const PlaylistPage = lazy(() => import("./pages/Playlist.tsx"));
 const Studio = lazy(() => import("./pages/Studio.tsx"));
 const AdminDashboard = lazy(() => import("./pages/admin/AdminDashboard.tsx"));
@@ -185,6 +186,7 @@ createRoot(document.getElementById("root")!).render(
                 <Routes>
                   <Route path="/auth" element={<AuthPage redirectAfterAuth="/" />} />
                   <Route path="/admin-login" element={<AdminLogin />} />
+                  <Route path="/read/:slug" element={<Suspense fallback={<RouteLoading />}><EbookReader /></Suspense>} />
                   <Route path="/ar/*" element={<SiteRoutes />} />
                   <Route path="/*" element={<SiteRoutes />} />
                 </Routes>

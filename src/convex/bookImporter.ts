@@ -10,7 +10,13 @@ import {
 import { internal, api } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { requireAdmin } from "./lib";
-import { validateExternalUrl, fetchWithLimit, fetchBlobWithLimit, SOURCES } from "./importSources";
+import {
+  validateExternalUrl,
+  fetchWithLimit,
+  fetchBlobWithLimit,
+  SOURCES,
+  parseImportUrl,
+} from "./importSources";
 
 // ---------------- Settings helpers ----------------
 
@@ -352,9 +358,45 @@ export const deleteSchedule = mutation({
  * process a small pending batch from existing jobs. Frequency (daily/weekly)
  * is respected by comparing lastRunAt with the current time.
  */
+/**
+ * Ensures the default auto-import schedule exists: a daily Gutenberg pull
+ * (English) that publishes public-domain books automatically. Created once,
+ * safe to call on every sweep.
+ */
+export const ensureDefaultScheduleInternal = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const existing = await ctx.db
+      .query("import_schedules")
+      .withIndex("by_enabled", (q) => q.eq("enabled", true))
+      .collect();
+    if (existing.some((s) => s.source === "gutenberg")) return { created: false };
+
+    const now = Date.now();
+    await ctx.db.insert("import_schedules", {
+      name: "\u062c\u0644\u0628 \u064a\u0648\u0645\u064a \u2014 \u063a\u0648\u062a\u0646\u0628\u0631\u063a (\u0625\u0646\u062c\u0644\u064a\u0632\u064a) \u0645\u0644\u0643 \u0639\u0627\u0645",
+      source: "gutenberg",
+      mode: "search",
+      input: "languages=en",
+      limitPerRun: 20,
+      frequency: "daily",
+      publishMode: "auto",
+      allowedFormats: ["epub", "txt", "html"],
+      minRights: "public_domain",
+      enabled: true,
+      createdBy: undefined,
+      createdAt: now,
+      updatedAt: now,
+    });
+    return { created: true };
+  },
+});
+
 export const runDueSweepInternal = internalMutation({
   args: {},
   handler: async (ctx) => {
+    // Self-heal: make sure the default Gutenberg auto-import exists.
+    await ctx.runMutation(internal.bookImporter.ensureDefaultScheduleInternal, {});
     const now = Date.now();
     const schedules = await ctx.db
       .query("import_schedules")
@@ -369,10 +411,6 @@ export const runDueSweepInternal = internalMutation({
           : now - (s.lastRunAt ?? 0) >= 23 * 3600_000;
       if (!due) continue;
 
-      // Discover candidate ids via the search API (network from a mutation is
-      // not allowed, so we only enqueue the job — the client-visible action
-      // path or the next sweep's action step will fill it). For the cron path
-      // we seed from the schedule input directly when it is a list of ids.
       const jobId = await ctx.db.insert("import_jobs", {
         source: s.source,
         mode: s.mode,
@@ -391,8 +429,85 @@ export const runDueSweepInternal = internalMutation({
       await ctx.db.patch(s._id, { lastRunAt: now, updatedAt: now });
       enqueued += 1;
       if (enqueued >= 3) break; // Gentle: max 3 scheduled jobs per sweep.
+      void jobId;
     }
     return { enqueued };
+  },
+});
+
+/**
+ * Auto-discovery step (cron): finds jobs still "pending" with zero items
+ * (created by the sweep from schedules or auto-tasks) and resolves their
+ * candidate ids via the official APIs — Gutenberg via Gutendex, others via
+ * the IA advancedsearch endpoint. Fully automatic: publishes public-domain
+ * Gutenberg books when the job's publishMode is "auto".
+ */
+export const autoDiscoverPendingInternal = internalAction({
+  args: { maxJobs: v.optional(v.number()) },
+  handler: async (ctx, args) => {
+    const maxJobs = Math.min(args.maxJobs ?? 3, 5);
+    const jobs: any[] = await ctx.runQuery(internal.bookImporter.listPendingJobsInternal, {});
+    let handled = 0;
+    for (const job of jobs) {
+      if (handled >= maxJobs) break;
+
+      let ids: string[] = [];
+      if (job.source === "gutenberg") {
+        // Schedule input may be "languages=en" style query or free text.
+        const raw = String(job.input ?? "");
+        const q = raw.startsWith("languages=")
+          ? `https://gutendex.com/books?${raw}&page=1`
+          : `https://gutendex.com/books?search=${encodeURIComponent(raw)}&page=1`;
+        const data = await fetchWithLimit(q);
+        const results: any[] = data?.results ?? [];
+        ids = results.map((b) => String(b.id)).filter(Boolean).slice(0, 60);
+      } else {
+        const q = `${job.input} AND mediatype:texts`;
+        const endpoint = SOURCES.internet_archive.searchEndpoint
+          .replace("{q}", encodeURIComponent(q))
+          .replace("{page}", "1")
+          .replace("{rows}", "60");
+        const data = await fetchWithLimit(endpoint);
+        const docs: any[] = data?.response?.docs ?? [];
+        ids = docs.map((d) => String(d.identifier)).filter(Boolean).slice(0, 60);
+      }
+
+      if (ids.length > 0) {
+        await ctx.runMutation(internal.bookImporter.seedJobItemsInternal, {
+          jobId: job._id,
+          ids,
+        });
+        handled += 1;
+      } else {
+        // Nothing found — fail the job so it is not retried forever.
+        await ctx.runMutation(internal.bookImporter.setJobStatusInternal, {
+          id: job._id,
+          status: "completed",
+        });
+      }
+    }
+    return { discovered: handled };
+  },
+});
+
+export const listPendingJobsInternal = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    const rows = await ctx.db
+      .query("import_jobs")
+      .withIndex("by_status", (q) => q.eq("status", "pending"))
+      .collect();
+    return rows
+      .filter((r) => (r.total ?? 0) === 0)
+      .sort((a, b) => a.createdAt - b.createdAt)
+      .slice(0, 5);
+  },
+});
+
+export const setJobStatusInternal = internalMutation({
+  args: { id: v.id("import_jobs"), status: v.string() },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.id, { status: args.status as any, updatedAt: Date.now() });
   },
 });
 
@@ -520,40 +635,79 @@ export const discoverCandidates = action({
   },
   handler: async (ctx: any, args) => {
     await requireAdmin(ctx as any);
-    const source = SOURCES[args.source];
-    if (!source) throw new Error("مصدر غير معروف");
+    let source = args.source;
+    let mode = args.mode;
+    let input = args.input;
 
-    let ids: string[] = [];
+    // Auto-detect pasted URLs (archive.org gutenberg collections, gutenberg.org,
+    // gutendex.com) and route to the right source without admin configuration.
+    if (/^https?:\/\//.test(input.trim())) {
+      const parsed = parseImportUrl(input.trim());
+      source = parsed.source;
+      const gutenbergSource = parsed.source === "gutenberg";
 
-    if (args.mode === "ids") {
-      ids = args.input
-        .split(/[\n,]+/)
-        .map((s) => s.trim())
-        .map((s) => {
-          if (!s) return "";
-          if (/^https?:\/\//.test(s)) {
-            const u = validateExternalUrl(s);
-            const m = u.pathname.match(/\/details\/([^/]+)/);
-            return m ? decodeURIComponent(m[1]) : "";
-          }
-          return s;
-        })
-        .filter(Boolean)
-        .slice(0, 200);
-    } else {
-      const u = validateExternalUrl(args.input);
-      let q: string;
-      const collectionMatch = u.pathname.match(/\/details\/([\w.-]+)$/);
-      if (args.mode === "collection" && collectionMatch) {
-        q = `collection:${collectionMatch[1]} AND mediatype:texts`;
-      } else {
-        const queryParam = u.searchParams.get("query") ?? u.searchParams.get("q");
-        q = queryParam
-          ? `${queryParam} AND mediatype:texts`
-          : `${args.input.replace(/["<>]/g, "").slice(0, 120)} AND mediatype:texts`;
+      // Explicit ids found in the URL (single ebook pages).
+      if (parsed.ids.length > 0) {
+        await ctx.runMutation(internal.bookImporter.seedJobItemsInternal, {
+          jobId: args.jobId,
+          ids: parsed.ids,
+        });
+        return { count: parsed.ids.length };
       }
 
-      const endpoint = source.searchEndpoint
+      if (gutenbergSource) {
+        // Gutendex search/collection query.
+        const q = parsed.query ?? "";
+        const endpoint = `https://gutendex.com/books?${q}${q ? "&" : ""}page=1`;
+        const data = await fetchWithLimit(endpoint);
+        const results: any[] = data?.results ?? [];
+        const ids = results.map((b) => String(b.id)).filter(Boolean).slice(0, 200);
+        if (ids.length === 0) throw new Error("\u0644\u0645 \u064a\u064f\u0639\u062b\u0631 \u0639\u0644\u0649 \u0643\u062a\u0628 \u2014 \u062a\u062d\u0642\u0642 \u0645\u0646 \u0627\u0644\u0631\u0627\u0628\u0637 \u0623\u0648 \u0627\u0644\u0645\u0639\u0631\u0641\u0627\u062a");
+        await ctx.runMutation(internal.bookImporter.seedJobItemsInternal, { jobId: args.jobId, ids });
+        return { count: ids.length };
+      }
+
+      // Internet Archive: derive query from the URL (existing behaviour).
+      const collectionMatch = parsed.collection;
+      const q = parsed.query
+        ? `${parsed.query} AND mediatype:texts`
+        : collectionMatch
+          ? `collection:${collectionMatch} AND mediatype:texts`
+          : `${input.replace(/["<>]/g, "").slice(0, 120)} AND mediatype:texts`;
+      const iaEndpoint = SOURCES.internet_archive.searchEndpoint
+        .replace("{q}", encodeURIComponent(q))
+        .replace("{page}", "1")
+        .replace("{rows}", "40");
+      const data = await fetchWithLimit(iaEndpoint);
+      const docs: any[] = data?.response?.docs ?? [];
+      const ids = docs.map((d) => String(d.identifier)).filter(Boolean).slice(0, 200);
+      if (ids.length === 0) throw new Error("\u0644\u0645 \u064a\u064f\u0639\u062b\u0631 \u0639\u0644\u0649 \u0643\u062a\u0628 \u2014 \u062a\u062d\u0642\u0642 \u0645\u0646 \u0627\u0644\u0631\u0627\u0628\u0637 \u0623\u0648 \u0627\u0644\u0645\u0639\u0631\u0641\u0627\u062a");
+      await ctx.runMutation(internal.bookImporter.seedJobItemsInternal, { jobId: args.jobId, ids });
+      return { count: ids.length };
+    }
+
+    // ---- No URL pasted: original id-list / collection / search flows ----
+    const sourceCfg = SOURCES[source];
+    if (!sourceCfg) throw new Error("\u0645\u0635\u062f\u0631 \u063a\u064a\u0631 \u0645\u0639\u0631\u0648\u0641");
+    let ids: string[] = [];
+
+    if (mode === "ids") {
+      ids = input
+        .split(/[\n,]+/)
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .slice(0, 200);
+    } else if (source === "gutenberg") {
+      const endpoint = `https://gutendex.com/books?search=${encodeURIComponent(input)}&page=1`;
+      const data = await fetchWithLimit(endpoint);
+      const results: any[] = data?.results ?? [];
+      ids = results.map((b) => String(b.id)).filter(Boolean).slice(0, 200);
+    } else {
+      const q =
+        mode === "collection"
+          ? `collection:${input} AND mediatype:texts`
+          : `${input.replace(/["<>]/g, "").slice(0, 120)} AND mediatype:texts`;
+      const endpoint = sourceCfg.searchEndpoint
         .replace("{q}", encodeURIComponent(q))
         .replace("{page}", "1")
         .replace("{rows}", "40");
@@ -562,7 +716,7 @@ export const discoverCandidates = action({
       ids = docs.map((d) => String(d.identifier)).filter(Boolean).slice(0, 200);
     }
 
-    if (ids.length === 0) throw new Error("لم يُعثر على كتب — تحقق من الرابط أو المعرفات");
+    if (ids.length === 0) throw new Error("\u0644\u0645 \u064a\u064f\u0639\u062b\u0631 \u0639\u0644\u0649 \u0643\u062a\u0628 \u2014 \u062a\u062d\u0642\u0642 \u0645\u0646 \u0627\u0644\u0631\u0627\u0628\u0637 \u0623\u0648 \u0627\u0644\u0645\u0639\u0631\u0641\u0627\u062a");
     await ctx.runMutation(internal.bookImporter.seedJobItemsInternal, { jobId: args.jobId, ids });
     return { count: ids.length };
   },

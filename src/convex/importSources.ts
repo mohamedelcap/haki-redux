@@ -32,6 +32,22 @@ export type SourceConfig = {
 };
 
 export const SOURCES: Record<string, SourceConfig> = {
+  gutenberg: {
+    name: "Project Gutenberg",
+    // Official Gutendex API (search): ?search=&languages=&topic=&page=
+    searchEndpoint:
+      "https://gutendex.com/books?search={q}&page={page}",
+    // Per-book metadata (official Gutendex detail shape).
+    metadataEndpoint: "https://gutendex.com/books/{id}",
+    // Direct files: https://www.gutenberg.org/ebooks/{id}.epub3.images etc.
+    fileEndpoint: "https://www.gutenberg.org/ebooks/{id}.{format}",
+    // Official cover: https://www.gutenberg.org/cache/epub/{id}/pg{id}.cover.medium.jpg
+    coverEndpoint: "https://www.gutenberg.org/cache/epub/{id}/pg{id}.cover.medium.jpg",
+    rightsField: "license",
+    idField: "id",
+    rateLimitPerMin: 30,
+    requiresAuth: false,
+  },
   internet_archive: {
     name: "Internet Archive",
     // Official advanced search API (JSON).
@@ -283,6 +299,132 @@ export async function fetchIaItem(id: string, source: SourceConfig) {
     }));
 
   return norm;
+}
+
+// ---------------- Project Gutenberg (Gutendex official API) ----------------
+
+type GutenbergAuthor = { birth_year: number | null; death_year: number | null; name: string };
+type GutenbergFormat = Record<string, string>;
+type GutenbergBook = {
+  id: number;
+  title: string;
+  authors: GutenbergAuthor[];
+  translators?: GutenbergAuthor[];
+  subjects: string[];
+  bookshelves: string[];
+  languages: string[];
+  copyright: boolean | null;
+  media_type: string;
+  formats: GutenbergFormat;
+  summaries: string[];
+};
+
+/** Map a Gutendex book to our normalized shape (public domain by definition). */
+export function normalizeGutenbergBook(b: GutenbergBook) {
+  const authorRaw = b.authors?.[0];
+  const year = authorRaw?.death_year ?? authorRaw?.birth_year ?? undefined;
+  const subjects = [...(b.subjects ?? []), ...(b.bookshelves ?? [])]
+    .map((s) => sanitizeText(s, 80))
+    .filter(Boolean)
+    .slice(0, 12);
+
+  // Pick the best readable/downloadable files (epub > pdf > txt > html).
+  const fmtList = Object.entries(b.formats ?? {});
+  const pick = (re: RegExp) => fmtList.find(([k]) => re.test(k))?.[1];
+  const epub = pick(/epub/);
+  const pdf = pick(/pdf/);
+  const txt = pick(/text\/plain|\.txt(?!.*html)/);
+  const html = pick(/html/);
+  const files = [
+    epub && { name: "epub", format: "epub", url: epub },
+    pdf && { name: "pdf", format: "pdf", url: pdf },
+    txt && { name: "txt", format: "txt", url: txt },
+    html && { name: "html", format: "html", url: html },
+  ].filter(Boolean) as { name: string; format: string; url: string }[];
+
+  const audioFiles = fmtList
+    .filter(([k]) => /audiobook|mp3|ogg/i.test(k))
+    .map(([, v], i) => ({ name: `audio-${i}`, format: "mp3", url: v }));
+
+  const summary = b.summaries?.[0] ?? "";
+
+  return {
+    externalId: String(b.id),
+    sourceName: "Project Gutenberg",
+    sourceUrl: `https://www.gutenberg.org/ebooks/${b.id}`,
+    title: sanitizeText(b.title, 300) || "بدون عنوان",
+    subtitle: undefined,
+    author: sanitizeText(authorRaw?.name ?? "", 200) || undefined,
+    authorBio: undefined,
+    pubDate: year ? String(year) : undefined,
+    originalYear: year,
+    language: sanitizeText(b.languages?.[0] ?? "en", 20) || "en",
+    publisher: "Project Gutenberg",
+    description: sanitizeText(summary, 4000),
+    subjects,
+    keywords: subjects,
+    isbn: undefined,
+    edition: undefined,
+    pageCount: undefined,
+    fileSize: undefined,
+    // Gutenberg hosts only public-domain works → explicit status.
+    rightsStatus: "public_domain" as const,
+    rightsInfo: "Project Gutenberg — public domain (ملك عام)",
+    coverUrl: `https://www.gutenberg.org/cache/epub/${b.id}/pg${b.id}.cover.medium.jpg`,
+    files: [...files, ...audioFiles].slice(0, 8),
+  };
+}
+
+/** Fetch full metadata for one Gutenberg book id (official Gutendex endpoint). */
+export async function fetchGutenbergItem(id: string) {
+  const data = await fetchWithLimit(
+    `https://gutendex.com/books/${encodeURIComponent(id)}`,
+  );
+  if (!data || data.id === undefined) throw new Error("كتاب غير موجود في Gutendex");
+  return normalizeGutenbergBook(data as GutenbergBook);
+}
+
+/**
+ * Parse any archive.org-style or Gutenberg URL the user pastes into a
+ * (source, query) pair used by the importer.
+ * Handles: https://archive.org/details/gutenberg?and[]=language:"English"
+ *          https://www.gutenberg.org/ebooks/search/?query=x
+ *          https://gutendex.com/books/?search=x
+ */
+export function parseImportUrl(
+  raw: string,
+): { source: "internet_archive" | "gutenberg"; collection?: string; query?: string; ids: string[] } {
+  const u = validateExternalUrl(raw);
+  const host = u.hostname.replace(/^www\./, "");
+  const ids: string[] = [];
+
+  // Project Gutenberg URLs
+  if (/(^|\.)gutenberg\.org$/.test(host) || host === "gutendex.com") {
+    const search = u.searchParams.get("query") ?? u.searchParams.get("search") ?? "";
+    const ebook = u.pathname.match(/\/ebooks\/(\d+)/);
+    if (ebook) ids.push(ebook[1]);
+    return { source: "gutenberg", query: search || undefined, ids };
+  }
+
+  // archive.org URLs (existing behaviour + gutenberg collection shortcut)
+  const collectionMatch = u.pathname.match(/\/details\/([\w.-]+)$/);
+  const qp = u.searchParams.get("q") ?? u.searchParams.get("query") ?? "";
+  if (collectionMatch && /^gutenberg/i.test(collectionMatch[1])) {
+    // e.g. /details/gutenberg?and[]=language:"English"
+    const lang = /language[:"\\\s]*"?([A-Za-z-]+)"?/.exec(JSON.stringify([...u.searchParams.values()]))?.[1];
+    return {
+      source: "gutenberg",
+      collection: "gutenberg",
+      query: lang ? `languages=${lang.toLowerCase()}` : undefined,
+      ids,
+    };
+  }
+  return {
+    source: "internet_archive",
+    collection: collectionMatch?.[1],
+    query: qp || undefined,
+    ids,
+  };
 }
 
 // ============================================================
