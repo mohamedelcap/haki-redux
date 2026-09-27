@@ -179,10 +179,26 @@ export const createJob = mutation({
   handler: async (ctx, args) => {
     const admin = await requireAdmin(ctx);
     const input = args.input.trim();
+    // Auto-detect pasted URLs so the stored job source always matches the
+    // discover/fetch pipeline (fixes UI default source conflicting with the
+    // link the admin pastes, e.g. a gutenberg.org link while IA is selected).
+    let source = args.source;
+    let mode = args.mode;
+    if (/^https?:\/\//.test(input)) {
+      try {
+        const parsed = parseImportUrl(input);
+        source = parsed.source;
+        if (parsed.ids.length > 0) mode = "ids";
+        else if (parsed.query) mode = "search";
+        else if (parsed.collection) mode = "collection";
+      } catch {
+        /* keep the admin's explicit source; discover will throw a clear error */
+      }
+    }
     if (!input) throw new Error("أدخل رابطًا أو معرفات");
     return await ctx.db.insert("import_jobs", {
-      source: args.source,
-      mode: args.mode,
+      source,
+      mode,
       input,
       status: "pending",
       total: 0,
@@ -493,8 +509,12 @@ export const autoDiscoverPendingInternal = internalAction({
         // Schedule inputs may already carry full boolean queries; only prefix
         // bare collection names.
         const raw = String(job.input ?? "").trim();
-        const isQuery = /AND |OR |mediatype:|collection:/.test(raw);
-        const q = isQuery ? raw : `${raw} AND mediatype:texts`;
+        const isQuery = /AND |OR |mediatype:|collection:|language:/.test(raw);
+        const q = isQuery
+          ? raw
+          : raw.includes(" ")
+            ? `${raw} AND mediatype:texts`
+            : `collection:${raw} AND mediatype:texts`;
         const endpoint = SOURCES.internet_archive.searchEndpoint
           .replace("{q}", encodeURIComponent(q))
           .replace("{page}", "1")
@@ -620,10 +640,16 @@ export const fetchItemCore = internalAction({
     });
     if (!item) throw new Error("العنصر غير موجود");
     const source = SOURCES[item.source] ?? SOURCES.internet_archive;
-    const { fetchIaItem } = await import("./importSources");
+    const { fetchIaItem, fetchGutenbergItem } = await import("./importSources");
 
     try {
-      const norm = await fetchIaItem(item.externalId, source);
+      // Gutenberg items live in Gutendex, NOT archive.org — fetching them via
+      // the IA metadata endpoint always failed with "not found" and broke the
+      // whole job when ids from both sources got mixed into one queue.
+      const norm =
+        item.source === "gutenberg"
+          ? await fetchGutenbergItem(String(item.externalId))
+          : await fetchIaItem(item.externalId, source);
 
       // Download the cover into platform storage when available.
       let storedCover: string | undefined;
@@ -707,7 +733,12 @@ export const discoverCandidates = action({
         // Gutendex search/collection query.
         const q = parsed.query ?? "";
         const endpoint = `https://gutendex.com/books/${q ? `?${q}&` : ""}page=1`;
-        const data = await fetchWithLimit(endpoint);
+        let data: any;
+        try {
+          data = await fetchWithLimit(endpoint);
+        } catch (e: any) {
+          throw new Error(`فشل الاتصال بـ Gutendex: ${e?.message ?? e}`);
+        }
         const results: any[] = data?.results ?? [];
         const ids = results.map((b) => String(b.id)).filter(Boolean).slice(0, 200);
         if (ids.length === 0) throw new Error("\u0644\u0645 \u064a\u064f\u0639\u062b\u0631 \u0639\u0644\u0649 \u0643\u062a\u0628 \u2014 \u062a\u062d\u0642\u0642 \u0645\u0646 \u0627\u0644\u0631\u0627\u0628\u0637 \u0623\u0648 \u0627\u0644\u0645\u0639\u0631\u0641\u0627\u062a");
@@ -715,10 +746,13 @@ export const discoverCandidates = action({
         return { count: ids.length };
       }
 
-      // Internet Archive: derive query from the URL (existing behaviour).
+      // Internet Archive: derive the query from the URL.
+      // NOTE: parsed.query already carries "AND mediatype:texts" when it comes
+      // from a /details/{collection}?and[]=language:"X" URL — appending it a
+      // second time produced a 0-result query and a confusing failure.
       const collectionMatch = parsed.collection;
       const q = parsed.query
-        ? `${parsed.query} AND mediatype:texts`
+        ? parsed.query
         : collectionMatch
           ? `collection:${collectionMatch} AND mediatype:texts`
           : `${input.replace(/["<>]/g, "").slice(0, 120)} AND mediatype:texts`;
@@ -726,7 +760,12 @@ export const discoverCandidates = action({
         .replace("{q}", encodeURIComponent(q))
         .replace("{page}", "1")
         .replace("{rows}", "40");
-      const data = await fetchWithLimit(iaEndpoint);
+      let data: any;
+      try {
+        data = await fetchWithLimit(iaEndpoint);
+      } catch (e: any) {
+        throw new Error(`فشل الاتصال بأرشيف الإنترنت: ${e?.message ?? e}`);
+      }
       const docs: any[] = data?.response?.docs ?? [];
       const ids = docs.map((d) => String(d.identifier)).filter(Boolean).slice(0, 200);
       if (ids.length === 0) throw new Error("\u0644\u0645 \u064a\u064f\u0639\u062b\u0631 \u0639\u0644\u0649 \u0643\u062a\u0628 \u2014 \u062a\u062d\u0642\u0642 \u0645\u0646 \u0627\u0644\u0631\u0627\u0628\u0637 \u0623\u0648 \u0627\u0644\u0645\u0639\u0631\u0641\u0627\u062a");
@@ -738,6 +777,41 @@ export const discoverCandidates = action({
     const sourceCfg = SOURCES[source];
     if (!sourceCfg) throw new Error("\u0645\u0635\u062f\u0631 \u063a\u064a\u0631 \u0645\u0639\u0631\u0648\u0641");
     let ids: string[] = [];
+
+    // Structured IA inputs: full boolean queries (schedule style, e.g.
+    // "collection:gutenberg AND mediatype:texts") or bare collection handles
+    // (e.g. "gutenberg" from the RSS link). The generic search flow would
+    // misquote these, so they go through a dedicated branch.
+    const rawInput = input.trim();
+    const isIaQuery =
+      source === "internet_archive" &&
+      /AND |OR |collection:|mediatype:|language:/.test(rawInput);
+    const isRssHandle =
+      source === "internet_archive" &&
+      !/^https?:\/\//.test(rawInput) &&
+      !rawInput.includes(" ");
+
+    if (isIaQuery || isRssHandle) {
+      const endpoint = SOURCES.internet_archive.searchEndpoint
+        .replace("{q}", encodeURIComponent(isIaQuery ? rawInput : `collection:${rawInput}`))
+        .replace("{page}", "1")
+        .replace("{rows}", "60");
+      let data: any;
+      try {
+        data = await fetchWithLimit(endpoint);
+      } catch (e: any) {
+        throw new Error(`فشل الاتصال بأرشيف الإنترنت: ${e?.message ?? e}`);
+      }
+      const docs: any[] = data?.response?.docs ?? [];
+      ids = docs.map((d) => String(d.identifier)).filter(Boolean).slice(0, 200);
+      if (ids.length === 0) {
+        throw new Error(
+          "لم يُعثر على نتائج في أرشيف الإنترنت — تحقق من اسم المجموعة أو صيغة الاستعلام",
+        );
+      }
+      await ctx.runMutation(internal.bookImporter.seedJobItemsInternal, { jobId: args.jobId, ids });
+      return { count: ids.length };
+    }
 
     if (mode === "ids") {
       ids = input

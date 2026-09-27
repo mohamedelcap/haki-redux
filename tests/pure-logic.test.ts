@@ -201,17 +201,25 @@ describe("computeChallengeProgress", () => {
 // ---------------- Gutenberg URL parsing + normalization ----------------
 
 describe("parseImportUrl", () => {
-  it("routes the IA gutenberg collection to the gutenberg source with an ISO language filter", () => {
+  it("keeps the IA gutenberg collection on Internet Archive with a language query", () => {
     const r = parseImportUrl('https://archive.org/details/gutenberg?and%5B%5D=language%3A%22English%22');
-    expect(r.source).toBe("gutenberg");
+    expect(r.source).toBe("internet_archive");
     expect(r.collection).toBe("gutenberg");
-    // Gutendex requires ISO codes: "English" → "en" (yields 63k+ books).
-    expect(r.query).toBe("languages=en");
+    // Items are IA records fetched from archive.org/metadata — routing them to
+    // Gutendex produced numeric ids that do not exist on archive.org.
+    expect(r.query).toBe('language:"English" AND mediatype:texts');
   });
 
-  it("maps Arabic language names to ISO codes", () => {
+  it("parses the IA collection RSS link into a gutenberg collection import", () => {
+    const r = parseImportUrl("https://archive.org/services/collection-rss.php?collection=gutenberg");
+    expect(r.source).toBe("internet_archive");
+    expect(r.collection).toBe("gutenberg");
+  });
+
+  it("extracts language facets from and[] params on any IA collection", () => {
     const r = parseImportUrl('https://archive.org/details/gutenberg?and%5B%5D=language%3A%22Arabic%22');
-    expect(r.query).toBe("languages=ar");
+    expect(r.source).toBe("internet_archive");
+    expect(r.query).toBe('language:"Arabic" AND mediatype:texts');
   });
 
   it("routes gutenberg.org ebook pages to direct ids", () => {

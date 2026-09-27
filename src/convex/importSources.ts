@@ -460,6 +460,17 @@ export async function fetchGutenbergItem(id: string) {
   return normalizeGutenbergBook(data as GutenbergBook);
 }
 
+/** Extract a language facet value from IA's and[]=language:"X" URL params. */
+function iaLanguageFacet(u: URL): string | undefined {
+  for (const key of [...u.searchParams.keys()]) {
+    if (key !== "and[]") continue;
+    const val = u.searchParams.get(key) ?? "";
+    const m = /language\s*[:=]\s*"?([^"]+?)"?\s*$/.exec(val);
+    if (m) return m[1].trim();
+  }
+  return undefined;
+}
+
 /**
  * Parse any archive.org-style or Gutenberg URL the user pastes into a
  * (source, query) pair used by the importer.
@@ -469,7 +480,14 @@ export async function fetchGutenbergItem(id: string) {
  */
 export function parseImportUrl(
   raw: string,
-): { source: "internet_archive" | "gutenberg"; collection?: string; query?: string; ids: string[] } {
+): {
+  source: "internet_archive" | "gutenberg";
+  collection?: string;
+  /** IA-only: collection captured from /details/{iaCollection}. */
+  iaCollection?: string;
+  query?: string;
+  ids: string[];
+} {
   const u = validateExternalUrl(raw);
   const host = u.hostname.replace(/^www\./, "");
   const ids: string[] = [];
@@ -486,20 +504,25 @@ export function parseImportUrl(
   const collectionMatch = u.pathname.match(/\/details\/([\w.-]+)$/);
   const qp = u.searchParams.get("q") ?? u.searchParams.get("query") ?? "";
   if (collectionMatch && /^gutenberg/i.test(collectionMatch[1])) {
-    // e.g. /details/gutenberg?and[]=language:"English" — may contain any
-    // facet filters; also catch topic/author params from the archive UI.
-    const allVals = [...u.searchParams.values()].join(" ");
-    const langRaw =
-      /language[:"\\\\\\s]*"?([A-Za-z-\u0600-\u06FF]+)"?/.exec(allVals)?.[1] ??
-      /topic[:"\\\\\\s]*"?([A-Za-z-]+)"?/.exec(allVals)?.[1];
-    // Gutendex expects ISO-639 codes ("en"), not full names ("English").
-    const langCode = langRaw ? gutenbergLanguageCode(langRaw) : undefined;
+    // IA's gutenberg collection (e.g. /details/gutenberg?and[]=language:"English")
+    // must STAY on Internet Archive: its items are IA records fetched from
+    // archive.org/metadata. Routing them to Gutendex caused id mismatches
+    // (numeric PG ids that do not exist on archive.org) and total failure.
+    const langRaw = iaLanguageFacet(u);
     return {
-      source: "gutenberg",
-      collection: "gutenberg",
-      query: langCode ? `languages=${langCode}` : undefined,
+      source: "internet_archive",
+      collection: collectionMatch[1],
+      query: langRaw ? `language:"${langRaw}" AND mediatype:texts` : undefined,
       ids,
     };
+  }
+
+  // Official IA collection RSS: /services/collection-rss.php?collection=gutenberg
+  if (u.pathname.includes("collection-rss.php")) {
+    const rssCollection = u.searchParams.get("collection") ?? "";
+    if (rssCollection !== "") {
+      return { source: "internet_archive", collection: rssCollection, ids };
+    }
   }
   return {
     source: "internet_archive",
