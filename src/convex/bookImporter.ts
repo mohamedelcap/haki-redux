@@ -1217,6 +1217,14 @@ export const publishItemInternal = internalMutation({
       contentId,
       updatedAt: now,
     });
+    // Live auto-publish counter for the job card.
+    const jobP = await ctx.db.get(item.jobId);
+    if (jobP) {
+      await ctx.db.patch(item.jobId, {
+        autoPublished: (jobP.autoPublished ?? 0) + 1,
+        updatedAt: now,
+      });
+    }
     return { ok: true, contentId };
   },
 });
@@ -1383,6 +1391,16 @@ export const publishItem = mutation({
       importedBy: admin._id,
       updatedAt: now,
     });
+    // Published counter (manual review flow counts too).
+    if (args.publish) {
+      const jobM = await ctx.db.get(item.jobId);
+      if (jobM) {
+        await ctx.db.patch(item.jobId, {
+          autoPublished: (jobM.autoPublished ?? 0) + 1,
+          updatedAt: now,
+        });
+      }
+    }
 
     return { ok: true, contentId, slug };
   },

@@ -416,9 +416,21 @@ function QueueView({
           <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-muted">
             <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${pct}%` }} />
           </div>
-          <div className="mt-2 flex gap-3 text-[11px] text-muted-foreground">
+          <div className="mt-2 flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
             <span className="text-green-600">✓ {job.succeeded} {L("نجح", "ok")}</span>
             <span className="text-destructive">✕ {job.failed} {L("فشل", "failed")}</span>
+            <span
+              className={
+                "flex items-center gap-1 rounded-full bg-green-600/10 px-2 py-0.5 font-bold text-green-600 " +
+                (job.status === "processing" ? "animate-pulse" : "")
+              }
+            >
+              <Zap className="size-3" />
+              {job.autoPublished ?? 0}{" "}
+              {job.publishMode === "auto"
+                ? L("منشور تلقائيًا", "auto-published")
+                : L("منشور", "published")}
+            </span>
           </div>
         </div>
       )}

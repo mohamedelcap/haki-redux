@@ -484,6 +484,8 @@ const schema = defineSchema(
       processed: v.number(),
       succeeded: v.number(),
       failed: v.number(),
+      /** Items auto-published from this job (live counter). */
+      autoPublished: v.optional(v.number()),
       /** draft | auto (publish only verified public-domain) */
       publishMode: v.string(),
       allowedFormats: v.optional(v.array(v.string())),
