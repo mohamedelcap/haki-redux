@@ -1,0 +1,1 @@
+import{j as a}from"./framer-motion-OGd9XbV_.js";import{a as t}from"./index-CwrknCIc.js";const e="/logo.png";function r({size:o=40,className:n}={}){return a.jsx("img",{src:e,alt:"حكي",width:o,height:o,loading:"eager",draggable:!1,className:t("shrink-0 select-none object-contain",n)})}function g({size:o=36,className:n}){return a.jsx(r,{size:o,className:n})}export{r as H,g as a};
