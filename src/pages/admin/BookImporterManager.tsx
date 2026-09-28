@@ -168,7 +168,7 @@ export function BookImporterManager({ L }: { L: LFn }) {
 
 function AnalyzeStep({ L, onAnalyzed }: { L: LFn; onAnalyzed: (jobId: string) => void }) {
   const [url, setUrl] = useState("");
-  const [publishMode, setPublishMode] = useState("draft");
+  const [publishMode, setPublishMode] = useState("auto");
   const [busy, setBusy] = useState(false);
   const [moreBusy, setMoreBusy] = useState(false);
   const [jobId, setJobId] = useState<string | null>(null);
@@ -179,30 +179,54 @@ function AnalyzeStep({ L, onAnalyzed }: { L: LFn; onAnalyzed: (jobId: string) =>
   const job = useQuery(api.bookImporter.getJob, jobId ? { id: jobId as never } : "skip");
 
   // Auto-analyze loop: extract metadata in batches of 10 until none pending.
+  // Errors are surfaced to the employee, never swallowed.
   const runExtraction = async (id: string) => {
+    let extracted = 0;
+    let failedRounds = 0;
+    let lastError: string | null = null;
     for (let round = 0; round < 30; round++) {
-      const r: any = await analyzeBatch({ jobId: id as never, maxItems: 10 });
-      if (!r?.analyzed) break;
+      try {
+        const r: any = await analyzeBatch({ jobId: id as never, maxItems: 10 });
+        if (!r?.analyzed) break;
+        extracted += r.analyzed;
+      } catch (e: any) {
+        failedRounds += 1;
+        lastError = e?.message ?? String(e);
+        break;
+      }
     }
+    return { extracted, failedRounds, lastError };
   };
 
   const start = async () => {
-    if (!url.trim()) return;
+    if (!url.trim()) {
+      toast.error(L("أدخل رابطًا أولًا", "Enter a URL first"));
+      return;
+    }
     setBusy(true);
     try {
       const res: any = await analyze({ url: url.trim(), publishMode });
       setJobId(res.jobId);
       toast.success(
         L(
-          `اكتُشف ${res.discovered} كتابًا (${res.total} إجمالًا في المصدر) — جارٍ استخراج البيانات…`,
-          `Discovered ${res.discovered} books (${res.total} total in source) — extracting…`,
+          `اكتُشف ${res.discovered} كتابًا (${Number(res.total).toLocaleString()} إجمالًا في المصدر) — جارٍ استخراج البيانات…`,
+          `Discovered ${res.discovered} books (${Number(res.total).toLocaleString()} total in source) — extracting…`,
         ),
       );
-      void runExtraction(res.jobId)
-        .then(() => toast.success(L("اكتمل استخراج الدفعة", "Batch extraction done")))
-        .catch(() => undefined);
+      const sum = await runExtraction(res.jobId);
+      if (sum.failedRounds > 0 && sum.lastError) {
+        toast.error(L(`فشل الاستخراج: ${sum.lastError}`, `Extraction failed: ${sum.lastError}`));
+      }
+      if (sum.extracted > 0) {
+        toast.success(
+          L(
+            `استُخرجت بيانات ${sum.extracted} كتاب — تابع للمراجعة`,
+            `Extracted ${sum.extracted} books — continue to review`,
+          ),
+        );
+      }
     } catch (e: any) {
-      toast.error(e.message);
+      toast.error(e?.message ?? String(e));
     } finally {
       setBusy(false);
     }
@@ -267,10 +291,12 @@ function AnalyzeStep({ L, onAnalyzed }: { L: LFn; onAnalyzed: (jobId: string) =>
             </Select>
           </div>
           <div className="flex flex-wrap items-end gap-2">
+            {job?.mode !== "item" && (
             <Button variant="outline" disabled={!jobId || moreBusy} onClick={loadMore}>
               {moreBusy ? <Loader2 className="size-4 animate-spin" /> : <Layers className="size-4" />}
               {L("تحميل 50 كتابًا إضافيًا", "Load 50 more books")}
             </Button>
+            )}
             <Button className="font-bold" disabled={!jobId} onClick={() => jobId && onAnalyzed(jobId)}>
               {L("متابعة للمراجعة", "Continue to review")}
               <ChevronRight className="size-4 rotate-180" />
@@ -311,6 +337,7 @@ function ReviewStep({ L, jobId, onDone }: { L: LFn; jobId: string; onDone: () =>
   const job = useQuery(api.bookImporter.getJob, { id: jobId as never });
   const items = useQuery(api.bookImporter.listJobItems, { jobId: jobId as never });
   const importSelected = useAction(api.bookImporter.importSelected);
+  const reanalyze = useAction(api.bookImporter.analyzeBatch);
   const retryItem = useMutation(api.bookImporter.retryItem);
   const skipItem = useMutation(api.bookImporter.skipItem);
   const [busy, setBusy] = useState(false);
@@ -532,8 +559,15 @@ function ReviewStep({ L, jobId, onDone }: { L: LFn; jobId: string; onDone: () =>
                           onClick={async () => {
                             try {
                               if (it.status === "failed") await retryItem({ itemId: it._id });
+                              const r: any = await reanalyze({ jobId: jobId as never, maxItems: 25 });
+                              toast.success(
+                                L(
+                                  `أُعيد التحليل: ${r?.analyzed ?? 0} — بقيت ${r?.remaining ?? 0}`,
+                                  `Re-analyzed: ${r?.analyzed ?? 0} — ${r?.remaining ?? 0} left`,
+                                ),
+                              );
                             } catch (e: any) {
-                              toast.error(e.message);
+                              toast.error(e?.message ?? String(e));
                             }
                           }}
                         >

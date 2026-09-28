@@ -26,10 +26,31 @@ const UA = "HAKI-Importer/2.0 (educational public-domain import)";
 async function getJson(url: string, timeoutMs = 20000): Promise<any> {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), timeoutMs);
+  const started = Date.now();
   try {
     const res = await fetch(url, { signal: ctrl.signal, redirect: "follow", headers: { "User-Agent": UA } });
-    if (!res.ok) throw new Error(`HTTP ${res.status} من المصدر`);
+    console.log(
+      `[HAKI-IMPORT] ${JSON.stringify({ stage: "HTTP_RESPONSE", endpoint: url, httpStatus: res.status, ms: Date.now() - started })}`,
+    );
+    if (!res.ok) {
+      let body = "";
+      try {
+        body = (await res.text()).slice(0, 300);
+      } catch {
+        body = "";
+      }
+      console.error(
+        `[HAKI-IMPORT] ${JSON.stringify({ stage: "HTTP_ERROR", endpoint: url, httpStatus: res.status, body })}`,
+      );
+      throw new Error(`HTTP ${res.status} من المصدر`);
+    }
     return await res.json();
+  } catch (e: any) {
+    if (e?.name === "AbortError") {
+      console.error(`[HAKI-IMPORT] ${JSON.stringify({ stage: "HTTP_ERROR", endpoint: url, message: "timeout" })}`);
+      throw new Error("انتهت مهلة الاتصال بالمصدر — حاول مرة أخرى");
+    }
+    throw e;
   } finally {
     clearTimeout(t);
   }
@@ -173,32 +194,61 @@ export function mapIaMetadata(meta: any, id: string): UnifiedItem {
 }
 
 export async function fetchIaItem(id: string): Promise<UnifiedItem> {
-  const meta = await getJson(`https://archive.org/metadata/${encodeURIComponent(id)}`);
+  const endpoint = `https://archive.org/metadata/${encodeURIComponent(id)}`;
+  console.log(
+    `[HAKI-IMPORT] ${JSON.stringify({ stage: "METADATA_FETCH_STARTED", externalId: id, endpoint })}`,
+  );
+  const meta = await getJson(endpoint);
   if (!meta || (meta.metadata == null && !Array.isArray(meta.files))) {
     throw new Error("تعذر قراءة صفحة الكتاب من أرشيف الإنترنت (لا بيانات)");
   }
   if (!meta.metadata || Object.keys(meta.metadata).length === 0) {
     throw new Error("الكتاب غير موجود على أرشيف الإنترنت (معرف غير صالح أو محجوب)");
   }
-  return mapIaMetadata(meta, id);
+  const item = mapIaMetadata(meta, id);
+  console.log(
+    `[HAKI-IMPORT] ${JSON.stringify({ stage: "METADATA_RECEIVED", externalId: id, title: item.title, files: item.files.length, cover: item.coverUrl })}`,
+  );
+  return item;
 }
 
 /** Discover IA ids from a collection/search link (paginated advancedsearch). */
 export async function discoverIa(link: ParsedLink, page: number, rows: number): Promise<{ ids: string[]; total: number }> {
   const parts: string[] = [];
   if (link.collection) parts.push(`collection:${link.collection}`);
-  if (link.language) parts.push(`language:"${link.language.replace(/"/g, "")}"`);
+  // IA's index stores ISO codes ("eng") while the site facet uses names
+  // ("English") — mirror the pasted value with its common code so the count
+  // matches what the user sees on archive.org (English: 11 vs eng: 28,926).
+  if (link.language) {
+    const lang = link.language.replace(/"/g, "");
+    const codes: Record<string, string> = {
+      english: "eng", arabic: "ara", french: "fre", german: "ger", spanish: "spa",
+      italian: "ita", portuguese: "por", russian: "rus", chinese: "chi", japanese: "jpn",
+      korean: "kor", greek: "gre", latin: "lat", dutch: "dut", polish: "pol",
+      hindi: "hin", turkish: "tur", persian: "per", hebrew: "heb",
+    };
+    const code = codes[lang.toLowerCase()];
+    if (code) parts.push(`language:("${lang}" OR "${code}")`);
+    else parts.push(`language:"${lang}"`);
+  }
   if (link.query) parts.push(link.query.replace(/"[<>]/g, ""));
   if (!parts.some((p) => p.includes("mediatype:"))) parts.push("mediatype:texts");
   const q = parts.join(" AND ");
   const url =
     `https://archive.org/advancedsearch.php?q=${encodeURIComponent(q)}` +
     `&fl[]=identifier&fl[]=title&fl[]=creator&fl[]=date&fl[]=language&page=${page}&rows=${rows}&output=json`;
+  console.log(
+    `[HAKI-IMPORT] ${JSON.stringify({ stage: "SEARCH_REQUEST_STARTED", endpoint: url, query: q })}`,
+  );
   const data = await getJson(url);
   const docs: any[] = data?.response?.docs ?? [];
+  const total = Number(data?.response?.numFound ?? 0);
+  console.log(
+    `[HAKI-IMPORT] ${JSON.stringify({ stage: "SEARCH_RESPONSE_RECEIVED", query: q, numFound: total, returned: docs.length })}`,
+  );
   return {
     ids: docs.map((d) => String(d.identifier)).filter(Boolean),
-    total: Number(data?.response?.numFound ?? 0),
+    total,
   };
 }
 
@@ -240,9 +290,17 @@ export function mapGutenbergBook(b: any): UnifiedItem {
 }
 
 export async function fetchGutenbergItem(id: string): Promise<UnifiedItem> {
-  const data = await getJson(`https://gutendex.com/books/${encodeURIComponent(id)}/`);
+  const endpoint = `https://gutendex.com/books/${encodeURIComponent(id)}/`;
+  console.log(
+    `[HAKI-IMPORT] ${JSON.stringify({ stage: "METADATA_FETCH_STARTED", externalId: id, endpoint })}`,
+  );
+  const data = await getJson(endpoint);
   if (!data || data.id === undefined) throw new Error("كتاب غير موجود في مشروع غوتنبرغ");
-  return mapGutenbergBook(data);
+  const item = mapGutenbergBook(data);
+  console.log(
+    `[HAKI-IMPORT] ${JSON.stringify({ stage: "METADATA_RECEIVED", externalId: id, title: item.title, files: item.files.length, cover: item.coverUrl })}`,
+  );
+  return item;
 }
 
 export async function discoverGutenberg(link: ParsedLink, page: number): Promise<{ ids: string[]; total: number }> {

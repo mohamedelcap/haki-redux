@@ -10,6 +10,8 @@ import {
 import { internal, api } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { requireAdmin } from "./lib";
+import { getAuthUserId } from "@convex-dev/auth/server";
+import { ConvexError } from "convex/values";
 import {
   classifySourceUrl,
   selectFiles,
@@ -57,6 +59,26 @@ function itemFiles(item: any): UnifiedFile[] {
   } catch {
     return [];
   }
+}
+
+// ---------------- Stage logging + action-safe admin gate ----------------
+
+function logStage(stage: string, fields: Record<string, unknown> = {}) {
+  console.log(`[HAKI-IMPORT] ${JSON.stringify({ stage, ...fields })}`);
+}
+
+/**
+ * Convex actions have NO ctx.db, so requireAdmin(ctx) (which reads the user
+ * doc with ctx.db.get) crashes inside any action. The viewer is resolved
+ * through an internalQuery instead — same role rules, action-safe.
+ */
+async function adminGate(ctx: any) {
+  const viewer: { _id?: string; role?: string; name?: string } | null =
+    await ctx.runQuery(internal.bookImporter.getViewerUserInternal, {});
+  if (!viewer || (viewer.role !== "admin" && viewer.role !== "super_admin")) {
+    throw new ConvexError("غير مصرح: هذه العملية تتطلب صلاحيات المدير");
+  }
+  return viewer;
 }
 
 /** Duplicate check: externalId | sourceUrl | ISBN | title+author (req 10). */
@@ -260,23 +282,6 @@ export const retryItem = mutation({
   },
 });
 
-// Temporary compile-compat stubs (the old UI referenced removed functions);
-// deleted together with the UI rewrite in the same task.
-export const discoverCandidates = action({
-  args: { jobId: v.id("import_jobs"), source: v.string(), mode: v.string(), input: v.string() },
-  handler: async () => ({ count: 0 }),
-});
-
-export const processBatchNow = action({
-  args: { jobId: v.optional(v.id("import_jobs")), maxItems: v.optional(v.number()) },
-  handler: async () => ({ processed: 0, published: 0 }),
-});
-
-export const fetchItemMetadata = action({
-  args: { itemId: v.id("import_items"), publishMode: v.optional(v.string()) },
-  handler: async () => ({ ok: false }),
-});
-
 export const skipItem = mutation({
   args: { itemId: v.id("import_items") },
   handler: async (ctx, args) => {
@@ -286,23 +291,43 @@ export const skipItem = mutation({
 });
 
 // ---------------- 1-2. Analyze URL → discover books (paginated) ----------------
+//
+// Public actions are thin auth wrappers: Convex actions have no ctx.db, so
+// the real logic lives in internalActions that verify the admin via
+// getViewerUserInternal and log every stage (IMPORT_STARTED … IMPORT_FAILED).
 
-/**
- * Step 1 of the wizard: analyze the pasted URL and run the first
- * discovery page (up to 50 books). Returns the job + live preview info.
- */
+export const getViewerUserInternal = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (userId === null) return null;
+    return await ctx.db.get(userId);
+  },
+});
+
+/** Step 1: analyze the pasted URL and run the first discovery page (50 books). */
 export const analyzeUrl = action({
   args: { url: v.string(), publishMode: v.optional(v.string()) },
-  handler: async (ctx: any, args) => {
-    await requireAdmin(ctx as any);
-    const url = args.url.trim();
-    const link = classifySourceUrl(url); // throws Arabic error for bad links
-    const admin: any = await ctx.auth.getUserIdentity
-      ? { _id: undefined }
-      : { _id: undefined };
-    void admin;
+  handler: async (ctx, args): Promise<any> => {
+    await adminGate(ctx);
+    return await ctx.runAction(internal.bookImporter.analyzeUrlInternal, args);
+  },
+});
 
-    const now = Date.now();
+export const analyzeUrlInternal = internalAction({
+  args: { url: v.string(), publishMode: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    const url = args.url.trim();
+    logStage("IMPORT_STARTED", { url });
+    const link = classifySourceUrl(url); // throws Arabic error for bad links
+    logStage("SOURCE_DETECTED", {
+      source: link.source,
+      kind: link.kind,
+      collection: link.collection,
+      language: link.language,
+      externalId: link.externalId,
+    });
+
     const jobId: any = await ctx.runMutation(internal.bookImporter.createJobInternal, {
       source: link.source,
       mode: link.kind,
@@ -311,7 +336,11 @@ export const analyzeUrl = action({
       numFound: 0,
     });
 
+    // Item URL → verify it actually exists, then seed exactly one identifier.
     if (link.kind === "item" && link.externalId) {
+      // Fail fast with a clear Arabic message instead of queueing a ghost id.
+      const probe = await fetchUnifiedItem(link.source, link.externalId);
+      logStage("ITEM_FOUND", { externalId: link.externalId, title: probe.title });
       await ctx.runMutation(internal.bookImporter.seedJobItemsInternal, {
         jobId,
         ids: [link.externalId],
@@ -319,15 +348,18 @@ export const analyzeUrl = action({
       return { jobId, kind: link.kind, discovered: 1, total: 1, page: 1 };
     }
 
+    // Collection / search URL → official advancedsearch API, first page.
     const first = await discoverPage(link, 1, 50);
     if (first.ids.length === 0) {
       await ctx.runMutation(internal.bookImporter.setJobStatusInternal, {
         id: jobId,
         status: "completed",
-        completedAt: now,
+        completedAt: Date.now(),
       });
+      logStage("IMPORT_FAILED", { stage: "discover", url, message: "لم يُعثر على أي كتاب في هذا الرابط" });
       throw new Error("لم يُعثر على أي كتاب في هذا الرابط — جرّب رابطًا آخر");
     }
+    logStage("ITEM_FOUND", { discovered: first.ids.length, sample: first.ids.slice(0, 3), total: first.total });
     await ctx.runMutation(internal.bookImporter.seedJobItemsInternal, { jobId, ids: first.ids });
     await ctx.runMutation(internal.bookImporter.patchJobInternal, {
       id: jobId,
@@ -337,14 +369,25 @@ export const analyzeUrl = action({
   },
 });
 
-/** Load the next page of results into the same job (req 2: pagination). */
+/** Load the next page of results into the same job (pagination). */
 export const discoverMore = action({
   args: { jobId: v.id("import_jobs") },
-  handler: async (ctx: any, args) => {
-    await requireAdmin(ctx as any);
+  handler: async (ctx, args): Promise<any> => {
+    await adminGate(ctx);
+    return await ctx.runAction(internal.bookImporter.discoverMoreInternal, args);
+  },
+});
+
+export const discoverMoreInternal = internalAction({
+  args: { jobId: v.id("import_jobs") },
+  handler: async (ctx, args) => {
     const job: any = await ctx.runQuery(internal.bookImporter.getJobInternal, { id: args.jobId });
     if (!job) throw new Error("المهمة غير موجودة");
     if (job.status === "completed") throw new Error("انتهت هذه المهمة");
+    // Item links have no pages — report done instead of hitting the search API.
+    if (job.mode === "item") {
+      return { added: 0, page: 1, total: job.numFound ?? 1, done: true };
+    }
     const link = classifySourceUrl(job.input);
     const page = (job.lastPage ?? 0) + 1;
     const next = await discoverPage(link, page, 50);
@@ -366,12 +409,19 @@ export const discoverMore = action({
 
 /**
  * Step 2: extract REAL metadata + files for a batch of pending items
- * (no publishing — everything lands in preview as analyzed/needs review).
+ * (no publishing — everything lands in preview as analyzed).
  */
 export const analyzeBatch = action({
   args: { jobId: v.id("import_jobs"), maxItems: v.optional(v.number()) },
-  handler: async (ctx: any, args) => {
-    await requireAdmin(ctx as any);
+  handler: async (ctx, args): Promise<any> => {
+    await adminGate(ctx);
+    return await ctx.runAction(internal.bookImporter.analyzeBatchInternal, args);
+  },
+});
+
+export const analyzeBatchInternal = internalAction({
+  args: { jobId: v.id("import_jobs"), maxItems: v.optional(v.number()) },
+  handler: async (ctx, args) => {
     const max = Math.min(args.maxItems ?? 10, 25);
     const pending: any[] = await ctx.runQuery(internal.bookImporter.listPendingByJobInternal, {
       jobId: args.jobId,
@@ -386,6 +436,11 @@ export const analyzeBatch = action({
       try {
         const item: UnifiedItem = await fetchUnifiedItem(it.source, it.externalId);
         const files = item.files;
+        logStage("FILES_FOUND", {
+          externalId: it.externalId,
+          total: files.length,
+          selected: files.filter((f) => f.selected).length,
+        });
         await ctx.runMutation(internal.bookImporter.finalizeAnalyzeInternal, {
           itemId: it._id,
           ok: true,
@@ -407,6 +462,11 @@ export const analyzeBatch = action({
         });
         analyzed += 1;
       } catch (e: any) {
+        logStage("IMPORT_FAILED", {
+          stage: "metadata",
+          externalId: it.externalId,
+          message: String(e?.message ?? e),
+        });
         await ctx.runMutation(internal.bookImporter.finalizeAnalyzeInternal, {
           itemId: it._id,
           ok: false,
@@ -425,12 +485,20 @@ export const analyzeBatch = action({
 
 /**
  * Step 3: create real content records for the SELECTED analyzed items.
- * Honors per-item selected files (req 6) and duplicate protection (req 10).
+ * Honors per-item selected files and the job's publish policy
+ * (draft = keep off the site until review; auto = publish verified PD).
  */
 export const importSelected = action({
   args: { itemIds: v.array(v.id("import_items")) },
-  handler: async (ctx: any, args) => {
-    await requireAdmin(ctx as any);
+  handler: async (ctx, args): Promise<any> => {
+    await adminGate(ctx);
+    return await ctx.runAction(internal.bookImporter.importSelectedInternal, args);
+  },
+});
+
+export const importSelectedInternal = internalAction({
+  args: { itemIds: v.array(v.id("import_items")) },
+  handler: async (ctx, args) => {
     const out: { imported: number; duplicates: number; failed: number; review: number } = {
       imported: 0,
       duplicates: 0,
@@ -441,23 +509,47 @@ export const importSelected = action({
       const item: any = await ctx.runQuery(internal.bookImporter.getItemPublicInternal, {
         itemId,
       });
-      if (!item || item.status !== "analyzed") continue;
+      if (!item) continue;
+      // Already imported before (or flagged by the duplicate check)? Count it
+      // as a duplicate instead of silently skipping — the employee sees real numbers.
+      if (item.status !== "analyzed") {
+        if (["imported", "published", "draft", "requires_review", "duplicate"].includes(item.status)) {
+          out.duplicates += 1;
+        }
+        continue;
+      }
       const meta: UnifiedItem = item.metadata ? JSON.parse(item.metadata) : null;
       if (!meta) continue;
       try {
+        // Publish policy comes from the JOB (draft | auto), not per-item guesses.
+        const job: any = await ctx.runQuery(internal.bookImporter.getJobInternal, { id: item.jobId });
+        const auto = (job?.publishMode ?? "draft") === "auto";
+        const asDraft = auto ? !isPd(meta.rights.status) : true;
         const res: any = await ctx.runMutation(internal.bookImporter.publishFromAnalysisInternal, {
           itemId,
-          asDraft: !isPd(meta.rights.status),
+          asDraft,
         });
         if (res?.duplicate) out.duplicates += 1;
         else if (res?.ok) {
-          if (res.status === "requires_review") out.review += 1;
-          else out.imported += 1;
+          if (res.status === "published") out.imported += 1;
+          else out.review += 1;
         } else out.failed += 1;
-      } catch {
+      } catch (e: any) {
+        logStage("IMPORT_FAILED", {
+          stage: "publish",
+          externalId: item.externalId,
+          message: String(e?.message ?? e),
+        });
         out.failed += 1;
       }
     }
+    logStage("IMPORT_COMPLETED", {
+      scope: "selected",
+      imported: out.imported,
+      duplicates: out.duplicates,
+      review: out.review,
+      failed: out.failed,
+    });
     return out;
   },
 });
@@ -736,6 +828,7 @@ export const finalizeAnalyzeInternal = internalMutation({
 
     if (!args.ok) {
       await ctx.db.patch(args.itemId, { status: "failed", error: args.error, updatedAt: now });
+      logStage("IMPORT_FAILED", { stage: "metadata_finalize", itemId: args.itemId, message: args.error });
       if (job) {
         await ctx.db.patch(item.jobId, {
           processed: (job.processed ?? 0) + 1,
@@ -804,6 +897,7 @@ export const publishFromAnalysisInternal = internalMutation({
       : chosen.find((f) => f.kind === "electronic")?.url ?? chosen[0]?.url;
 
     // Duplicate check right before insert (req 10).
+    logStage("DUPLICATE_CHECK", { externalId: item.externalId, title: item.title ?? meta.title });
     const dup = await findDuplicate(
       ctx,
       item.source,
@@ -815,6 +909,7 @@ export const publishFromAnalysisInternal = internalMutation({
     );
     if (dup) {
       await ctx.db.patch(args.itemId, { status: "duplicate", duplicateOf: dup, updatedAt: Date.now() });
+      logStage("IMPORT_COMPLETED", { externalId: item.externalId, duplicate: true, contentId: dup });
       return { ok: true, duplicate: true, contentId: dup };
     }
 
@@ -864,6 +959,11 @@ export const publishFromAnalysisInternal = internalMutation({
     const slug = `${slugBase}-${item.externalId.slice(0, 8)}`;
     const now = Date.now();
 
+    logStage("DATABASE_INSERT", {
+      externalId: item.externalId,
+      title,
+      contentType: isAudiobook ? "audiobook" : "ebook",
+    });
     const contentId = await ctx.db.insert("content", {
       title,
       slug,
@@ -917,6 +1017,12 @@ export const publishFromAnalysisInternal = internalMutation({
       status: args.asDraft ? "draft" : "published",
       contentId,
       updatedAt: now,
+    });
+    logStage("IMPORT_COMPLETED", {
+      externalId: item.externalId,
+      contentId,
+      status: args.asDraft ? "draft" : "published",
+      slug,
     });
     const job: any = await ctx.db.get(item.jobId);
     if (job) {
@@ -1258,10 +1364,10 @@ export const deleteCategoryMapping = mutation({
 
 // ---------------- Sources registry (for the Sources tab) ----------------
 
-export const listSources = action({
+export const listSources = query({
   args: {},
-  handler: async (ctx: any) => {
-    await requireAdmin(ctx as any);
+  handler: async (ctx) => {
+    await requireAdmin(ctx);
     return [
       {
         key: "internet_archive",
