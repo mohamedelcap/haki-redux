@@ -21,15 +21,27 @@ import {
   BookmarkCheck,
   Check,
   Clock,
+  Download,
+  FileText,
   Headphones,
   Link2,
   ListPlus,
+  Lock,
   Play,
   ShieldCheck,
 } from "lucide-react";
 import { useMemo } from "react";
 import { Link, useParams } from "react-router";
 import { toast } from "sonner";
+
+type ImportFile = {
+  name: string;
+  format: string;
+  kind: string;
+  size?: number;
+  url: string;
+  availability?: string;
+};
 
 export default function ContentDetails() {
   const { slug } = useParams<{ slug: string }>();
@@ -58,6 +70,25 @@ export default function ContentDetails() {
   const hasChapters = (chapters?.length ?? 0) > 0;
   const hasEpisodes = (episodes?.length ?? 0) > 0;
   const trackList = hasChapters ? chapters : episodes;
+
+  // ---- Imported-book real files (Book Importer) ----
+  const importFiles = useMemo<ImportFile[]>(
+    () => ((item as any)?.importFiles ?? []) as ImportFile[],
+    [item],
+  );
+  const availableFiles = importFiles.filter((f) => f.availability === "available");
+  const restrictedFiles = importFiles.filter((f) => f.availability && f.availability !== "available");
+  const audioFiles = availableFiles.filter((f) => f.kind === "audio");
+  const readableFormats = availableFiles
+    .filter((f) => ["epub", "pdf", "txt"].includes(f.format))
+    .map((f) => f.format);
+  const hasReadable =
+    item?.contentType === "ebook" &&
+    (Boolean(item.fileUrl && /\.(epub|pdf|txt)($|\?)/i.test(item.fileUrl)) ||
+      readableFormats.length > 0);
+  const readableFormat = item?.fileUrl
+    ? (/\.(epub|pdf|txt)($|\?)/i.exec(item.fileUrl)?.[1] ?? readableFormats[0] ?? "epub")
+    : readableFormats[0];
 
   // Chapter start offsets: cumulative durations
   const offsets = useMemo(() => {
@@ -146,6 +177,20 @@ export default function ContentDetails() {
         startAt,
       });
     }
+  };
+
+  const playImportedAudio = (f: ImportFile) => {
+    if (!item) return;
+    player.play({
+      contentId: item._id,
+      title: `${item.title} — ${f.name}`,
+      coverImage: item.coverImage,
+      authorName: item.authorName,
+      narratorName: item.narratorName,
+      audioUrl: f.url,
+      startOffset: 0,
+      startAt: 0,
+    });
   };
 
   const share = async () => {
@@ -355,7 +400,7 @@ export default function ContentDetails() {
 
             {/* Actions */}
             <div className="mt-6 flex flex-wrap items-center gap-2.5">
-              {item.contentType === "ebook" && (item.fileUrl || item.sourceUrl) && (
+              {hasReadable && (
                 <Button size="lg" variant="secondary" className="font-bold" asChild>
                   <Link to={`/read/${item.slug}`}>
                     <BookOpen className="size-4" />
@@ -444,6 +489,61 @@ export default function ContentDetails() {
           </aside>
         )}
       </div>
+
+      {/* Real files of imported books */}
+      {importFiles.length > 0 && (
+        <div className="haki-container">
+          <h2 className="text-lg font-extrabold">
+            {lang === "ar" ? "ملفات الكتاب" : "Book files"}
+          </h2>
+          <div className="mt-3 space-y-1.5">
+            {availableFiles.map((f) => (
+              <div
+                key={f.url}
+                className="flex flex-wrap items-center gap-2 rounded-xl border bg-card p-3 text-sm"
+              >
+                <FileText className="size-4 shrink-0 text-primary" />
+                <Badge variant="secondary" className="text-[10px] uppercase">{f.format}</Badge>
+                <span className="min-w-0 flex-1 truncate" dir="ltr" title={f.name}>{f.name}</span>
+                {f.kind === "audio" ? (
+                  <Button size="sm" variant="secondary" onClick={() => playImportedAudio(f)}>
+                    <Headphones className="size-3.5" />
+                    {lang === "ar" ? "استمع" : "Listen"}
+                  </Button>
+                ) : readableFormat === f.format ? (
+                  <Button size="sm" variant="secondary" asChild>
+                    <Link to={`/read/${item.slug}`}>
+                      <BookOpen className="size-3.5" />
+                      {lang === "ar" ? "اقرأ" : "Read"}
+                    </Link>
+                  </Button>
+                ) : null}
+                <Button size="sm" variant="ghost" asChild>
+                  <a href={f.url} target="_blank" rel="noopener noreferrer">
+                    <Download className="size-3.5" />
+                    {lang === "ar" ? "تحميل" : "Download"}
+                  </a>
+                </Button>
+              </div>
+            ))}
+            {restrictedFiles.map((f) => (
+              <div
+                key={f.url}
+                className="flex flex-wrap items-center gap-2 rounded-xl border bg-muted/40 p-3 text-sm text-muted-foreground"
+              >
+                <Lock className="size-4 shrink-0" />
+                <Badge variant="secondary" className="text-[10px] uppercase">{f.format}</Badge>
+                <span className="min-w-0 flex-1 truncate" dir="ltr">{f.name}</span>
+                <Badge variant="outline" className="text-[10px]">
+                  {f.availability === "restricted"
+                    ? lang === "ar" ? "الوصول مقيد من المصدر" : "Access restricted"
+                    : lang === "ar" ? "غير قابل للتنزيل" : "Not downloadable"}
+                </Badge>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Ratings & reviews */}
       <div className="haki-container pb-12">

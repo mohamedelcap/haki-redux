@@ -97,6 +97,66 @@ export function parseIaLength(v: any): number {
   return 0;
 }
 
+/**
+ * Probe a REAL URL against the source: HEAD first, ranged GET fallback.
+ * Returns HTTP status / content-type / final URL so the importer never
+ * invents availability. Never throws — network failures come back as
+ * { ok:false, status:null } and callers keep the metadata-derived state.
+ */
+export type ProbeResult = {
+  ok: boolean;
+  status: number | null;
+  contentType?: string;
+  contentLength?: number;
+  finalUrl?: string;
+  error?: string;
+};
+
+export async function probeUrl(url: string, timeoutMs = 12000): Promise<ProbeResult> {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), timeoutMs);
+  const started = Date.now();
+  try {
+    let res = await fetch(url, {
+      method: "HEAD",
+      signal: ctrl.signal,
+      redirect: "follow",
+      headers: { "User-Agent": UA },
+    });
+    // Some IA storage nodes reject HEAD — fall back to a 1-byte ranged GET.
+    if (!res.ok || res.status >= 400) {
+      res = await fetch(url, {
+        method: "GET",
+        headers: { "User-Agent": UA, Range: "bytes=0-0" },
+        signal: ctrl.signal,
+        redirect: "follow",
+      });
+      try {
+        await res.body?.cancel();
+      } catch {
+        /* ignore */
+      }
+    }
+    const result: ProbeResult = {
+      ok: res.ok,
+      status: res.status,
+      contentType: res.headers.get("content-type") ?? undefined,
+      contentLength: Number(res.headers.get("content-length") ?? 0) || undefined,
+      finalUrl: res.url || url,
+    };
+    console.log(
+      `[HAKI-IMPORT] ${JSON.stringify({ stage: "PROBE", url, httpStatus: res.status, contentType: result.contentType, ms: Date.now() - started })}`,
+    );
+    return result;
+  } catch (e: any) {
+    const msg = e?.name === "AbortError" ? "timeout" : String(e?.message ?? e);
+    console.error(`[HAKI-IMPORT] ${JSON.stringify({ stage: "PROBE_ERROR", url, message: msg })}`);
+    return { ok: false, status: null, error: msg };
+  } finally {
+    clearTimeout(t);
+  }
+}
+
 // ---------------- Unified item shape ----------------
 
 export type UnifiedItem = {
@@ -173,7 +233,10 @@ export function mapIaMetadata(meta: any, id: string): UnifiedItem {
     item.rights = { status: "public_domain", info: item.rights.info ?? "Project Gutenberg (IA mirror)", verified: true };
   }
 
-  // Files (real file list from the metadata API).
+  // Files (real file list from the metadata API). IA marks restricted items
+  // with access-restricted-item and private files with private:true — we keep
+  // them but flag availability so the UI never fakes a working download.
+  const restrictedItem = String(md["access-restricted-item"] ?? "").trim() !== "";
   const rawFiles = (Array.isArray(meta?.files) ? meta.files : [])
     .map((f: any) => ({
       name: String(f.name ?? ""),
@@ -181,15 +244,21 @@ export function mapIaMetadata(meta: any, id: string): UnifiedItem {
       size: Number(f.size ?? 0) || undefined,
       url: iaDownloadUrl(id, String(f.name ?? "")),
       duration: parseIaLength(f.length),
+      availability: (restrictedItem || Boolean(f.private) || String(f.source ?? "") === "private")
+        ? ("restricted" as const)
+        : ("available" as const),
+      mime: String(f["content-type"] ?? f.mimetype ?? "") || undefined,
     }))
     .filter((f: any) => f.name && !f.name.endsWith("_files.xml") && !f.name.endsWith("_meta.xml"));
   item.files = selectFiles(rawFiles);
   item.isAudiobook = item.files.some((f) => f.kind === "audio" && f.selected);
   item.audioDuration = audioDurationOf(item.files);
 
-  // Cover (official services endpoint; may still 404 → coverFound flag).
+  // Cover (official services endpoint). IA returns a generic "notfound"
+  // placeholder image with HTTP 200 when the item has no cover — the live
+  // HEAD validation in the importer detects that and clears the cover.
   item.coverUrl = iaCoverUrl(id);
-  item.coverFound = true; // endpoint exists for every IA item; UI falls back if missing
+  item.coverFound = true;
   return item;
 }
 

@@ -151,6 +151,16 @@ const schema = defineSchema(
       rightsInfo: v.optional(v.string()),
       /** Available ebook formats detected, e.g. ["pdf","epub"]. */
       fileFormats: v.optional(v.array(v.string())),
+      /** Per-file records with verified availability (Book Importer). */
+      importFiles: v.optional(v.array(v.object({
+        name: v.string(),
+        format: v.string(),
+        kind: v.union(v.literal("electronic"), v.literal("audio"), v.literal("archive"), v.literal("other")),
+        size: v.optional(v.number()),
+        url: v.string(),
+        availability: v.union(v.literal("available"), v.literal("restricted"), v.literal("unavailable")),
+        mime: v.optional(v.string()),
+      }))),
       subtitle: v.optional(v.string()),
       originalYear: v.optional(v.number()),
       pageCount: v.optional(v.number()),

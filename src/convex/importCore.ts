@@ -159,6 +159,10 @@ export type UnifiedFile = {
   duration?: number;
   /** Automatic selection for publishing. */
   selected: boolean;
+  /** Real availability, verified against the source (default available). */
+  availability?: "available" | "restricted" | "unavailable";
+  /** MIME type reported by the source when known. */
+  mime?: string;
 };
 
 export const ELECTRONIC_PRIORITY = ["epub", "pdf", "mobi", "azw3", "azw", "djvu", "txt"];
@@ -200,10 +204,10 @@ function kindOfExt(ext: string): UnifiedFile["kind"] {
  * - Never removes any file: the data-entry employee can toggle manually.
  */
 export function selectFiles(
-  raw: { name: string; format?: string; size?: number; url: string; duration?: number }[],
+  raw: { name: string; format?: string; size?: number; url: string; duration?: number; availability?: UnifiedFile["availability"]; mime?: string }[],
 ): UnifiedFile[] {
   // De-duplicate by (ext + stem), preferring the largest size (drops 64kb dupes).
-  const byKey = new Map<string, { name: string; format?: string; size?: number; url: string; duration?: number }>();
+  const byKey = new Map<string, { name: string; format?: string; size?: number; url: string; duration?: number; availability?: UnifiedFile["availability"]; mime?: string }>();
   for (const f of raw) {
     if (!f?.url) continue;
     const ext = extOf(f.format ?? f.name);
@@ -224,6 +228,8 @@ export function selectFiles(
       url: f.url,
       duration: f.duration,
       selected: false,
+      availability: f.availability ?? "available",
+      mime: f.mime,
     };
   });
 
@@ -246,6 +252,31 @@ export function audioDurationOf(files: UnifiedFile[]): number {
   return files
     .filter((f) => f.kind === "audio" && f.selected)
     .reduce((acc, f) => acc + (f.duration ?? 0), 0);
+}
+
+/**
+ * The single most usable file for the built-in reader, in REAL usability
+ * order: EPUB (epub.js) > PDF (embeddable) > TXT (text reader).
+ * Never returns archive containers (zip/torrent) — they are not readable.
+ * Availability is respected: restricted/unavailable files are skipped first.
+ */
+export function bestReadableFile(files: UnifiedFile[]): UnifiedFile | undefined {
+  const open = files.filter(
+    (f) => f.selected && f.availability !== "restricted" && f.availability !== "unavailable",
+  );
+  for (const ext of ["epub", "pdf", "txt"]) {
+    const found = open.find((f) => f.format === ext);
+    if (found) return found;
+  }
+  // Everything restricted/unavailable but selected → still return the best
+  // readable so the UI can show its true state instead of a fake button.
+  for (const ext of ["epub", "pdf", "txt"]) {
+    const found = files.find(
+      (f) => f.selected && f.format === ext,
+    );
+    if (found) return found;
+  }
+  return undefined;
 }
 
 export function iaCoverUrl(id: string): string {

@@ -109,9 +109,24 @@ export default function EbookReader() {
     if (item.sourceName === "Project Gutenberg" && g) {
       return `https://www.gutenberg.org/ebooks/${g[1]}.epub3.images`;
     }
-    // IA fallback: details page epub may not exist; let the reader show the hint.
+    // IA fallback: prefer an epub/pdf/txt recorded in the import file list.
+    const files: any[] = (item as any).importFiles ?? [];
+    const avail = files.filter((f) => (f.availability ?? "available") === "available");
+    for (const ext of ["epub", "pdf", "txt"]) {
+      const hit = avail.find((f) => f.format === ext);
+      if (hit?.url) return hit.url as string;
+    }
     return undefined;
   }, [item]);
+  const fileExt = useMemo(() => {
+    const m = /\.(epub|pdf|txt)($|\?)/i.exec(fileUrl ?? "");
+    if (m) return m[1].toLowerCase();
+    const fmt = (fileUrl ?? "").toLowerCase();
+    if (fmt.includes("epub")) return "epub";
+    if (fmt.includes("pdf")) return "pdf";
+    if (fmt.includes("txt") || fmt.includes("/text")) return "txt";
+    return "epub";
+  }, [fileUrl]);
 
   // ---------- restore saved prefs/progress once ----------
   useEffect(() => {
@@ -511,6 +526,15 @@ export default function EbookReader() {
         </div>
       )}
 
+      {/* TXT — plain text reader (fetched once, paginated by the browser) */}
+      {fileExt === "txt" ? (
+        <TxtReader url={fileUrl} theme={theme} L={L} />
+      ) : fileExt === "pdf" ? (
+        <div className="relative flex min-h-0 flex-1">
+          <iframe src={fileUrl} className="h-full w-full bg-white" title={item.title} />
+        </div>
+      ) : (
+        <>
       {/* Main area */}
       <div className="relative flex min-h-0 flex-1">
         {/* TOC sidebar */}
@@ -623,6 +647,70 @@ export default function EbookReader() {
           {L("حفظ", "Save")}
         </button>
       </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/** Plain-text reader for .txt books (Project Gutenberg / IA text files). */
+function TxtReader({
+  url,
+  theme,
+  L,
+}: {
+  url: string;
+  theme: { body: Record<string, string>; ui: string };
+  L: (ar: string, en: string) => string;
+}) {
+  const [text, setText] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const body = await res.text();
+        if (!cancelled) setText(body.slice(0, 2_000_000));
+      } catch (e: any) {
+        if (!cancelled) setError(String(e?.message ?? e));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [url]);
+
+  if (error) {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 bg-background px-6 text-center">
+        <p className="font-bold text-destructive">{L("تعذّر تحميل النص", "Failed to load the text")}</p>
+        <p className="text-xs text-muted-foreground" dir="ltr">{error}</p>
+        <a href={url} target="_blank" rel="noopener noreferrer" className="text-sm font-semibold text-primary hover:underline">
+          {L("افتح الملف مباشرة", "Open the file directly")}
+        </a>
+      </div>
+    );
+  }
+  if (text === null) {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3">
+        <Loader2 className="size-8 animate-spin text-primary" />
+        <p className="text-sm font-semibold text-muted-foreground">{L("جارٍ تحميل النص…", "Loading text…")}</p>
+      </div>
+    );
+  }
+  return (
+    <div className="relative min-h-0 flex-1 overflow-y-auto">
+      <pre
+        className="mx-auto max-w-3xl whitespace-pre-wrap px-6 py-8 font-serif text-[17px] leading-relaxed"
+        style={{ background: theme.body.background, color: theme.body.color }}
+        dir="auto"
+      >
+        {text}
+      </pre>
     </div>
   );
 }

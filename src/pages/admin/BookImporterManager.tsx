@@ -369,9 +369,20 @@ function ReviewStep({ L, jobId, onDone }: { L: LFn; jobId: string; onDone: () =>
       toast.error(L("اختر كتابًا واحدًا على الأقل", "Select at least one book"));
       return;
     }
+    // Items whose file checkboxes were touched → send the exact checked set
+    // so the backend stores the employee's real selection.
+    const fileSelection: Record<string, number[]> = {};
+    for (const it of analyzed) {
+      const files = parseFiles(it.fileUrls);
+      const touched = files.some((_f: any, i: number) => fileSel[`${it._id}:${i}`] !== undefined);
+      if (!touched) continue;
+      fileSelection[it._id] = files
+        .map((_f: any, i: number) => (isFileSelected(it._id, i, Boolean(_f.selected)) ? i : -1))
+        .filter((i: number) => i >= 0);
+    }
     setBusy(true);
     try {
-      const r: any = await importSelected({ itemIds: ids as never });
+      const r: any = await importSelected({ itemIds: ids as never, fileSelection });
       toast.success(
         L(
           `استُورد ${r.imported} · مكرر ${r.duplicates} · للمراجعة ${r.review} · فشل ${r.failed}`,
@@ -531,14 +542,20 @@ function ReviewStep({ L, jobId, onDone }: { L: LFn; jobId: string; onDone: () =>
                               <Badge variant="secondary" className="text-[9px]">{f.format}</Badge>
                               <span className="truncate" dir="ltr">{f.name}</span>
                               <span className="shrink-0 text-muted-foreground">{fmtBytes(f.size)}</span>
-                              <a
-                                href={f.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="shrink-0 font-bold text-primary hover:underline"
-                              >
-                                {L("تحميل", "DL")}
-                              </a>
+                              {f.availability && f.availability !== "available" ? (
+                                <Badge className="shrink-0 bg-amber-600 text-white text-[9px]">
+                                  {f.availability === "restricted" ? L("مقيد", "Restricted") : L("غير متاح", "Unavailable")}
+                                </Badge>
+                              ) : (
+                                <a
+                                  href={f.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="shrink-0 font-bold text-primary hover:underline"
+                                >
+                                  {L("تحميل", "DL")}
+                                </a>
+                              )}
                             </div>
                           ))}
                         </div>
@@ -605,6 +622,132 @@ function ReviewStep({ L, jobId, onDone }: { L: LFn; jobId: string; onDone: () =>
 // Step 3 — History + report
 // ============================================================
 
+// ============================================================
+// Repair / Re-sync — previously imported books (real DB numbers)
+// ============================================================
+
+function ResyncPanel({ L }: { L: LFn }) {
+  const books = useQuery(api.bookImporter.listImportedBooks, { limit: 300 });
+  const repair = useQuery(api.bookImporter.repairReport, {});
+  const resyncAll = useAction(api.bookImporter.resyncAllBooks);
+  const resyncOne = useAction(api.bookImporter.resyncBook);
+  const [busy, setBusy] = useState(false);
+
+  const stats = useMemo(() => {
+    const list = books ?? [];
+    const withFiles = list.filter((b: any) => b.fileUrl || (b.importFiles ?? []).some((f: any) => f.availability === "available")).length;
+    const restricted = list.filter((b: any) => (b.importFiles ?? []).some((f: any) => f.availability !== "available")).length;
+    const noSource = list.filter((b: any) => !b.sourceUrl || !b.sourceName).length;
+    const noCover = list.filter((b: any) => !b.coverImage).length;
+    return { total: list.length, withFiles, restricted, noSource, noCover };
+  }, [books]);
+
+  const runAll = async () => {
+    setBusy(true);
+    try {
+      const r: any = await resyncAll({ batchSize: 10 });
+      toast.success(
+        L(
+          `فُحص ${r.checked} وأُصلح ${r.repaired} · فشل ${r.failed} · بقي ${r.remaining}`,
+          `Checked ${r.checked}, repaired ${r.repaired}, failed ${r.failed}, left ${r.remaining}`,
+        ),
+      );
+    } catch (e: any) {
+      toast.error(e?.message ?? String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const runOne = async (id: string, title: string) => {
+    try {
+      const r: any = await resyncOne({ contentId: id as never });
+      if (r.ok) toast.success(L(`تمت إعادة مزامنة: ${title}`, `Re-synced: ${title}`));
+      else toast.error(L(`تعذر الإصلاح: ${r.failed}`, `Repair failed: ${r.failed}`));
+    } catch (e: any) {
+      toast.error(e?.message ?? String(e));
+    }
+  };
+
+  return (
+    <div className="rounded-2xl border bg-card p-5 card-shadow">
+      <h3 className="mb-3 flex items-center gap-2 text-base font-black">
+        <RefreshCw className="size-4 text-primary" />
+        {L("الكتب المستوردة وإعادة المزامنة", "Imported books & re-sync")}
+      </h3>
+      {books === undefined ? (
+        <Skeleton className="h-16 rounded-xl" />
+      ) : (
+        <>
+          {repair && (
+            <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {(
+                [
+                  [L("ملفات مُتحقق منها", "Verified files"), repair.availableFiles, "text-green-600"],
+                  [L("مقيدة/غير متاحة", "Restricted"), repair.restrictedFiles, "text-amber-600"],
+                  [L("كتب بملفات تعمل", "Working files"), repair.withWorkingFiles, "text-foreground"],
+                  [L("كتب بملفات مكسورة", "Broken files"), repair.withBrokenFiles, "text-destructive"],
+                ] as [string, number, string][]
+              ).map(([label, v, cls]) => (
+                <div key={label} className="rounded-xl border bg-muted/40 p-2.5 text-center">
+                  <p className={"text-lg font-black tabular-nums " + cls}>{v}</p>
+                  <p className="text-[9px] text-muted-foreground">{label}</p>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+            {(
+              [
+                [L("كتب مستوردة", "Imported books"), stats.total, "text-foreground"],
+                [L("بها ملفات تعمل", "With working files"), stats.withFiles, "text-green-600"],
+                [L("ملفات مقيدة/غير متاحة", "Restricted files"), stats.restricted, "text-amber-600"],
+                [L("بلا مصدر", "Missing source"), stats.noSource, "text-destructive"],
+                [L("بلا غلاف", "Missing cover"), stats.noCover, "text-muted-foreground"],
+              ] as [string, number, string][]
+            ).map(([label, v, cls]) => (
+              <div key={label} className="rounded-xl border bg-muted/40 p-2.5 text-center">
+                <p className={"text-lg font-black tabular-nums " + cls}>{v}</p>
+                <p className="text-[9px] text-muted-foreground">{label}</p>
+              </div>
+            ))}
+          </div>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <Button size="sm" className="font-bold" disabled={busy || stats.total === 0} onClick={runAll}>
+              {busy ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
+              {L("إعادة مزامنة كل الكتب المستوردة", "Re-sync all imported books")}
+            </Button>
+            <span className="text-xs text-muted-foreground">
+              {L("يعيد جلب البيانات والملفات والأغلفة من المصدر ويصلح السجلات الحالية — بدون تكرار.", "Re-fetches metadata, files and covers from the source and repairs existing records — no duplicates.")}
+            </span>
+          </div>
+          {books.length > 0 && (
+            <div className="mt-3 max-h-64 space-y-1.5 overflow-y-auto">
+              {books.map((b: any) => (
+                <div key={b._id} className="flex items-center gap-2 rounded-lg border bg-muted/30 p-2 text-xs">
+                  <Badge variant="secondary" className="text-[9px]">
+                    {b.status === "published" ? L("منشور", "Live") : L("مسودة", "Draft")}
+                  </Badge>
+                  <span className="min-w-0 flex-1 truncate font-semibold">{b.title}</span>
+                  {b.fileUrl ? (
+                    <Badge variant="outline" className="text-[9px] text-green-700">{L("ملف", "file")} ✓</Badge>
+                  ) : (
+                    <Badge variant="outline" className="text-[9px] text-amber-700">{L("بلا ملف", "no file")}</Badge>
+                  )}
+                  <Button size="sm" variant="ghost" disabled={busy} onClick={() => runOne(b._id, b.title)}>
+                    <RefreshCw className="size-3.5" />
+                    {L("إعادة مزامنة", "Re-sync")}
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 function HistoryStep({ L, onOpenJob }: { L: LFn; onOpenJob: (id: string) => void }) {
   const history = useQuery(api.bookImporter.listHistory, { limit: 50 });
   const report = useQuery(api.bookImporter.importReport, {});
@@ -626,6 +769,7 @@ function HistoryStep({ L, onOpenJob }: { L: LFn; onOpenJob: (id: string) => void
 
   return (
     <div className="space-y-5">
+      <ResyncPanel L={L} />
       <div className="rounded-2xl border bg-card p-5 card-shadow">
         <h3 className="mb-3 flex items-center gap-2 text-base font-black">
           <Layers className="size-4 text-primary" />

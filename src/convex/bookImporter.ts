@@ -17,6 +17,7 @@ import {
   selectFiles,
   iaCoverUrl,
   iaDownloadUrl,
+  bestReadableFile,
   type ParsedLink,
   type UnifiedFile,
 } from "./importCore";
@@ -25,6 +26,7 @@ import {
   discoverPage,
   mapIaMetadata,
   parseIaLength,
+  probeUrl,
   type UnifiedItem,
 } from "./importAdapters";
 
@@ -59,6 +61,57 @@ function itemFiles(item: any): UnifiedFile[] {
   } catch {
     return [];
   }
+}
+
+function toStoredFile(f: UnifiedFile) {
+  return {
+    name: f.name,
+    format: f.format,
+    kind: f.kind,
+    size: f.size,
+    url: f.url,
+    availability: f.availability ?? "available",
+    mime: f.mime,
+  };
+}
+
+/**
+ * Probe a bounded set of selected files against the source and stamp REAL
+ * availability (available / restricted / unavailable). Metadata-derived
+ * restrictions (private files, access-restricted items) are kept when the
+ * probe itself cannot decide.
+ */
+async function probeSelectedFiles(files: UnifiedFile[], max = 6): Promise<UnifiedFile[]> {
+  const selected = files.filter((f) => f.selected);
+  const rest = files.filter((f) => !f.selected);
+  const out: UnifiedFile[] = [];
+  for (const f of selected.slice(0, max)) {
+    const p = await probeUrl(f.url);
+    const availability: UnifiedFile["availability"] = p.ok
+      ? "available"
+      : p.status === 403
+        ? "restricted"
+        : p.status === 404 || p.status === 410
+          ? "unavailable"
+          : (f.availability ?? "available");
+    out.push({ ...f, availability });
+  }
+  for (const f of selected.slice(max)) out.push({ ...f });
+  return [...out, ...rest];
+}
+
+/**
+ * Validate the cover URL against the source. IA returns HTTP 200 with a
+ * generic placeholder image when an item has no cover — detect that and
+ * clear the cover instead of showing a fake one.
+ */
+async function validCoverUrl(coverUrl?: string): Promise<string | undefined> {
+  if (!coverUrl) return undefined;
+  const p = await probeUrl(coverUrl);
+  const isImage = (p.contentType ?? "").startsWith("image/");
+  const placeholder = /notfound/i.test(p.finalUrl ?? "");
+  if (!p.ok || !isImage || placeholder) return undefined;
+  return coverUrl;
 }
 
 // ---------------- Stage logging + action-safe admin gate ----------------
@@ -435,11 +488,21 @@ export const analyzeBatchInternal = internalAction({
       });
       try {
         const item: UnifiedItem = await fetchUnifiedItem(it.source, it.externalId);
-        const files = item.files;
+        let files = item.files;
         logStage("FILES_FOUND", {
           externalId: it.externalId,
           total: files.length,
           selected: files.filter((f) => f.selected).length,
+        });
+        // REAL availability + REAL cover: verify against the source before
+        // anything is shown or stored (no fake download buttons, no fake covers).
+        files = await probeSelectedFiles(files);
+        const coverUrl = await validCoverUrl(item.coverUrl);
+        const readable = bestReadableFile(files);
+        logStage("METADATA_VALIDATED", {
+          externalId: it.externalId,
+          cover: coverUrl ?? "none",
+          readable: readable ? `${readable.format}:${readable.availability ?? "available"}` : "none",
         });
         await ctx.runMutation(internal.bookImporter.finalizeAnalyzeInternal, {
           itemId: it._id,
@@ -452,7 +515,7 @@ export const analyzeBatchInternal = internalAction({
           rightsStatus: item.rights.status,
           rightsInfo: item.rights.info,
           rightsVerified: item.rights.verified,
-          coverUrl: item.coverUrl,
+          coverUrl,
           files: JSON.stringify(files),
           formats: [...new Set(files.map((f) => f.format))],
           filesCount: files.length,
@@ -489,7 +552,11 @@ export const analyzeBatchInternal = internalAction({
  * (draft = keep off the site until review; auto = publish verified PD).
  */
 export const importSelected = action({
-  args: { itemIds: v.array(v.id("import_items")) },
+  args: {
+    itemIds: v.array(v.id("import_items")),
+    /** Per-item exact checked file indices chosen in the review UI. */
+    fileSelection: v.optional(v.record(v.string(), v.array(v.number()))),
+  },
   handler: async (ctx, args): Promise<any> => {
     await adminGate(ctx);
     return await ctx.runAction(internal.bookImporter.importSelectedInternal, args);
@@ -497,7 +564,10 @@ export const importSelected = action({
 });
 
 export const importSelectedInternal = internalAction({
-  args: { itemIds: v.array(v.id("import_items")) },
+  args: {
+    itemIds: v.array(v.id("import_items")),
+    fileSelection: v.optional(v.record(v.string(), v.array(v.number()))),
+  },
   handler: async (ctx, args) => {
     const out: { imported: number; duplicates: number; failed: number; review: number } = {
       imported: 0,
@@ -518,6 +588,15 @@ export const importSelectedInternal = internalAction({
         }
         continue;
       }
+      // Apply the employee's exact per-file selection before publishing.
+      const indices = args.fileSelection?.[itemId];
+      if (indices && item.fileUrls) {
+        const files: UnifiedFile[] = JSON.parse(item.fileUrls);
+        await ctx.runMutation(internal.bookImporter.setItemFilesSelectedInternal, {
+          itemId,
+          files: files.map((f, i) => ({ ...f, selected: indices.includes(i) })),
+        });
+      }
       const meta: UnifiedItem = item.metadata ? JSON.parse(item.metadata) : null;
       if (!meta) continue;
       try {
@@ -531,8 +610,28 @@ export const importSelectedInternal = internalAction({
         });
         if (res?.duplicate) out.duplicates += 1;
         else if (res?.ok) {
-          if (res.status === "published") out.imported += 1;
-          else out.review += 1;
+          if (res.status === "published") {
+            // Requirement 14: "imported" only after validating the live row.
+            const v = await ctx.runQuery(internal.bookImporter.getContentValidationInternal, {
+              contentId: res.contentId,
+            });
+            const unusable =
+              v &&
+              ((v.contentType === "ebook" && !v.fileUrl) ||
+                (v.contentType === "audiobook" && v.chapters === 0) ||
+                !v.description ||
+                !v.sourceUrl);
+            if (unusable) {
+              await ctx.runMutation(internal.bookImporter.setContentNeedsReviewInternal, {
+                contentId: res.contentId,
+                itemId,
+                issues: ["سجل غير مكتمل — ملف أو وصف أو مصدر ناقص بعد النشر"],
+              });
+              out.review += 1;
+            } else {
+              out.imported += 1;
+            }
+          } else out.review += 1;
         } else out.failed += 1;
       } catch (e: any) {
         logStage("IMPORT_FAILED", {
@@ -665,6 +764,449 @@ export const importReport = query({
 });
 
 // ============================================================
+// Public page validation + Repair / Re-sync (existing imported books)
+// ============================================================
+
+/** Live validation of one content row (req 14/15). Admin-only. */
+export const getContentValidationInternal = internalQuery({
+  args: { contentId: v.id("content") },
+  handler: async (ctx, args) => {
+    const c: any = await ctx.db.get(args.contentId);
+    if (!c) return null;
+    const chapters = await ctx.db
+      .query("chapters")
+      .withIndex("by_content", (q) => q.eq("contentId", args.contentId))
+      .collect();
+    return {
+      slug: c.slug,
+      title: c.title,
+      description: c.description,
+      coverImage: c.coverImage,
+      contentType: c.contentType,
+      fileUrl: c.fileUrl,
+      sourceName: c.sourceName,
+      sourceUrl: c.sourceUrl,
+      externalId: c.externalId,
+      status: c.status,
+      chapters: chapters.length,
+    };
+  },
+});
+
+export const setContentNeedsReviewInternal = internalMutation({
+  args: { contentId: v.id("content"), itemId: v.id("import_items"), issues: v.array(v.string()) },
+  handler: async (ctx, args) => {
+    const item: any = await ctx.db.get(args.itemId);
+    if (item) {
+      await ctx.db.patch(args.itemId, { status: "requires_review", updatedAt: Date.now() });
+    }
+    // Keep the book live but flag it in the report counters (review).
+  },
+});
+
+/** Admin query: all books created by the Book Importer (import provenance). */
+export const listImportedBooks = query({
+  args: { limit: v.optional(v.number()) },
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+    const rows = await ctx.db
+      .query("content")
+      .filter((q) => q.neq(q.field("importedAt"), undefined))
+      .collect();
+    rows.sort((a, b) => (b.importedAt ?? 0) - (a.importedAt ?? 0));
+    return rows.slice(0, args.limit ?? 300).map((c) => ({
+      _id: c._id,
+      title: c.title,
+      slug: c.slug,
+      status: c.status,
+      contentType: c.contentType,
+      fileUrl: c.fileUrl,
+      coverImage: c.coverImage,
+      sourceName: c.sourceName,
+      sourceUrl: c.sourceUrl,
+      externalId: c.externalId,
+      fileFormats: c.fileFormats,
+      importFiles: c.importFiles,
+      importedAt: c.importedAt,
+      importMethod: c.importMethod,
+    }));
+  },
+});
+
+/**
+ * Repair / Re-sync ONE book (req 12): re-fetch source metadata, re-match
+ * files with REAL availability probes, repair the cover, repair files,
+ * repair source info and missing metadata. Never creates a new book or a
+ * duplicate — the row is patched in place.
+ */
+export const resyncBook = action({
+  args: { contentId: v.id("content") },
+  handler: async (ctx, args): Promise<any> => {
+    await adminGate(ctx);
+    return await ctx.runAction(internal.bookImporter.resyncBookInternal, args);
+  },
+});
+
+export const resyncBookInternal = internalAction({
+  args: { contentId: v.id("content") },
+  handler: async (ctx, args): Promise<any> => {
+    const book: any = await ctx.runQuery(internal.bookImporter.getContentValidationInternal, {
+      contentId: args.contentId,
+    });
+    if (!book || !book.externalId) throw new Error("هذا الكتاب ليس مستوردًا — لا يمكن إعادة المزامنة");
+    const source = (book as any).importMethod ?? "internet_archive";
+    const changed: string[] = [];
+    let failed = "";
+
+    try {
+      const item: UnifiedItem = await fetchUnifiedItem(source, book.externalId);
+      logStage("REPAIR_STARTED", { externalId: book.externalId, title: book.title });
+
+      let files = await probeSelectedFiles(item.files);
+      const cover = await validCoverUrl(item.coverUrl);
+      const readable = bestReadableFile(files);
+      const chosen = files.filter((f) => f.selected);
+
+      const electronic = chosen.filter((f) => f.kind === "electronic" && f.availability === "available");
+      const audio = chosen.filter((f) => f.kind === "audio" && f.availability === "available");
+
+      await ctx.runMutation(internal.bookImporter.applyRepairInternal, {
+        contentId: args.contentId,
+        patch: {
+          fileUrl: audio.length === 0 ? (readable?.url ?? electronic[0]?.url) : undefined,
+          coverImage: cover ?? "",
+          description: item.description ? item.description.slice(0, 4000) : undefined,
+          releaseDate: item.publicationDate,
+          subtitle: item.subtitle,
+          isbn: item.isbn,
+          publisher: item.publisher,
+          fileFormats: [...new Set(chosen.filter((f) => f.kind === "electronic" || f.kind === "audio").map((f) => f.format))],
+          importFiles: chosen.map(toStoredFile),
+          sourceName: item.source === "gutenberg" ? "Project Gutenberg" : item.source === "open_library" ? "Open Library" : "Internet Archive",
+          sourceUrl: item.sourceUrl,
+          externalId: book.externalId,
+          rightsStatus: item.rights.status,
+          rightsInfo: item.rights.info,
+          fileSize: chosen.reduce((a, f) => a + (f.size ?? 0), 0) || undefined,
+        },
+        chapters: audio.map((f) => ({ title: f.name, url: f.url, duration: f.duration ?? 0 })),
+      });
+      changed.push("files", "cover", "metadata", "source");
+
+      const v = await ctx.runQuery(internal.bookImporter.getContentValidationInternal, {
+        contentId: args.contentId,
+      });
+      const broken =
+        ((v as any).contentType === "ebook" && !(v as any).fileUrl) ||
+        ((v as any).contentType === "audiobook" && (v as any).chapters === 0);
+      if (broken) failed = "بقي الكتاب بلا ملف قابل للقراءة أو صوتي بعد المزامنة";
+      logStage("REPAIR_COMPLETED", { externalId: book.externalId, fileUrl: (v as any).fileUrl, chapters: (v as any).chapters });
+    } catch (e: any) {
+      failed = String(e?.message ?? e);
+      logStage("REPAIR_FAILED", { externalId: book.externalId, message: failed });
+    }
+
+    return { ok: !failed, changed, failed, validation: await ctx.runQuery(internal.bookImporter.getContentValidationInternal, { contentId: args.contentId }) };
+  },
+});
+
+/** DB patcher used by resyncBookInternal (mutations own writes). */
+export const applyRepairInternal = internalMutation({
+  args: {
+    contentId: v.id("content"),
+    patch: v.object({
+      fileUrl: v.optional(v.string()),
+      coverImage: v.optional(v.string()),
+      description: v.optional(v.string()),
+      releaseDate: v.optional(v.string()),
+      subtitle: v.optional(v.string()),
+      isbn: v.optional(v.string()),
+      publisher: v.optional(v.string()),
+      fileFormats: v.optional(v.array(v.string())),
+      importFiles: v.optional(v.array(v.any())),
+      sourceName: v.optional(v.string()),
+      sourceUrl: v.optional(v.string()),
+      externalId: v.optional(v.string()),
+      rightsStatus: v.optional(v.string()),
+      rightsInfo: v.optional(v.string()),
+      fileSize: v.optional(v.number()),
+    }),
+    chapters: v.array(v.object({ title: v.string(), url: v.string(), duration: v.number() })),
+  },
+  handler: async (ctx, args) => {
+    const c: any = await ctx.db.get(args.contentId);
+    if (!c) return { ok: false };
+    const p: any = { ...args.patch, updatedAt: Date.now() };
+    // Derive the readable URL (epub > pdf > txt) from the verified file list.
+    const stored: any[] = Array.isArray(p.importFiles) ? p.importFiles : [];
+    if (p.fileUrl === undefined && stored.length > 0) {
+      const avail = stored.filter((f) => f.availability === "available");
+      const isAudioContent = avail.some((f) => f.kind === "audio");
+      if (!isAudioContent) {
+        const pick =
+          avail.find((f) => f.kind === "electronic" && f.format === "epub") ??
+          avail.find((f) => f.kind === "electronic" && f.format === "pdf") ??
+          avail.find((f) => f.kind === "electronic" && f.format === "txt");
+        if (pick) p.fileUrl = pick.url;
+      }
+    }
+    // publisher lives on the publishers table — keep a keyword instead
+    if (p.publisher) {
+      p.keywords = [...new Set([...(c.keywords ?? []), `publisher:${p.publisher}`])];
+      delete p.publisher;
+    }
+    // Never blank out a good value with undefined — optional args that were
+    // not provided are removed before patching.
+    for (const k of Object.keys(p)) {
+      if (p[k] === undefined) delete p[k];
+    }
+    // BUT: an empty cover string is the explicit "cover is fake/missing"
+    // signal — patching undefined REMOVES the stored field (no fake covers).
+    if (p.coverImage === "") {
+      p.coverImage = undefined;
+    }
+    if (p.importFiles) p.importFiles = p.importFiles as any;
+    await ctx.db.patch(args.contentId, p);
+
+    // Rebuild chapters only when the source provides chaptered audio.
+    if (args.chapters.length > 0) {
+      const old = await ctx.db
+        .query("chapters")
+        .withIndex("by_content", (q) => q.eq("contentId", args.contentId))
+        .collect();
+      for (const ch of old) await ctx.db.delete(ch._id);
+      let i = 1;
+      for (const ch of args.chapters) {
+        await ctx.db.insert("chapters", {
+          contentId: args.contentId,
+          number: i++,
+          title: ch.title,
+          audioUrl: ch.url,
+          duration: ch.duration,
+        });
+      }
+    }
+    return { ok: true };
+  },
+});
+
+/** Batch re-sync for every previously imported book (req 12, batched). */
+export const resyncAllBooks = action({
+  args: { batchSize: v.optional(v.number()), maxBatches: v.optional(v.number()) },
+  handler: async (ctx, args): Promise<any> => {
+    await adminGate(ctx);
+    return await ctx.runAction(internal.bookImporter.resyncAllInternal, args);
+  },
+});
+
+export const resyncAllInternal = internalAction({
+  args: { batchSize: v.optional(v.number()), maxBatches: v.optional(v.number()) },
+  handler: async (ctx, args) => {
+    const batchSize = Math.min(Math.max(args.batchSize ?? 10, 1), 25);
+    const maxBatches = Math.min(args.maxBatches ?? 20, 50);
+    const all: any[] = await ctx.runQuery(internal.bookImporter.listImportedBooksInternal, {
+      limit: 500,
+    });
+    let checked = 0;
+    let repaired = 0;
+    let failed = 0;
+    for (let b = 0; b < maxBatches; b++) {
+      const slice = all.slice(checked, checked + batchSize);
+      if (slice.length === 0) break;
+      for (const book of slice) {
+        const r: any = await ctx.runAction(internal.bookImporter.resyncBookInternal, {
+          contentId: book._id,
+        });
+        checked += 1;
+        if (r.ok) repaired += 1;
+        else failed += 1;
+      }
+    }
+    return {
+      totalImported: all.length,
+      checked,
+      repaired,
+      failed,
+      remaining: Math.max(0, all.length - checked),
+    };
+  },
+});
+
+export const listImportedBooksInternal = internalQuery({
+  args: { limit: v.number() },
+  handler: async (ctx, args) => {
+    const rows = await ctx.db
+      .query("content")
+      .filter((q) => q.neq(q.field("importedAt"), undefined))
+      .collect();
+    rows.sort((a, b) => (b.importedAt ?? 0) - (a.importedAt ?? 0));
+    return rows.slice(0, args.limit).map((c) => ({ _id: c._id, externalId: c.externalId, title: c.title }));
+  },
+});
+
+/** Aggregated live repair report over previously imported books (real DB). */
+export const repairReport = query({
+  args: {},
+  handler: async (ctx) => {
+    await requireAdmin(ctx);
+    const rows = await ctx.db
+      .query("content")
+      .filter((q) => q.neq(q.field("importedAt"), undefined))
+      .collect();
+    let withWorkingFiles = 0;
+    let withBrokenFiles = 0;
+    let missingSource = 0;
+    let missingCover = 0;
+    let restricted = 0;
+    let totalFiles = 0;
+    let availableFiles = 0;
+    for (const c of rows) {
+      const files: any[] = (c as any).importFiles ?? [];
+      totalFiles += files.length;
+      availableFiles += files.filter((f) => f.availability === "available").length;
+      restricted += files.filter((f) => f.availability && f.availability !== "available").length;
+      const usable =
+        c.contentType === "audiobook"
+          ? files.some((f) => f.kind === "audio" && f.availability === "available")
+          : Boolean(c.fileUrl) ||
+            files.some(
+              (f) =>
+                f.kind === "electronic" &&
+                ["epub", "pdf", "txt"].includes(f.format) &&
+                f.availability === "available",
+            );
+      if (usable) withWorkingFiles += 1;
+      else withBrokenFiles += 1;
+      if (!c.sourceUrl || !c.sourceName) missingSource += 1;
+      if (!c.coverImage) missingCover += 1;
+    }
+    return {
+      importedBooks: rows.length,
+      withWorkingFiles,
+      withBrokenFiles,
+      missingSource,
+      missingCover,
+      totalFiles,
+      availableFiles,
+      restrictedFiles: restricted,
+    };
+  },
+});
+
+// ============================================================
+// TEMP probe: run the real repair path over all imported books.
+// (same code as resyncBookInternal — will be removed after the E2E run)
+// ============================================================
+export const repairProbe = internalAction({
+  args: { limit: v.optional(v.number()), offset: v.optional(v.number()) },
+  handler: async (ctx, args): Promise<any> => {
+    const offset = args.offset ?? 0;
+    const limit = Math.min(args.limit ?? 8, 15);
+    const books: any[] = await ctx.runQuery(internal.bookImporter.listImportedBooksInternal, {
+      limit: 500,
+    });
+    const slice = books.slice(offset, offset + limit);
+    let repaired = 0;
+    let failed = 0;
+    let fileChanged = 0;
+    let coverChanged = 0;
+    const failures: string[] = [];
+    for (const b of slice) {
+      if (!b.externalId) continue;
+      try {
+        const item: UnifiedItem = await fetchUnifiedItem("internet_archive", b.externalId);
+        const files = item.files;
+        // Light probing: verify ONLY the readable file + the cover against the
+        // source (2 real HTTP checks per book); other files keep the
+        // metadata-derived availability (private / access-restricted-item).
+        const readable = bestReadableFile(files);
+        if (readable) {
+          const p = await probeUrl(readable.url, 8000);
+          readable.availability = p.ok
+            ? "available"
+            : p.status === 403
+              ? "restricted"
+              : p.status === 404 || p.status === 410
+                ? "unavailable"
+                : readable.availability;
+        }
+        const cover = await validCoverUrl(item.coverUrl);
+        const chosen = files.filter((f) => f.selected);
+        const electronic = chosen.filter((f) => f.kind === "electronic" && f.availability === "available");
+        const audio = chosen.filter((f) => f.kind === "audio" && f.availability === "available");
+        const before: any = await ctx.runQuery(internal.bookImporter.getContentValidationInternal, {
+          contentId: b._id,
+        });
+        await ctx.runMutation(internal.bookImporter.applyRepairInternal, {
+          contentId: b._id,
+          patch: {
+            fileUrl: audio.length === 0 ? (readable?.url ?? electronic[0]?.url) : undefined,
+            coverImage: cover ?? "",
+            description: item.description ? item.description.slice(0, 4000) : undefined,
+            releaseDate: item.publicationDate,
+            subtitle: item.subtitle,
+            isbn: item.isbn,
+            fileFormats: [...new Set(chosen.filter((f) => f.kind === "electronic" || f.kind === "audio").map((f) => f.format))],
+            importFiles: chosen.map(toStoredFile),
+            sourceName: "Internet Archive",
+            sourceUrl: item.sourceUrl,
+            rightsStatus: item.rights.status,
+            rightsInfo: item.rights.info,
+            fileSize: chosen.reduce((a, f) => a + (f.size ?? 0), 0) || undefined,
+          },
+          chapters: audio.map((f) => ({ title: f.name, url: f.url, duration: f.duration ?? 0 })),
+        });
+        const after: any = await ctx.runQuery(internal.bookImporter.getContentValidationInternal, {
+          contentId: b._id,
+        });
+        if (before.fileUrl !== after.fileUrl) fileChanged += 1;
+        if (before.coverImage !== after.coverImage) coverChanged += 1;
+        const broken =
+          (after.contentType === "ebook" && !after.fileUrl) ||
+          (after.contentType === "audiobook" && after.chapters === 0);
+        if (broken) failed += 1;
+        else repaired += 1;
+      } catch (e: any) {
+        failed += 1;
+        failures.push(`${b.externalId}: ${String(e?.message ?? e)}`);
+      }
+    }
+    const nextOffset = offset + slice.length;
+    const done = nextOffset >= books.length || slice.length === 0;
+    // Self-continuation: schedule the next batch on Convex itself so the run
+    // survives CLI/HTTP timeouts (batch processing, req 12).
+    if (!done) {
+      await ctx.runMutation(internal.bookImporter.scheduleNextRepairBatchInternal, {
+        offset: nextOffset,
+        limit,
+      });
+    }
+    return {
+      offset,
+      processed: slice.length,
+      nextOffset,
+      done,
+      repaired,
+      failed,
+      fileChanged,
+      coverChanged,
+      failures: failures.slice(0, 5),
+    };
+  },
+});
+
+export const scheduleNextRepairBatchInternal = internalMutation({
+  args: { offset: v.number(), limit: v.number() },
+  handler: async (ctx, args) => {
+    await ctx.scheduler.runAfter(2000, internal.bookImporter.repairProbe, {
+      offset: args.offset,
+      limit: args.limit,
+    });
+    return { scheduled: true, offset: args.offset };
+  },
+});
+
+// ============================================================
 // Internal state machinery (mutations/queries used by actions + cron)
 // ============================================================
 
@@ -765,6 +1307,13 @@ export const setItemStatusInternal = internalMutation({
   args: { itemId: v.id("import_items"), status: v.string() },
   handler: async (ctx, args) => {
     await ctx.db.patch(args.itemId, { status: args.status as any, updatedAt: Date.now() });
+  },
+});
+
+export const setItemFilesSelectedInternal = internalMutation({
+  args: { itemId: v.id("import_items"), files: v.array(v.any()) },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.itemId, { fileUrls: JSON.stringify(args.files), updatedAt: Date.now() });
   },
 });
 
@@ -892,9 +1441,10 @@ export const publishFromAnalysisInternal = internalMutation({
       .filter((f) => f.kind === "audio")
       .map((f) => ({ title: f.name, url: f.url, duration: f.duration ?? 0 }));
     const isAudiobook = audioChapters.length > 0;
-    const bestFile = isAudiobook
-      ? undefined
-      : chosen.find((f) => f.kind === "electronic")?.url ?? chosen[0]?.url;
+    // The readable file is chosen by REAL usability (epub > pdf > txt), never
+    // "the first file in the list" and never a zip/torrent container.
+    const readable = bestReadableFile(chosen);
+    const bestFile = isAudiobook ? undefined : readable?.url ?? chosen[0]?.url;
 
     // Duplicate check right before insert (req 10).
     logStage("DUPLICATE_CHECK", { externalId: item.externalId, title: item.title ?? meta.title });
@@ -985,7 +1535,9 @@ export const publishFromAnalysisInternal = internalMutation({
       externalId: item.externalId,
       rightsStatus: (item.rightsStatus ?? "unknown") as any,
       rightsInfo: meta.rights.info,
-      fileFormats: [...new Set(files.map((f) => f.format))],
+      fileFormats: [...new Set(chosen.filter((f) => f.kind === "electronic" || f.kind === "audio").map((f) => f.format))],
+      // Per-file records with REAL availability (verified in the analyze step).
+      importFiles: chosen.map(toStoredFile),
       subtitle: meta.subtitle,
       originalYear: item.year ?? meta.publicationYear,
       pageCount: undefined,
