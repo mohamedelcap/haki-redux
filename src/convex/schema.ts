@@ -486,6 +486,16 @@ const schema = defineSchema(
       failed: v.number(),
       /** Items auto-published from this job (live counter). */
       autoPublished: v.optional(v.number()),
+      /** Analysis progress: total matches on the source + last fetched page. */
+      numFound: v.optional(v.number()),
+      lastPage: v.optional(v.number()),
+      analyzedAt: v.optional(v.number()),
+      completedAt: v.optional(v.number()),
+      /** Import-run report counters (requirement 24). */
+      electronicFiles: v.optional(v.number()),
+      audioFiles: v.optional(v.number()),
+      coversFound: v.optional(v.number()),
+      needsReview: v.optional(v.number()),
       /** draft | auto (publish only verified public-domain) */
       publishMode: v.string(),
       allowedFormats: v.optional(v.array(v.string())),
@@ -503,6 +513,7 @@ const schema = defineSchema(
       status: v.union(
         v.literal("pending"),
         v.literal("processing"),
+        v.literal("analyzed"),
         v.literal("imported"),
         v.literal("published"),
         v.literal("draft"),
@@ -527,6 +538,9 @@ const schema = defineSchema(
       /** Existing content id when a duplicate was found. */
       duplicateOf: v.optional(v.id("content")),
       importedBy: v.optional(v.id("users")),
+      /** Extraction stats shown in preview cards. */
+      filesCount: v.optional(v.number()),
+      audioCount: v.optional(v.number()),
       /** True when the source item carries chaptered audio (LibriVox etc.). */
       isAudiobook: v.optional(v.boolean()),
       /** Total audio duration in seconds. */

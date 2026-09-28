@@ -7,6 +7,11 @@ import {
   normalizeGutenbergBook,
   parseIaLength,
 } from "../src/convex/importSources";
+import {
+  classifySourceUrl,
+  selectFiles,
+  extOf,
+} from "../src/convex/importCore";
 import { computePoolShares } from "../src/convex/royalties";
 import { computeChallengeProgress, statusFor } from "../src/convex/engagement";
 
@@ -238,6 +243,155 @@ describe("parseImportUrl", () => {
     const r = parseImportUrl("https://archive.org/details/arabic_books");
     expect(r.source).toBe("internet_archive");
     expect(r.collection).toBe("arabic_books");
+  });
+});
+
+// ---------------- New import core: URL classification + file rules ----------------
+
+describe("classifySourceUrl", () => {
+  it("classifies the gutenberg IA collection link with a language facet", () => {
+    const r = classifySourceUrl('https://archive.org/details/gutenberg?and%5B%5D=language%3A%22English%22');
+    expect(r.source).toBe("internet_archive");
+    expect(r.kind).toBe("collection");
+    expect(r.collection).toBe("gutenberg");
+    expect(r.language).toBe("English");
+  });
+
+  it("classifies plain IA collection links", () => {
+    const r = classifySourceUrl("https://archive.org/details/librivoxaudio");
+    expect(r.kind).toBe("collection");
+    expect(r.collection).toBe("librivoxaudio");
+  });
+
+  it("classifies IA search links", () => {
+    const r = classifySourceUrl("https://archive.org/search?query=poetry+arabic");
+    expect(r.kind).toBe("search");
+    expect(r.query).toBe("poetry arabic");
+  });
+
+  it("classifies single IA item links", () => {
+    const r = classifySourceUrl("https://archive.org/details/theboyalliesatli12656gut");
+    expect(r.kind).toBe("item");
+    expect(r.externalId).toBe("theboyalliesatli12656gut");
+  });
+
+  it("classifies the IA collection RSS link", () => {
+    const r = classifySourceUrl("https://archive.org/services/collection-rss.php?collection=gutenberg");
+    expect(r.kind).toBe("collection");
+    expect(r.collection).toBe("gutenberg");
+  });
+
+  it("classifies gutenberg.org book and search links", () => {
+    expect(classifySourceUrl("https://www.gutenberg.org/ebooks/1342").kind).toBe("item");
+    const s = classifySourceUrl("https://www.gutenberg.org/ebooks/search/?query=poetry");
+    expect(s.kind).toBe("search");
+    expect(s.query).toBe("poetry");
+  });
+
+  it("classifies Open Library works and rejects unknown hosts", () => {
+    const w = classifySourceUrl("https://openlibrary.org/works/OL12345W");
+    expect(w.source).toBe("open_library");
+    expect(w.kind).toBe("item");
+    expect(() => classifySourceUrl("https://example.com/books")).toThrow();
+    expect(() => classifySourceUrl("not-a-url")).toThrow();
+  });
+});
+
+describe("selectFiles (automatic selection rules)", () => {
+  it("selects best electronic formats and all audio chapters, keeps others unselected", () => {
+    const files = selectFiles([
+      { name: "book.epub", format: "epub", url: "u-epub", size: 100 },
+      { name: "book.pdf", format: "pdf", url: "u-pdf", size: 200 },
+      { name: "book.txt", format: "txt", url: "u-txt", size: 50 },
+      { name: "ch1_128kb.mp3", format: "128Kbps MP3", url: "u-ch1", size: 1000, duration: 120 },
+      { name: "ch1_64kb.mp3", format: "64Kbps MP3", url: "u-ch1-low", size: 500, duration: 120 },
+      { name: "book.zip", format: "ZIP", url: "u-zip", size: 300 },
+    ]);
+    const byUrl = Object.fromEntries(files.map((f) => [f.url, f]));
+    expect(byUrl["u-epub"].selected).toBe(true);
+    expect(byUrl["u-pdf"].selected).toBe(true);
+    expect(byUrl["u-txt"].selected).toBe(false); // beyond top-3 priority with epub+pdf first
+    expect(byUrl["u-ch1"].selected).toBe(true); // 128kb chapter kept
+    expect(byUrl["u-ch1-low"]).toBeUndefined(); // 64kb duplicate dropped entirely
+    expect(byUrl["u-zip"].selected).toBe(false);
+    expect(files.find((f) => f.kind === "archive")).toBeTruthy();
+  });
+
+  it("maps IA gutenberg-mirror text/zip files without inventing formats", () => {
+    const files = selectFiles([
+      { name: "2657.txt", format: "Text", url: "u-txt", size: 711901 },
+      { name: "2657.zip", format: "ZIP", url: "u-zip", size: 249027 },
+    ]);
+    expect(files.map((f) => f.format).sort()).toEqual(["txt", "zip"]);
+    expect(files.find((f) => f.format === "txt")!.selected).toBe(true);
+  });
+
+  it("computes extensions from names and IA format labels", () => {
+    expect(extOf("file.epub")).toBe("epub");
+    expect(extOf("Text PDF")).toBe("pdf");
+    expect(extOf("128Kbps MP3")).toBe("mp3");
+  });
+});
+
+// ---------------- New import core: URL classification + file rules ----------------
+
+describe("classifySourceUrl", () => {
+  it("classifies the gutenberg IA collection link with a language facet", () => {
+    const r = classifySourceUrl('https://archive.org/details/gutenberg?and%5B%5D=language%3A%22English%22');
+    expect(r.source).toBe("internet_archive");
+    expect(r.kind).toBe("collection");
+    expect(r.collection).toBe("gutenberg");
+    expect(r.language).toBe("English");
+  });
+
+  it("classifies plain IA collections, search links, items and RSS", () => {
+    expect(classifySourceUrl("https://archive.org/details/librivoxaudio")).toMatchObject({ kind: "collection", collection: "librivoxaudio" });
+    expect(classifySourceUrl("https://archive.org/search?query=poetry")).toMatchObject({ kind: "search", query: "poetry" });
+    expect(classifySourceUrl("https://archive.org/details/theboyalliesatli12656gut")).toMatchObject({ kind: "item", externalId: "theboyalliesatli12656gut" });
+    expect(classifySourceUrl("https://archive.org/services/collection-rss.php?collection=gutenberg")).toMatchObject({ kind: "collection", collection: "gutenberg" });
+  });
+
+  it("classifies gutenberg.org and Open Library links, rejects unknown hosts", () => {
+    expect(classifySourceUrl("https://www.gutenberg.org/ebooks/1342")).toMatchObject({ kind: "item", externalId: "1342" });
+    expect(classifySourceUrl("https://openlibrary.org/works/OL12345W")).toMatchObject({ source: "open_library", kind: "item" });
+    expect(() => classifySourceUrl("https://example.com/books")).toThrow();
+    expect(() => classifySourceUrl("not-a-url")).toThrow();
+  });
+});
+
+describe("selectFiles (automatic selection rules)", () => {
+  it("selects best electronic formats and audio chapters, drops dupes, keeps others listed", () => {
+    const files = selectFiles([
+      { name: "book.epub", format: "epub", url: "u-epub", size: 100 },
+      { name: "book.pdf", format: "pdf", url: "u-pdf", size: 200 },
+      { name: "book.txt", format: "txt", url: "u-txt", size: 50 },
+      { name: "ch1_128kb.mp3", format: "128Kbps MP3", url: "u-ch1", size: 1000, duration: 120 },
+      { name: "ch1_64kb.mp3", format: "64Kbps MP3", url: "u-ch1-low", size: 500, duration: 120 },
+      { name: "book.zip", format: "ZIP", url: "u-zip", size: 300 },
+    ]);
+    const byUrl = Object.fromEntries(files.map((f) => [f.url, f]));
+    expect(byUrl["u-epub"].selected).toBe(true);
+    expect(byUrl["u-pdf"].selected).toBe(true);
+    expect(byUrl["u-txt"].selected).toBe(false);
+    expect(byUrl["u-ch1"].selected).toBe(true);
+    expect(byUrl["u-ch1-low"]).toBeUndefined(); // 64kb duplicate dropped entirely
+    expect(byUrl["u-zip"].selected).toBe(false);
+    expect(files.find((f) => f.kind === "archive")).toBeTruthy();
+  });
+
+  it("maps IA gutenberg-mirror Text/ZIP files without inventing formats", () => {
+    const files = selectFiles([
+      { name: "2657.txt", format: "Text", url: "u-txt", size: 711901 },
+      { name: "2657.zip", format: "ZIP", url: "u-zip", size: 249027 },
+    ]);
+    expect(files.map((f) => f.format).sort()).toEqual(["txt", "zip"]);
+    expect(files.find((f) => f.format === "txt")!.selected).toBe(true);
+  });
+
+  it("computes extensions from names and IA format labels", () => {
+    expect(extOf("file.epub")).toBe("epub");
+    expect(extOf("Text PDF")).toBe("pdf");
+    expect(extOf("128Kbps MP3")).toBe("mp3");
   });
 });
 
