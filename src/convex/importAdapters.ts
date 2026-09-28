@@ -123,8 +123,10 @@ export async function probeUrl(url: string, timeoutMs = 12000): Promise<ProbeRes
       redirect: "follow",
       headers: { "User-Agent": UA },
     });
-    // Some IA storage nodes reject HEAD — fall back to a 1-byte ranged GET.
-    if (!res.ok || res.status >= 400) {
+    // Fall back to a 1-byte ranged GET only when HEAD itself is unsupported
+    // (405/501) — a 4xx/5xx from HEAD is the node's REAL answer and must be
+    // trusted, otherwise broken files would hang the check instead of failing.
+    if (res.status === 405 || res.status === 501) {
       res = await fetch(url, {
         method: "GET",
         headers: { "User-Agent": UA, Range: "bytes=0-0" },

@@ -165,14 +165,17 @@ export type UnifiedFile = {
   mime?: string;
 };
 
-export const ELECTRONIC_PRIORITY = ["epub", "pdf", "mobi", "azw3", "azw", "djvu", "txt"];
+export const ELECTRONIC_PRIORITY = ["epub", "pdf", "mobi", "azw3", "azw", "djvu", "txt", "html"];
 export const AUDIO_EXTS = ["mp3", "m4b", "ogg", "wav"];
 const ARCHIVE_EXTS = ["zip", "rar", "torrent"];
 
 export function extOf(nameOrFormat: string): string {
   const s = String(nameOrFormat ?? "").toLowerCase();
   const m = /\.([a-z0-9]{2,5})$/.exec(s);
-  if (m) return m[1];
+  if (m) {
+    if (m[1] === "htm") return "html";
+    return m[1];
+  }
   // Format labels like "Text PDF" / "EPUB" / "128Kbps MP3".
   if (/pdf/.test(s)) return "pdf";
   if (/epub/.test(s)) return "epub";
@@ -184,6 +187,7 @@ export function extOf(nameOrFormat: string): string {
   if (/ogg/.test(s)) return "ogg";
   if (/m4b/.test(s)) return "m4b";
   if (/wav/.test(s)) return "wav";
+  if (/html/.test(s)) return "html";
   if (/text|plain/.test(s)) return "txt";
   return "other";
 }
@@ -261,19 +265,13 @@ export function audioDurationOf(files: UnifiedFile[]): number {
  * Availability is respected: restricted/unavailable files are skipped first.
  */
 export function bestReadableFile(files: UnifiedFile[]): UnifiedFile | undefined {
+  // Only VERIFIED-available files qualify — the reader must never open a
+  // restricted/broken file, and returning one would fake a working button.
   const open = files.filter(
-    (f) => f.selected && f.availability !== "restricted" && f.availability !== "unavailable",
+    (f) => f.selected && f.availability === "available",
   );
-  for (const ext of ["epub", "pdf", "txt"]) {
+  for (const ext of ["epub", "pdf", "txt", "html"]) {
     const found = open.find((f) => f.format === ext);
-    if (found) return found;
-  }
-  // Everything restricted/unavailable but selected → still return the best
-  // readable so the UI can show its true state instead of a fake button.
-  for (const ext of ["epub", "pdf", "txt"]) {
-    const found = files.find(
-      (f) => f.selected && f.format === ext,
-    );
     if (found) return found;
   }
   return undefined;
@@ -284,7 +282,10 @@ export function iaCoverUrl(id: string): string {
 }
 
 export function iaDownloadUrl(id: string, filename: string): string {
-  return `https://archive.org/download/${encodeURIComponent(id)}/${encodeURIComponent(filename)}`;
+  // Encode path SEGMENTS only: "/" separates IA subfolders and must stay raw
+  // (encoding it to %2F breaks archive.org downloads with HTTP 500).
+  const seg = encodeURIComponent(filename).replace(/%2F/gi, "/");
+  return `https://archive.org/download/${encodeURIComponent(id)}/${seg}`;
 }
 
 /** Format bytes for the preview UI (kept here so tests cover it). */

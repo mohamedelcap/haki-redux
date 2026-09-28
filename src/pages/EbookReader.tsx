@@ -119,12 +119,13 @@ export default function EbookReader() {
     return undefined;
   }, [item]);
   const fileExt = useMemo(() => {
-    const m = /\.(epub|pdf|txt)($|\?)/i.exec(fileUrl ?? "");
+    const m = /\.(epub|pdf|txt|html?)($|\?)/i.exec(fileUrl ?? "");
     if (m) return m[1].toLowerCase();
     const fmt = (fileUrl ?? "").toLowerCase();
     if (fmt.includes("epub")) return "epub";
     if (fmt.includes("pdf")) return "pdf";
     if (fmt.includes("txt") || fmt.includes("/text")) return "txt";
+    if (fmt.includes("htm")) return "html";
     return "epub";
   }, [fileUrl]);
 
@@ -529,7 +530,7 @@ export default function EbookReader() {
       {/* TXT — plain text reader (fetched once, paginated by the browser) */}
       {fileExt === "txt" ? (
         <TxtReader url={fileUrl} theme={theme} L={L} />
-      ) : fileExt === "pdf" ? (
+      ) : fileExt === "pdf" || fileExt === "html" ? (
         <div className="relative flex min-h-0 flex-1">
           <iframe src={fileUrl} className="h-full w-full bg-white" title={item.title} />
         </div>

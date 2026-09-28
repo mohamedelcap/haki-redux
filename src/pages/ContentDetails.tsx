@@ -84,7 +84,7 @@ export default function ContentDetails() {
     .map((f) => f.format);
   const hasReadable =
     item?.contentType === "ebook" &&
-    (Boolean(item.fileUrl && /\.(epub|pdf|txt)($|\?)/i.test(item.fileUrl)) ||
+    (Boolean(item.fileUrl && /\.(epub|pdf|txt|html?)($|\?)/i.test(item.fileUrl)) ||
       readableFormats.length > 0);
   const readableFormat = item?.fileUrl
     ? (/\.(epub|pdf|txt)($|\?)/i.exec(item.fileUrl)?.[1] ?? readableFormats[0] ?? "epub")
