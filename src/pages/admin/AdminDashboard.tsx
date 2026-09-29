@@ -15,6 +15,7 @@ import { RoyaltiesManager } from "@/pages/admin/RoyaltiesManager";
 import { BookImporterManager } from "@/pages/admin/BookImporterManager";
 import { GitHubManager, GitHubStatsCard } from "@/pages/admin/GitHubManager";
 import { CollectionsManager } from "@/pages/admin/CollectionsManager";
+import { VercelManager, VercelStatsCard } from "@/pages/admin/VercelManager";
 import { SEO } from "@/components/SEO";
 import { HakiLogo } from "@/components/HakiLogo";
 import { LOGO_COVER } from "@/lib/logoAsset";
@@ -48,6 +49,7 @@ import { useMutation, useQuery } from "convex/react";
 import {
   AlertTriangle,
   ArrowLeft,
+  Rocket,
   LayoutGrid as LayoutGridIcon,
   AudioLines,
   CirclePlus,
@@ -133,6 +135,7 @@ type TabKey =
   | "bookImporter"
   | "github"
   | "collections"
+  | "vercel"
   | "settings";
 
 function AdminInner() {
@@ -208,6 +211,7 @@ function AdminInner() {
       label: L("الإعدادات", "Settings"),
       items: [
         { key: "github", label: L("GitHub", "GitHub"), icon: Github },
+        { key: "vercel", label: L("Vercel", "Vercel"), icon: Rocket },
         { key: "settings", label: L("الإعدادات", "Settings"), icon: Settings2 },
       ],
     },
@@ -352,6 +356,7 @@ function AdminInner() {
           {tab === "users" && <UsersManager L={L} />}
           {tab === "access" && <AccessManager L={L} />}
           {tab === "github" && <GitHubManager L={L} />}
+          {tab === "vercel" && <VercelManager L={L} />}
           {tab === "settings" && <SettingsManager L={L} />}
         </main>
       </div>
@@ -434,6 +439,7 @@ function Overview({
         </div>
         <div className="mt-5 flex flex-wrap items-center gap-3">
           <GitHubStatsCard L={L} />
+          <VercelStatsCard L={L} />
         </div>
         <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
           {quick.map((q) => (
