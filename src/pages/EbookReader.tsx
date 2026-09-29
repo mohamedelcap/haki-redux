@@ -112,6 +112,8 @@ export default function EbookReader() {
     // IA fallback: prefer an epub/pdf/txt recorded in the import file list.
     const files: any[] = (item as any).importFiles ?? [];
     const avail = files.filter((f) => (f.availability ?? "available") === "available");
+    // HAKI policy: EPUB and PDF are the publishable formats; TXT is a
+    // last-resort legacy fallback (old imports before the epub/pdf policy).
     for (const ext of ["epub", "pdf", "txt"]) {
       const hit = avail.find((f) => f.format === ext);
       if (hit?.url) return hit.url as string;
@@ -666,32 +668,56 @@ function TxtReader({
 }) {
   const [text, setText] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
+    setError(null);
+    setText(null);
     (async () => {
+      // Hardened fetch: 30s timeout so a hung source never stalls the reader.
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 30_000);
       try {
-        const res = await fetch(url);
+        const res = await fetch(url, { signal: ctrl.signal, redirect: "follow" });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const body = await res.text();
         if (!cancelled) setText(body.slice(0, 2_000_000));
       } catch (e: any) {
-        if (!cancelled) setError(String(e?.message ?? e));
+        if (!cancelled) {
+          const aborted = e?.name === "AbortError";
+          setError(
+            aborted
+              ? "انتهت مهلة تحميل الملف من المصدر"
+              : String(e?.message ?? e),
+          );
+        }
+      } finally {
+        clearTimeout(t);
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [url]);
+  }, [url, attempt]);
 
   if (error) {
     return (
       <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 bg-background px-6 text-center">
         <p className="font-bold text-destructive">{L("تعذّر تحميل النص", "Failed to load the text")}</p>
         <p className="text-xs text-muted-foreground" dir="ltr">{error}</p>
-        <a href={url} target="_blank" rel="noopener noreferrer" className="text-sm font-semibold text-primary hover:underline">
-          {L("افتح الملف مباشرة", "Open the file directly")}
-        </a>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setAttempt((a) => a + 1)}
+            className="rounded-lg bg-primary px-3 py-1.5 text-sm font-bold text-white transition-colors hover:bg-primary/90"
+          >
+            {L("إعادة المحاولة", "Retry")}
+          </button>
+          <a href={url} target="_blank" rel="noopener noreferrer" className="text-sm font-semibold text-primary hover:underline">
+            {L("افتح الملف مباشرة", "Open the file directly")}
+          </a>
+        </div>
       </div>
     );
   }
