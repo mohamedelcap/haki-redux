@@ -13,6 +13,7 @@ import { ModerationManager } from "@/pages/admin/ModerationManager";
 import { AuditLogManager } from "@/pages/admin/AuditLogManager";
 import { RoyaltiesManager } from "@/pages/admin/RoyaltiesManager";
 import { BookImporterManager } from "@/pages/admin/BookImporterManager";
+import { GitHubManager } from "@/pages/admin/GitHubManager";
 import { SEO } from "@/components/SEO";
 import { HakiLogo } from "@/components/HakiLogo";
 import { LOGO_COVER } from "@/lib/logoAsset";
@@ -54,6 +55,7 @@ import {
   Crown,
   FileText,
   Flame,
+  Github,
   Globe,
   Headphones,
   Images,
@@ -127,6 +129,7 @@ type TabKey =
   | "users"
   | "access"
   | "bookImporter"
+  | "github"
   | "settings";
 
 function AdminInner() {
@@ -197,7 +200,10 @@ function AdminInner() {
     },
     {
       label: L("الإعدادات", "Settings"),
-      items: [{ key: "settings", label: L("الإعدادات", "Settings"), icon: Settings2 }],
+      items: [
+        { key: "github", label: L("GitHub", "GitHub"), icon: Github },
+        { key: "settings", label: L("الإعدادات", "Settings"), icon: Settings2 },
+      ],
     },
   ];
 
@@ -338,6 +344,7 @@ function AdminInner() {
           {tab === "bookImporter" && <BookImporterManager L={L} />}
           {tab === "users" && <UsersManager L={L} />}
           {tab === "access" && <AccessManager L={L} />}
+          {tab === "github" && <GitHubManager L={L} />}
           {tab === "settings" && <SettingsManager L={L} />}
         </main>
       </div>

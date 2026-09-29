@@ -14,7 +14,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { formatDuration, formatTime, useLang } from "@/lib/i18n";
 import { usePlayer } from "@/lib/player";
 import { cn } from "@/lib/utils";
-import { useMutation, useQuery } from "convex/react";
+import { useAction, useMutation, useQuery } from "convex/react";
 import {
   BookOpen,
   Bookmark,
@@ -26,11 +26,12 @@ import {
   Headphones,
   Link2,
   ListPlus,
+  Flag,
   Lock,
   Play,
   ShieldCheck,
 } from "lucide-react";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Link, useParams } from "react-router";
 import { toast } from "sonner";
 
@@ -545,10 +546,113 @@ export default function ContentDetails() {
         </div>
       )}
 
+      {/* Report a problem (GitHub integration) */}
+      {isAuthenticated && (
+        <div className="haki-container pb-2">
+          <ReportProblem contentTitle={item.title} contentSlug={item.slug} lang={lang} />
+        </div>
+      )}
+
       {/* Ratings & reviews */}
       <div className="haki-container pb-12">
         <RatingsSection contentId={item._id} />
       </div>
     </div>
+  );
+}
+
+function ReportProblem({
+  contentTitle,
+  contentSlug,
+  lang,
+}: {
+  contentTitle: string;
+  contentSlug: string;
+  lang: string;
+}) {
+  const ar = lang === "ar";
+  const createIssue = useAction(api.github.createIssue);
+  const [open, setOpen] = useState(false);
+  const [title, setTitle] = useState("");
+  const [details, setDetails] = useState("");
+  const [sending, setSending] = useState(false);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!title.trim()) return;
+    setSending(true);
+    try {
+      const res = await createIssue({
+        title: title.trim(),
+        body:
+          (details.trim() || (ar ? "بدون تفاصيل إضافية." : "No extra details.")) +
+          `\n\n- Content: ${contentTitle} (/content/${contentSlug})`,
+        labels: ["haki-feedback", "content-report"],
+      });
+      if (res.ok && res.url) {
+        toast.success(ar ? `تم إرسال البلاغ #${res.number} — شكرًا لك` : `Report #${res.number} sent — thank you`);
+        window.open(res.url, "_blank", "noopener,noreferrer");
+        setOpen(false);
+        setTitle("");
+        setDetails("");
+      } else {
+        toast.error(res.message ?? (ar ? "تعذّر إرسال البلاغ" : "Could not send the report"));
+      }
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="inline-flex items-center gap-2 rounded-full border bg-card px-4 py-2 text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+      >
+        <Flag className="size-3.5" />
+        {ar ? "أوجد مشكلة في هذه الصفحة؟ أبلغ عنها" : "Found a problem on this page? Report it"}
+      </button>
+    );
+  }
+
+  return (
+    <form onSubmit={submit} className="rounded-2xl border bg-card p-5 card-shadow">
+      <h3 className="flex items-center gap-2 text-sm font-extrabold">
+        <Flag className="size-4 text-primary" />
+        {ar ? "الإبلاغ عن مشكلة" : "Report a problem"}
+      </h3>
+      <p className="mt-1 text-xs text-muted-foreground">
+        {ar
+          ? "يصل بلاغك مباشرة إلى فريق المنصة عبر مستودع GitHub."
+          : "Your report goes straight to the team via the platform's GitHub repo."}
+      </p>
+      <input
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        required
+        maxLength={120}
+        placeholder={ar ? "عنوان المشكلة" : "Problem title"}
+        className="mt-3 w-full rounded-xl border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/40"
+      />
+      <textarea
+        value={details}
+        onChange={(e) => setDetails(e.target.value)}
+        rows={3}
+        maxLength={2000}
+        placeholder={ar ? "تفاصيل المشكلة (اختياري)" : "Details (optional)"}
+        className="mt-2 w-full rounded-xl border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/40"
+      />
+      <div className="mt-3 flex gap-2">
+        <Button type="submit" size="sm" disabled={sending || !title.trim()} className="font-bold">
+          {sending ? (ar ? "جارٍ الإرسال…" : "Sending…") : ar ? "إرسال البلاغ" : "Send report"}
+        </Button>
+        <Button type="button" size="sm" variant="ghost" onClick={() => setOpen(false)}>
+          {ar ? "إلغاء" : "Cancel"}
+        </Button>
+      </div>
+    </form>
   );
 }
