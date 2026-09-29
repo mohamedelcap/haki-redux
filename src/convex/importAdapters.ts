@@ -15,6 +15,7 @@ import {
   classifySourceUrl,
   selectFiles,
   iaCoverUrl,
+  iaFirstPageUrl,
   iaDownloadUrl,
   audioDurationOf,
   type ParsedLink,
@@ -180,6 +181,8 @@ export type UnifiedItem = {
   isbn?: string;
   publisher?: string;
   coverUrl?: string;
+  /** Secondary cover candidate (IA first-page scan) used when coverUrl is a placeholder. */
+  coverFallbackUrl?: string;
   coverFound: boolean;
   rights: { status: string; info?: string; verified: boolean };
   files: UnifiedFile[];
@@ -258,8 +261,11 @@ export function mapIaMetadata(meta: any, id: string): UnifiedItem {
 
   // Cover (official services endpoint). IA returns a generic "notfound"
   // placeholder image with HTTP 200 when the item has no cover — the live
-  // HEAD validation in the importer detects that and clears the cover.
+  // HEAD validation in the importer detects that and falls back to the
+  // item's "first page" scan image ({id}_page1, typically the first page of
+  // the work) before ever showing the site without a cover.
   item.coverUrl = iaCoverUrl(id);
+  item.coverFallbackUrl = iaFirstPageUrl(id);
   item.coverFound = true;
   return item;
 }

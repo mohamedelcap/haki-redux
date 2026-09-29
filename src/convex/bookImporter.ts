@@ -16,6 +16,7 @@ import {
   classifySourceUrl,
   selectFiles,
   iaCoverUrl,
+  iaFirstPageUrl,
   iaDownloadUrl,
   bestReadableFile,
   type ParsedLink,
@@ -101,17 +102,34 @@ async function probeSelectedFiles(files: UnifiedFile[], max = 6): Promise<Unifie
 }
 
 /**
- * Validate the cover URL against the source. IA returns HTTP 200 with a
- * generic placeholder image when an item has no cover — detect that and
- * clear the cover instead of showing a fake one.
+ * Resolve a REAL cover URL. IA answers HTTP 200 with a generic "notfound"
+ * placeholder when an item has no thumbnail — detect that and fall back to
+ * the item's first-page scan image ({id}_page1, typically the first page of
+ * the work) so imported books almost always show a real image. When both
+ * candidates are placeholders the cover is cleared (never fake).
  */
+async function resolveCoverUrl(
+  coverUrl?: string,
+  fallbackUrl?: string,
+): Promise<string | undefined> {
+  if (coverUrl) {
+    const p = await probeUrl(coverUrl);
+    const isImage = (p.contentType ?? "").startsWith("image/");
+    const placeholder = /notfound/i.test(p.finalUrl ?? "");
+    if (p.ok && isImage && !placeholder) return coverUrl;
+  }
+  if (fallbackUrl) {
+    const pf = await probeUrl(fallbackUrl);
+    const isImageF = (pf.contentType ?? "").startsWith("image/");
+    const placeholderF = /notfound/i.test(pf.finalUrl ?? "");
+    if (pf.ok && isImageF && !placeholderF) return fallbackUrl;
+  }
+  return undefined;
+}
+
+/** Backwards-compatible wrapper used by the analyze stage. */
 async function validCoverUrl(coverUrl?: string): Promise<string | undefined> {
-  if (!coverUrl) return undefined;
-  const p = await probeUrl(coverUrl);
-  const isImage = (p.contentType ?? "").startsWith("image/");
-  const placeholder = /notfound/i.test(p.finalUrl ?? "");
-  if (!p.ok || !isImage || placeholder) return undefined;
-  return coverUrl;
+  return resolveCoverUrl(coverUrl);
 }
 
 // ---------------- Stage logging + action-safe admin gate ----------------
@@ -497,7 +515,7 @@ export const analyzeBatchInternal = internalAction({
         // REAL availability + REAL cover: verify against the source before
         // anything is shown or stored (no fake download buttons, no fake covers).
         files = await probeSelectedFiles(files);
-        const coverUrl = await validCoverUrl(item.coverUrl);
+        const coverUrl = await resolveCoverUrl(item.coverUrl, item.coverFallbackUrl);
         const readable = bestReadableFile(files);
         logStage("METADATA_VALIDATED", {
           externalId: it.externalId,
@@ -864,7 +882,7 @@ export const resyncBookInternal = internalAction({
       logStage("REPAIR_STARTED", { externalId: book.externalId, title: book.title });
 
       let files = await probeSelectedFiles(item.files);
-      const cover = await validCoverUrl(item.coverUrl);
+      const cover = await resolveCoverUrl(item.coverUrl, item.coverFallbackUrl);
       const readable = bestReadableFile(files);
       const chosen = files.filter((f) => f.selected);
 

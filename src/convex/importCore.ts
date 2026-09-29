@@ -200,13 +200,15 @@ function kindOfExt(ext: string): UnifiedFile["kind"] {
 }
 
 /**
- * Automatic file-selection rules (requirement 6):
- * - Electronic: mark the best formats present, in priority order
- *   epub > pdf > mobi > azw3 > azw > djvu > txt (max 3 selected).
+ * HAKI policy: e-books publish in EPUB and PDF only — based on what the
+ * source actually provides. Every other electronic format (txt, html, mobi,
+ * djvu…) stays LISTED but UNSELECTED: the data-entry employee controls it
+ * manually from the dashboard (file-selection checkboxes).
  * - Audio: select every chapter file (max 150) — they form the audiobook.
  * - Archives/other: listed but NOT selected automatically.
- * - Never removes any file: the data-entry employee can toggle manually.
+ * - Never removes any file: nothing is dropped from the list.
  */
+export const PUBLISHABLE_ELECTRONIC = ["epub", "pdf"];
 export function selectFiles(
   raw: { name: string; format?: string; size?: number; url: string; duration?: number; availability?: UnifiedFile["availability"]; mime?: string }[],
 ): UnifiedFile[] {
@@ -237,11 +239,16 @@ export function selectFiles(
     };
   });
 
-  // Electronic: top-3 by priority.
+  // Electronic: EPUB and PDF only (auto-selected when the source has them).
+  // Priority order keeps EPUB ahead of PDF when both exist — both are marked.
   const electronic = files
     .filter((f) => f.kind === "electronic")
     .sort((a, b) => ELECTRONIC_PRIORITY.indexOf(a.format) - ELECTRONIC_PRIORITY.indexOf(b.format));
-  electronic.slice(0, 3).forEach((f) => (f.selected = true));
+  for (const ext of PUBLISHABLE_ELECTRONIC) {
+    files
+      .filter((f) => f.kind === "electronic" && f.format === ext)
+      .forEach((f) => (f.selected = true));
+  }
 
   // Audio: all chapter files selected.
   files
@@ -259,9 +266,10 @@ export function audioDurationOf(files: UnifiedFile[]): number {
 }
 
 /**
- * The single most usable file for the built-in reader, in REAL usability
- * order: EPUB (epub.js) > PDF (embeddable) > TXT (text reader).
- * Never returns archive containers (zip/torrent) — they are not readable.
+ * The single publishable e-book file, in HAKI policy order:
+ * EPUB (epub.js reader) > PDF (embeddable). The site publishes e-books in
+ * these two formats only; txt/html stay selectable from the dashboard but
+ * never become the automatic fileUrl. Never returns archive containers.
  * Availability is respected: restricted/unavailable files are skipped first.
  */
 export function bestReadableFile(files: UnifiedFile[]): UnifiedFile | undefined {
@@ -270,7 +278,7 @@ export function bestReadableFile(files: UnifiedFile[]): UnifiedFile | undefined 
   const open = files.filter(
     (f) => f.selected && f.availability === "available",
   );
-  for (const ext of ["epub", "pdf", "txt", "html"]) {
+  for (const ext of PUBLISHABLE_ELECTRONIC) {
     const found = open.find((f) => f.format === ext);
     if (found) return found;
   }
@@ -279,6 +287,17 @@ export function bestReadableFile(files: UnifiedFile[]): UnifiedFile | undefined 
 
 export function iaCoverUrl(id: string): string {
   return `https://archive.org/services/img/${encodeURIComponent(id)}`;
+}
+
+/**
+ * IA "first page" image — the standard black-and-white scan of page 1, which
+ * IA generates for scanned books ({id}/{id}_page1... after JP2 optimization).
+ * Used as the fallback cover when the services/img thumbnail is missing
+ * (both are HTTP-200 placeholders when absent; the importer validates them
+ * live and falls back honestly).
+ */
+export function iaFirstPageUrl(id: string): string {
+  return `https://archive.org/download/${encodeURIComponent(id)}/${encodeURIComponent(`${id}_page1`)}`;
 }
 
 export function iaDownloadUrl(id: string, filename: string): string {

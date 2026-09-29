@@ -323,7 +323,23 @@ describe("selectFiles (automatic selection rules)", () => {
       { name: "2657.zip", format: "ZIP", url: "u-zip", size: 249027 },
     ]);
     expect(files.map((f) => f.format).sort()).toEqual(["txt", "zip"]);
-    expect(files.find((f) => f.format === "txt")!.selected).toBe(true);
+    // HAKI policy: txt is NOT auto-published (epub/pdf only) — it stays
+    // listed for manual dashboard control.
+    expect(files.find((f) => f.format === "txt")!.selected).toBe(false);
+  });
+
+  it("auto-selects only EPUB and PDF among electronic formats (HAKI policy)", () => {
+    const files = selectFiles([
+      { name: "book.epub", format: "epub", url: "u-epub", size: 100 },
+      { name: "book.pdf", format: "Text PDF", url: "u-pdf", size: 200 },
+      { name: "book.txt", format: "Text", url: "u-txt", size: 50 },
+      { name: "book.html", format: "HTML", url: "u-html", size: 60 },
+    ]);
+    const byUrl = Object.fromEntries(files.map((f) => [f.url, f]));
+    expect(byUrl["u-epub"].selected).toBe(true);
+    expect(byUrl["u-pdf"].selected).toBe(true);
+    expect(byUrl["u-txt"].selected).toBe(false);
+    expect(byUrl["u-html"].selected).toBe(false);
   });
 
   it("computes extensions from names and IA format labels", () => {
@@ -385,7 +401,22 @@ describe("selectFiles (automatic selection rules)", () => {
       { name: "2657.zip", format: "ZIP", url: "u-zip", size: 249027 },
     ]);
     expect(files.map((f) => f.format).sort()).toEqual(["txt", "zip"]);
-    expect(files.find((f) => f.format === "txt")!.selected).toBe(true);
+    // HAKI policy: txt is NOT auto-published (epub/pdf only).
+    expect(files.find((f) => f.format === "txt")!.selected).toBe(false);
+  });
+
+  it("auto-selects only EPUB and PDF among electronic formats (HAKI policy)", () => {
+    const files = selectFiles([
+      { name: "book.epub", format: "epub", url: "u-epub", size: 100 },
+      { name: "book.pdf", format: "Text PDF", url: "u-pdf", size: 200 },
+      { name: "book.txt", format: "Text", url: "u-txt", size: 50 },
+      { name: "book.html", format: "HTML", url: "u-html", size: 60 },
+    ]);
+    const byUrl = Object.fromEntries(files.map((f) => [f.url, f]));
+    expect(byUrl["u-epub"].selected).toBe(true);
+    expect(byUrl["u-pdf"].selected).toBe(true);
+    expect(byUrl["u-txt"].selected).toBe(false);
+    expect(byUrl["u-html"].selected).toBe(false);
   });
 
   it("computes extensions from names and IA format labels", () => {
