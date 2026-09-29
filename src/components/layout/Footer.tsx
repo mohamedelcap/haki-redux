@@ -1,7 +1,7 @@
 import { useLang } from "@/lib/i18n";
 import { Separator } from "@/components/ui/separator";
 import { HakiLogoInline } from "@/components/HakiLogo";
-import { MessageCircle } from "lucide-react";
+import { Github, Instagram, MessageCircle, Twitter } from "lucide-react";
 import { Link } from "react-router";
 
 const WHATSAPP = "https://wa.me/966500000000";
@@ -24,6 +24,16 @@ export function Footer() {
     { label: lang === "ar" ? "انشر محتواك" : "Publish", href: "/publish" },
     { label: lang === "ar" ? "قوائم القراءة" : "Reading list", href: "/library" },
   ];
+  const discoverMore = [
+    { label: lang === "ar" ? "المجموعات" : "Collections", href: "/collections" },
+    { label: lang === "ar" ? "الأسئلة الشائعة" : "FAQ", href: "/faq" },
+    { label: lang === "ar" ? "شفافية البلاغات" : "Report transparency", href: "/transparency" },
+  ];
+  const socials = [
+    { label: "X", href: "https://x.com/hakiapp", icon: Twitter },
+    { label: "Instagram", href: "https://instagram.com/hakiapp", icon: Instagram },
+    { label: "GitHub", href: "https://github.com/hakiapp", icon: Github },
+  ];
   const support = [
     { label: lang === "ar" ? "عن حكي" : "About HAKI", href: "/about" },
     { label: lang === "ar" ? "التحديات" : "Challenges", href: "/challenges" },
@@ -36,7 +46,7 @@ export function Footer() {
   return (
     <footer className="border-t bg-secondary/60 pb-24 lg:pb-8">
       <div className="haki-container py-12">
-        <div className="grid gap-10 md:grid-cols-4">
+        <div className="grid gap-10 md:grid-cols-5">
           <div className="space-y-4">
             <Link to="/" className="flex items-center gap-2.5">
               <HakiLogoInline size={44} />
@@ -59,10 +69,23 @@ export function Footer() {
                 <MessageCircle className="size-3.5 text-green-600" />
                 {lang === "ar" ? "تواصل عبر واتساب" : "WhatsApp us"}
               </a>
+              {socials.map((s) => (
+                <a
+                  key={s.label}
+                  href={s.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={s.label}
+                  className="inline-flex size-8 items-center justify-center rounded-full border bg-background text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                >
+                  <s.icon className="size-3.5" />
+                </a>
+              ))}
             </div>
           </div>
 
           <FooterColumn title={lang === "ar" ? "اكتشف" : "Discover"} links={discover} />
+          <FooterColumn title={lang === "ar" ? "المزيد" : "More"} links={discoverMore} />
           <FooterColumn title={lang === "ar" ? "حسابي" : "Account"} links={account} />
           <FooterColumn title={lang === "ar" ? "الدعم" : "Support"} links={support} />
         </div>

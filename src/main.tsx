@@ -30,6 +30,9 @@ const Challenges = lazy(() => import("./pages/Challenges.tsx"));
 const ChallengeDetails = lazy(() => import("./pages/ChallengeDetails.tsx"));
 const Live = lazy(() => import("./pages/Live.tsx"));
 const About = lazy(() => import("./pages/About.tsx"));
+const Transparency = lazy(() => import("./pages/Transparency.tsx"));
+const Collections = lazy(() => import("./pages/Collections.tsx"));
+const Faq = lazy(() => import("./pages/Faq.tsx"));
 const Profile = lazy(() => import("./pages/Profile.tsx"));
 const Library = lazy(() => import("./pages/Library.tsx"));
 const HistoryPage = lazy(() => import("./pages/History.tsx"));
@@ -109,8 +112,8 @@ function SiteRoutes() {
         <Route path="/browse/:type" element={<Browse />} />
         <Route path="/search" element={<SearchPage />} />
         <Route path="/content/:slug" element={<ContentDetails />} />
-        <Route path="/author/:id" element={<PersonPage />} />
-        <Route path="/narrator/:id" element={<PersonPage />} />
+        <Route path="/author/:id" element={<PersonPage kind="author" />} />
+        <Route path="/narrator/:id" element={<PersonPage kind="narrator" />} />
         <Route path="/subscriptions" element={<Subscriptions />} />
         <Route path="/publish" element={<Publish />} />
         <Route
@@ -125,6 +128,9 @@ function SiteRoutes() {
         <Route path="/challenges/:id" element={<ChallengeDetails />} />
         <Route path="/live" element={<Live />} />
         <Route path="/about" element={<About />} />
+        <Route path="/transparency" element={<Transparency />} />
+        <Route path="/collections" element={<Collections />} />
+        <Route path="/faq" element={<Faq />} />
         <Route
           path="/profile"
           element={

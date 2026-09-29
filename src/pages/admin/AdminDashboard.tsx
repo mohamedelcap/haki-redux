@@ -13,7 +13,8 @@ import { ModerationManager } from "@/pages/admin/ModerationManager";
 import { AuditLogManager } from "@/pages/admin/AuditLogManager";
 import { RoyaltiesManager } from "@/pages/admin/RoyaltiesManager";
 import { BookImporterManager } from "@/pages/admin/BookImporterManager";
-import { GitHubManager } from "@/pages/admin/GitHubManager";
+import { GitHubManager, GitHubStatsCard } from "@/pages/admin/GitHubManager";
+import { CollectionsManager } from "@/pages/admin/CollectionsManager";
 import { SEO } from "@/components/SEO";
 import { HakiLogo } from "@/components/HakiLogo";
 import { LOGO_COVER } from "@/lib/logoAsset";
@@ -47,6 +48,7 @@ import { useMutation, useQuery } from "convex/react";
 import {
   AlertTriangle,
   ArrowLeft,
+  LayoutGrid as LayoutGridIcon,
   AudioLines,
   CirclePlus,
   BarChart3,
@@ -130,6 +132,7 @@ type TabKey =
   | "access"
   | "bookImporter"
   | "github"
+  | "collections"
   | "settings";
 
 function AdminInner() {
@@ -186,7 +189,10 @@ function AdminInner() {
     },
     {
       label: L("المكتبة", "Library"),
-      items: [{ key: "bookImporter", label: L("مستورد الكتب", "Book Importer"), icon: BookOpen }],
+      items: [
+        { key: "bookImporter", label: L("مستورد الكتب", "Book Importer"), icon: BookOpen },
+        { key: "collections", label: L("المجموعات", "Collections"), icon: LayoutGridIcon },
+      ],
     },
     {
       label: L("التفاعلات والأنشطة", "Engagement"),
@@ -342,6 +348,7 @@ function AdminInner() {
           {tab === "manualPayments" && <ManualPaymentsManager L={L} />}
           {tab === "royalties" && <RoyaltiesManager L={L} />}
           {tab === "bookImporter" && <BookImporterManager L={L} />}
+          {tab === "collections" && <CollectionsManager L={L} />}
           {tab === "users" && <UsersManager L={L} />}
           {tab === "access" && <AccessManager L={L} />}
           {tab === "github" && <GitHubManager L={L} />}
@@ -424,6 +431,9 @@ function Overview({
               {L("إدارة منصة حكي من مكان واحد", "Manage the whole HAKI platform from one place")}
             </p>
           </div>
+        </div>
+        <div className="mt-5 flex flex-wrap items-center gap-3">
+          <GitHubStatsCard L={L} />
         </div>
         <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
           {quick.map((q) => (

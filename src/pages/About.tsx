@@ -18,6 +18,31 @@ import {
 } from "lucide-react";
 import { Link } from "react-router";
 
+function LiveStats({ L }: { L: (ar: string, en: string) => string }) {
+  const stats = useQuery(api.publicStats.platformStats, {});
+  const cards = [
+    { value: stats?.publishedCount, label: L("عمل منشور", "Published works") },
+    { value: stats?.totalHours, label: L("ساعة محتوى", "Hours of content") },
+    { value: stats?.authorCount, label: L("مؤلفًا", "Authors") },
+    { value: stats?.narratorCount, label: L("راويًا", "Narrators") },
+  ];
+  return (
+    <section className="mt-14">
+      <h2 className="text-xl font-extrabold">{L("حكي بالأرقام", "HAKI in numbers")}</h2>
+      <div className="mt-4 grid grid-cols-2 gap-4 md:grid-cols-4">
+        {cards.map((c) => (
+          <div key={c.label} className="rounded-2xl border bg-card p-5 text-center card-shadow">
+            <p className="text-3xl font-black tabular-nums text-primary">
+              {c.value === undefined ? "…" : c.value.toLocaleString("ar-EG")}
+            </p>
+            <p className="mt-1 text-xs font-semibold text-muted-foreground">{c.label}</p>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 export default function About() {
   const { lang, t } = useLang();
   const L = (ar: string, en: string) => (lang === "ar" ? ar : en);
@@ -71,6 +96,7 @@ export default function About() {
         </div>
 
         {/* Content types */}
+        <LiveStats L={L} />
         <section className="mt-14">
           <h2 className="text-xl font-extrabold">{L("أنواع المحتوى", "Content types")}</h2>
           <div className="mt-5 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
@@ -165,11 +191,16 @@ function PeopleShowcase() {
 
   const strip = (
     people: { _id: string; name: string; nameEn?: string | null; image?: string | null }[] | undefined,
+    kind: "author" | "narrator" = "author",
   ) => (
     <div className="mt-5 flex gap-4 overflow-x-auto pb-2 no-scrollbar">
       {(people ?? Array.from({ length: 8 })).map((p: any, i: number) =>
         p?._id ? (
-          <div key={p._id} className="w-28 shrink-0 text-center">
+          <Link
+            key={p._id}
+            to={`/${kind}/${p._id}`}
+            className="w-28 shrink-0 text-center transition-opacity hover:opacity-80"
+          >
             <Avatar className="mx-auto size-24 border-2 border-background card-shadow">
               {p.image ? (
                 <AvatarImage src={p.image} alt={p.name} loading="lazy" />
@@ -183,7 +214,7 @@ function PeopleShowcase() {
             <p className="truncate text-xs text-muted-foreground" dir="ltr">
               {p.nameEn}
             </p>
-          </div>
+          </Link>
         ) : (
           <div key={i} className="w-28 shrink-0">
             <Skeleton className="mx-auto size-24 rounded-full" />
@@ -198,11 +229,11 @@ function PeopleShowcase() {
     <>
       <section className="mt-14">
         <h2 className="text-xl font-extrabold">{L("مؤلفونا", "Our authors")}</h2>
-        {strip(authors)}
+        {strip(authors, "author")}
       </section>
       <section className="mt-10">
         <h2 className="text-xl font-extrabold">{L("رواتنا", "Our narrators")}</h2>
-        {strip(narrators)}
+        {strip(narrators, "narrator")}
       </section>
     </>
   );

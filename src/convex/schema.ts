@@ -637,6 +637,43 @@ const schema = defineSchema(
       createdAt: v.number(),
       updatedAt: v.number(),
     }).index("by_enabled", ["enabled"]),
+
+    /** Curated collections (صفحة المجموعات) managed from the admin dashboard. */
+    collections: defineTable({
+      slug: v.string(),
+      titleAr: v.string(),
+      titleEn: v.string(),
+      descriptionAr: v.optional(v.string()),
+      descriptionEn: v.optional(v.string()),
+      coverImage: v.optional(v.string()),
+      itemIds: v.array(v.id("content")),
+      isHidden: v.optional(v.boolean()),
+      order: v.number(),
+      createdAt: v.number(),
+      updatedAt: v.number(),
+    }).index("by_slug", ["slug"]),
+
+    /**
+     * GitHub issue reports (transparency). Every createIssue attempt from the
+     * app is logged here BEFORE calling GitHub, so a missing/invalid token
+     * never loses a report. status: created | failed | local.
+     */
+    github_reports: defineTable({
+      userId: v.optional(v.id("users")),
+      reporterName: v.optional(v.string()),
+      reporterEmail: v.optional(v.string()),
+      title: v.string(),
+      body: v.optional(v.string()),
+      /** created (on GitHub) | failed (API error) | local (no token/repo yet) */
+      status: v.string(),
+      /** page that produced the report: admin_test | content_report */
+      origin: v.optional(v.string()),
+      labels: v.optional(v.array(v.string())),
+      issueNumber: v.optional(v.number()),
+      issueUrl: v.optional(v.string()),
+      errorMessage: v.optional(v.string()),
+      createdAt: v.number(),
+    }).index("by_created", ["createdAt"]).index("by_user", ["userId"]).index("by_status", ["status"]),
   },
   {
     schemaValidation: false,

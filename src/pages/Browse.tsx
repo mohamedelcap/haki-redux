@@ -61,6 +61,7 @@ export default function Browse() {
     debouncedQ.length >= 2 ? { q: debouncedQ, type: TYPE_KEYS.includes(type as any) ? (type as any) : undefined } : "skip",
   );
   const [categorySlug, setCategorySlug] = useState<string>(searchParams.get("category") ?? "all");
+  const [rights, setRights] = useState<string>(searchParams.get("rights") ?? "all");
   const [authorId, setAuthorId] = useState<string>("all");
   const [narratorId, setNarratorId] = useState<string>("all");
   const [duration, setDuration] = useState<string>("all");
@@ -71,6 +72,7 @@ export default function Browse() {
   useEffect(() => {
     setType(pathType ?? searchParams.get("type") ?? "all");
     setCategorySlug(searchParams.get("category") ?? "all");
+    setRights(searchParams.get("rights") ?? "all");
     setSort(searchParams.get("sort") ?? "newest");
   }, [typeParam, searchParams]);
 
@@ -82,6 +84,7 @@ export default function Browse() {
     q: debouncedQ || undefined,
     contentType: TYPE_KEYS.includes(type as any) ? (type as any) : undefined,
     categorySlug: categorySlug === "all" ? undefined : categorySlug,
+    rights: rights === "all" ? undefined : (rights as "public_domain" | "free"),
     authorId: authorId === "all" ? undefined : (authorId as any),
     narratorId: narratorId === "all" ? undefined : (narratorId as any),
     duration: duration === "all" ? undefined : (duration as any),
@@ -145,6 +148,15 @@ export default function Browse() {
                 ))}
               </div>
             )}
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            {/* Rights filter pills */}
+            <div className="flex flex-wrap gap-1.5">
+              <FilterPill active={rights === "all"} onClick={() => setRights("all")} label={lang === "ar" ? "كل الأعمال" : "All works"} />
+              <FilterPill active={rights === "free"} onClick={() => setRights("free")} label={lang === "ar" ? "مجاني" : "Free"} />
+              <FilterPill active={rights === "public_domain"} onClick={() => setRights("public_domain")} label={lang === "ar" ? "مجال عام" : "Public domain"} />
+            </div>
           </div>
 
           <div className="flex flex-wrap gap-2">

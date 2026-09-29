@@ -11,8 +11,10 @@ import { LOGO_COVER } from "@/lib/logoAsset";
 
 const FALLBACK_IMAGE = LOGO_COVER;
 
-export default function PersonPage() {
-  const { kind, id } = useParams<{ kind: string; id: string }>();
+export default function PersonPage({ kind: kindProp }: { kind?: "author" | "narrator" } = {}) {
+  const params = useParams<{ kind?: string; id: string }>();
+  const kind = kindProp ?? (params as any).kind ?? "author";
+  const id = params.id;
   const { lang, t } = useLang();
   const L = (ar: string, en: string) => (lang === "ar" ? ar : en);
   const personKind = kind === "narrator" ? "narrator" : "author";

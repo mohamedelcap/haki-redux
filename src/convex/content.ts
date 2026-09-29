@@ -233,6 +233,7 @@ export const browse = query({
     categorySlug: v.optional(v.string()),
     authorId: v.optional(v.id("authors")),
     narratorId: v.optional(v.id("narrators")),
+    rights: v.optional(v.union(v.literal("public_domain"), v.literal("free"))),
     duration: v.optional(v.union(v.literal("short"), v.literal("medium"), v.literal("long"))),
     sort: v.optional(
       v.union(v.literal("newest"), v.literal("popular"), v.literal("title"), v.literal("topRated")),
@@ -281,6 +282,13 @@ export const browse = query({
     let out: EnrichedContent[] = enriched;
     if (args.authorId) out = out.filter((r) => r.authorId === args.authorId);
     if (args.narratorId) out = out.filter((r) => r.narratorId === args.narratorId);
+    if (args.rights) {
+      out = out.filter((r) =>
+        args.rights === "public_domain"
+          ? r.rightsStatus === "public_domain"
+          : r.rightsStatus === "public_domain" || r.rightsStatus === "copyrighted",
+      );
+    }
     if (args.duration) {
       out = out.filter((r) => {
         const h = r.duration / 3600;
