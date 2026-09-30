@@ -13,6 +13,8 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useLang } from "@/lib/i18n";
+import { iaFirstPageUrl } from "@/convex/importCore";
+import { LOGO_COVER } from "@/lib/logoAsset";
 import { cn } from "@/lib/utils";
 import { useQuery } from "convex/react";
 import {
@@ -301,7 +303,12 @@ export default function Browse() {
                     className="flex items-center gap-3 px-3 py-2 transition-colors hover:bg-accent"
                     onMouseDown={(e) => e.preventDefault()}
                   >
-                    <img src={s.coverImage || "/logo.png"} alt="" loading="lazy" className="size-9 rounded-md object-cover" />
+                    <img
+                      src={s.coverImage || (s.externalId && s.sourceName ? iaFirstPageUrl(s.externalId) : undefined) || LOGO_COVER}
+                      alt=""
+                      loading="lazy"
+                      className="size-9 rounded-md object-cover"
+                    />
                     <span className="min-w-0 flex-1 truncate text-sm font-semibold">{s.title}</span>
                     <span className="shrink-0 text-[10px] font-bold uppercase text-muted-foreground">
                       {TYPE_LABELS[s.contentType]?.[lang] ?? ""}
@@ -643,6 +650,11 @@ function AccessPill({
 /** Horizontal result row for the list view. */
 function ListRow({ item }: { item: RowItem }) {
   const { lang } = useLang();
+  // Cover priority: real cover → first-page scan of the imported book → logo.
+  const coverSrc =
+    item.coverImage ||
+    (item.externalId && item.sourceName ? iaFirstPageUrl(item.externalId) : undefined) ||
+    LOGO_COVER;
   return (
     <Link
       to={`/content/${item.slug}`}
@@ -650,7 +662,7 @@ function ListRow({ item }: { item: RowItem }) {
     >
       <div className="relative h-28 w-20 shrink-0 overflow-hidden rounded-xl bg-muted">
         <img
-          src={item.coverImage || "/logo.png"}
+          src={coverSrc}
           alt={item.title}
           loading="lazy"
           className="size-full object-cover transition-transform duration-300 group-hover:scale-105"
@@ -689,6 +701,8 @@ type RowItem = {
   authorName?: string | null;
   narratorName?: string | null;
   categories: { id: string; name: string; slug: string }[];
+  externalId?: string | null;
+  sourceName?: string | null;
 };
 
 function EmptyState({ hasFilters, onReset }: { hasFilters: boolean; onReset: () => void }) {

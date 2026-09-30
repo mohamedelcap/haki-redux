@@ -531,6 +531,8 @@ export const suggest = query({
       title: r.title,
       coverImage: r.coverImage ?? null,
       contentType: r.contentType,
+      externalId: r.externalId,
+      sourceName: r.sourceName,
     }));
   },
 });

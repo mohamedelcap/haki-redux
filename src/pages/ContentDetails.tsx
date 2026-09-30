@@ -212,7 +212,7 @@ export default function ContentDetails() {
     player.play({
       contentId: item._id,
       title: `${item.title} — ${f.name}`,
-      coverImage: item.coverImage,
+      coverImage: coverFallback,
       authorName: item.authorName,
       narratorName: item.narratorName,
       audioUrl: f.url,
@@ -270,7 +270,7 @@ export default function ContentDetails() {
         <div
           className="absolute inset-0 opacity-15"
           style={{
-            backgroundImage: `url(${item.coverImage})`,
+            backgroundImage: `url(${coverFallback ?? ""})`,
             backgroundSize: "cover",
             backgroundPosition: "center",
             filter: "blur(40px)",
