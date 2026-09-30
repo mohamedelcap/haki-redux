@@ -119,6 +119,16 @@ export default function ContentDetails() {
     return map;
   }, [trackList]);
 
+  // Cover priority: real cover → first-page scan of the imported book → logo.
+  // NOTE: must stay ABOVE the conditional returns below — hooks order must be
+  // stable across renders regardless of loading state.
+  const coverFallback = useMemo(() => {
+    if (!item) return undefined;
+    if (item.coverImage) return item.coverImage;
+    const ext = (item as any).externalId as string | undefined;
+    return ext && (item as any).sourceName ? iaFirstPageUrl(ext) : undefined;
+  }, [item?.coverImage, (item as any)?.externalId, (item as any)?.sourceName]);
+
   if (item === undefined) {
     return (
       <div className="haki-container grid gap-8 py-10 lg:grid-cols-[300px_1fr]">
@@ -145,13 +155,6 @@ export default function ContentDetails() {
 
   const typeLabel = TYPE_LABELS[item.contentType]?.[lang] ?? item.contentType;
   const resumePosition = progress?.position ?? 0;
-
-  // Cover priority: real cover → first-page scan of the imported book → logo.
-  const coverFallback = useMemo(() => {
-    if (item.coverImage) return item.coverImage;
-    const ext = (item as any).externalId as string | undefined;
-    return ext && (item as any).sourceName ? iaFirstPageUrl(ext) : undefined;
-  }, [item.coverImage, (item as any).externalId, (item as any).sourceName]);
 
   const startPlayback = (opts?: { chapterId?: string; fromStart?: boolean }) => {
     if (hasChapters || hasEpisodes) {
