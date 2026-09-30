@@ -1,8 +1,8 @@
-"use use node";
+"use node";
 
 import Stripe from "stripe";
 import { v } from "convex/values";
-import { action, internalQuery, internalMutation } from "./_generated/server";
+import { action } from "./_generated/server";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { internal } from "./_generated/api";
 
@@ -32,10 +32,10 @@ export const createCheckoutSession = action({
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new Error("يجب تسجيل الدخول للاشتراك");
 
-    const user: any = await ctx.runQuery(internal.payments.getUserEmail, { userId });
+    const user: any = await ctx.runQuery(internal.paymentsInternal.getUserEmail, { userId });
     if (!user?.email) throw new Error("يجب أن يكون لحسابك بريد إلكتروني");
 
-    const plan: any = await ctx.runQuery(internal.payments.getPlan, { planId: args.planId });
+    const plan: any = await ctx.runQuery(internal.paymentsInternal.getPlan, { planId: args.planId });
     if (!plan || !plan.isActive) throw new Error("هذه الباقة غير متاحة");
 
     const stripe = getStripe();
@@ -88,17 +88,17 @@ export const activateAfterCheckout = action({
     if (!refPlan) throw new Error("جلسة دفع غير صالحة");
 
     const now = Date.now();
-    const plan: any = await ctx.runQuery(internal.payments.getPlan, { planId: refPlan as never });
+    const plan: any = await ctx.runQuery(internal.paymentsInternal.getPlan, { planId: refPlan as never });
     const expiresAt =
       plan?.period === "yearly" ? now + 365 * 86400000 : now + 30 * 86400000;
 
     // Cancel previous active subscriptions of this user.
-    const prev: any = await ctx.runQuery(internal.payments.myActiveSubInternal, {
+    const prev: any = await ctx.runQuery(internal.paymentsInternal.myActiveSubInternal, {
       userId,
     });
-    if (prev) await ctx.runMutation(internal.payments.setStatus, { id: prev._id, status: "cancelled" });
+    if (prev) await ctx.runMutation(internal.paymentsInternal.setStatus, { id: prev._id, status: "cancelled" });
 
-    await ctx.runMutation(internal.payments.insertSub, {
+    await ctx.runMutation(internal.paymentsInternal.insertSub, {
       userId,
       planId: refPlan as never,
       startedAt: now,
@@ -108,52 +108,5 @@ export const activateAfterCheckout = action({
   },
 });
 
-export const getUserEmail = internalQuery({
-  args: { userId: v.id("users") },
-  handler: async (ctx, args) => {
-    return await ctx.db.get(args.userId);
-  },
-});
-
-export const getPlan = internalQuery({
-  args: { planId: v.id("subscription_plans") },
-  handler: async (ctx, args) => {
-    return await ctx.db.get(args.planId);
-  },
-});
-
-export const myActiveSubInternal = internalQuery({
-  args: { userId: v.id("users") },
-  handler: async (ctx, args) => {
-    return await ctx.db
-      .query("subscriptions")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
-      .order("desc")
-      .first();
-  },
-});
-
-export const setStatus = internalMutation({
-  args: { id: v.id("subscriptions"), status: v.string() },
-  handler: async (ctx, args) => {
-    await ctx.db.patch(args.id, { status: args.status as any });
-  },
-});
-
-export const insertSub = internalMutation({
-  args: {
-    userId: v.id("users"),
-    planId: v.id("subscription_plans"),
-    startedAt: v.number(),
-    expiresAt: v.number(),
-  },
-  handler: async (ctx, args) => {
-    return await ctx.db.insert("subscriptions", {
-      userId: args.userId,
-      planId: args.planId,
-      status: "active",
-      startedAt: args.startedAt,
-      expiresAt: args.expiresAt,
-    });
-  },
-});
+// Internal queries/mutations backing these actions live in paymentsInternal.ts
+// (Convex only allows actions inside "use node" files).

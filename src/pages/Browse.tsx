@@ -1,5 +1,4 @@
 import { api } from "@/convex/_generated/api";
-import type { ContentType } from "@/convex/schema";
 import { SEO } from "@/components/SEO";
 import { ContentCard, TYPE_LABELS } from "@/components/ContentCard";
 import { Button } from "@/components/ui/button";
@@ -171,13 +170,17 @@ export default function Browse() {
     sort: sort as any,
   });
 
-  // Sync filters when navigating between /browse/:type routes or query strings.
-  useEffect(() => {
+  // Reset filters when navigating between /browse/:type routes or query strings.
+  // Uses the React-endorsed "adjust state during render" pattern (no effect needed):
+  const filterKey = `${typeParam ?? ""}|${searchParams.toString()}`;
+  const [prevFilterKey, setPrevFilterKey] = useState(filterKey);
+  if (prevFilterKey !== filterKey) {
+    setPrevFilterKey(filterKey);
     setType(pathType ?? searchParams.get("type") ?? "all");
     setCategorySlug(searchParams.get("category") ?? "all");
     setRights(searchParams.get("rights") ?? "all");
     setSort(searchParams.get("sort") ?? "newest");
-  }, [typeParam, searchParams]);
+  }
 
   const heading = type !== "all" && TYPE_LABELS[type] ? TYPE_LABELS[type][lang] : ar ? "تصفح المكتبة" : "Browse the library";
 
@@ -640,7 +643,7 @@ function AccessPill({
 
 /** Horizontal result row for the list view. */
 function ListRow({ item }: { item: RowItem }) {
-  const { lang, t } = useLang();
+  const { lang } = useLang();
   return (
     <Link
       to={`/content/${item.slug}`}
