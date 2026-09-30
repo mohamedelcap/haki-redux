@@ -245,6 +245,9 @@ export const browse = query({
     /** Custom duration bounds in minutes (advanced filter sliders). */
     minDurationMin: v.optional(v.number()),
     maxDurationMin: v.optional(v.number()),
+    /** Publication-year range (originalYear, falling back to releaseDate). */
+    yearFrom: v.optional(v.number()),
+    yearTo: v.optional(v.number()),
     /** Minimum average rating 1–5 (advanced filter). */
     minRating: v.optional(v.number()),
     sort: v.optional(
@@ -327,6 +330,25 @@ export const browse = query({
       out = out.filter((r) => r.duration >= min && r.duration <= max);
     }
 
+    // Publication-year range (originalYear, falling back to releaseDate year).
+    if (args.yearFrom !== undefined || args.yearTo !== undefined) {
+      const yearOf = (r: { originalYear?: number; releaseDate?: string }): number | undefined => {
+        if (r.originalYear) return r.originalYear;
+        if (r.releaseDate) {
+          const y = Number.parseInt(r.releaseDate.slice(0, 4), 10);
+          return Number.isFinite(y) ? y : undefined;
+        }
+        return undefined;
+      };
+      out = out.filter((r) => {
+        const y = yearOf(r);
+        if (y === undefined) return false;
+        if (args.yearFrom !== undefined && y < args.yearFrom) return false;
+        if (args.yearTo !== undefined && y > args.yearTo) return false;
+        return true;
+      });
+    }
+
     const sort = args.sort ?? "newest";
     if (sort === "newest") out.sort((a, b) => b.createdAt - a.createdAt);
     else if (sort === "popular") out.sort((a, b) => b.playCount - a.playCount);
@@ -388,6 +410,8 @@ export const browseFacets = query({
     ),
     minDurationMin: v.optional(v.number()),
     maxDurationMin: v.optional(v.number()),
+    yearFrom: v.optional(v.number()),
+    yearTo: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     let rows: Doc<"content">[];
@@ -447,6 +471,25 @@ export const browseFacets = query({
       rows = rows.filter((r) => r.duration >= min && r.duration <= max);
     }
 
+    // Publication-year range (same rule as browse: originalYear → releaseDate).
+    if (args.yearFrom !== undefined || args.yearTo !== undefined) {
+      const yearOf = (r: { originalYear?: number; releaseDate?: string }): number | undefined => {
+        if (r.originalYear) return r.originalYear;
+        if (r.releaseDate) {
+          const y = Number.parseInt(r.releaseDate.slice(0, 4), 10);
+          return Number.isFinite(y) ? y : undefined;
+        }
+        return undefined;
+      };
+      rows = rows.filter((r) => {
+        const y = yearOf(r); 
+        if (y === undefined) return false;
+        if (args.yearFrom !== undefined && y < args.yearFrom) return false;
+        if (args.yearTo !== undefined && y > args.yearTo) return false;
+        return true;
+      });
+    }
+
     // Category counts (all categories, with how many matching items each has).
     const allLinks = await ctx.db.query("content_categories").collect();
     const rowIds = new Set(rows.map((r) => r._id));
@@ -468,31 +511,18 @@ export const browseFacets = query({
       .sort((a, b) => b.count - a.count)
       .slice(0, 14);
 
-    // Author counts within the filtered rows.
-    const authorCount = new Map<string, number>();
+    // Year range within the filtered rows (drives the year-range inputs).
+    let minYear: number | undefined;
+    let maxYear: number | undefined;
     for (const r of rows) {
-      if (!r.authorId) continue;
-      authorCount.set(r.authorId, (authorCount.get(r.authorId) ?? 0) + 1);
-    }
-    const authors: { id: string; name: string; count: number; active: boolean }[] = [];
-    for (const [id, count] of [...authorCount.entries()].sort((a, b) => b[1] - a[1]).slice(0, 12)) {
-      const a = await ctx.db.get(id as Id<"authors">);
-      if (a) authors.push({ id, name: a.name, count, active: id === args.authorId });
+      const y = r.originalYear ?? (r.releaseDate ? Number.parseInt(r.releaseDate.slice(0, 4), 10) : NaN);
+      if (Number.isFinite(y)) {
+        minYear = minYear === undefined ? y : Math.min(minYear, y);
+        maxYear = maxYear === undefined ? y : Math.max(maxYear, y);
+      }
     }
 
-    // Narrator counts within the filtered rows.
-    const narratorCount = new Map<string, number>();
-    for (const r of rows) {
-      if (!r.narratorId) continue;
-      narratorCount.set(r.narratorId, (narratorCount.get(r.narratorId) ?? 0) + 1);
-    }
-    const narrators: { id: string; name: string; count: number; active: boolean }[] = [];
-    for (const [id, count] of [...narratorCount.entries()].sort((a, b) => b[1] - a[1]).slice(0, 12)) {
-      const n = await ctx.db.get(id as Id<"narrators">);
-      if (n) narrators.push({ id, name: n.name, count, active: id === args.narratorId });
-    }
-
-    return { categories, authors, narrators, total: rows.length };
+    return { categories, yearRange: { min: minYear, max: maxYear }, total: rows.length };
   },
 });
 

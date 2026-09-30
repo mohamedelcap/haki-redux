@@ -13,9 +13,9 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useLang } from "@/lib/i18n";
+import { cn } from "@/lib/utils";
 import { iaFirstPageUrl } from "@/convex/importCore";
 import { LOGO_COVER } from "@/lib/logoAsset";
-import { cn } from "@/lib/utils";
 import { useQuery } from "convex/react";
 import {
   BookOpen,
@@ -23,7 +23,6 @@ import {
   Clock,
   Crown,
   Filter,
-  Globe,
   Headphones,
   LayoutGrid,
   List,
@@ -75,23 +74,22 @@ const TYPE_PILLS: Record<string, { icon: typeof BookOpen; soft: string }> = {
   },
   micro_drama: {
     icon: Mic,
-    soft: "bg-pink-100 text-pink-700 border-pink-200 dark:bg-pink-500/15 dark:text-pink-300 dark:border-pink-500/30",
+    soft: "bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/30",
   },
   podcast: {
     icon: Podcast,
-    soft: "bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-500/15 dark:text-purple-300 dark:border-purple-500/30",
+    soft: "bg-teal-100 text-teal-700 border-teal-200 dark:bg-teal-500/15 dark:text-teal-300 dark:border-teal-500/30",
   },
   magazine: {
     icon: Newspaper,
-    soft: "bg-teal-100 text-teal-700 border-teal-200 dark:bg-teal-500/15 dark:text-teal-300 dark:border-teal-500/30",
+    soft: "bg-pink-100 text-pink-700 border-pink-200 dark:bg-pink-500/15 dark:text-pink-300 dark:border-pink-500/30",
   },
 };
 
-/** Rotating soft palette for the cascading sub-category pills. */
+/** Rotating soft colors for sub-category chips. */
 const CATEGORY_COLORS = [
   "bg-orange-100 text-orange-700 dark:bg-orange-500/15 dark:text-orange-300",
   "bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300",
-  "bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300",
   "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300",
   "bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300",
   "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300",
@@ -137,25 +135,44 @@ export default function Browse() {
   const [rights, setRights] = useState<string>(searchParams.get("rights") ?? "all");
   const [minRating, setMinRating] = useState<number>(0);
   const [durationRange, setDurationRange] = useState<[number, number]>([DURATION_MIN, DURATION_MAX]);
-  const [authorId, setAuthorId] = useState<string>("all");
-  const [narratorId, setNarratorId] = useState<string>("all");
+  // Publication-year range: free number inputs (committed on blur/Enter).
+  const CURRENT_YEAR = new Date().getFullYear();
+  const [yearInputs, setYearInputs] = useState<[string, string]>(["", ""]);
+  const [yearFrom, setYearFrom] = useState<number | undefined>(undefined);
+  const [yearTo, setYearTo] = useState<number | undefined>(undefined);
+
+  const yearError =
+    (yearInputs[0] && (Number(yearInputs[0]) < 1000 || Number(yearInputs[0]) > CURRENT_YEAR)) ||
+    (yearInputs[1] && (Number(yearInputs[1]) < 1000 || Number(yearInputs[1]) > CURRENT_YEAR))
+      ? ar
+        ? `أدخل سنة بين 1000 و ${CURRENT_YEAR}`
+        : `Enter a year between 1000 and ${CURRENT_YEAR}`
+      : undefined;
+
+  const commitYears = () => {
+    if (yearError) return;
+    const from = yearInputs[0] ? Number(yearInputs[0]) : undefined;
+    const to = yearInputs[1] ? Number(yearInputs[1]) : undefined;
+    setYearFrom(from);
+    setYearTo(to);
+  };
 
   // Keep duration + rights filter args stable for queries (rounded to step).
   const minDur = useMemo(() => (durationRange[0] <= DURATION_MIN ? undefined : durationRange[0]), [durationRange]);
   const maxDur = useMemo(() => (durationRange[1] >= DURATION_MAX ? undefined : durationRange[1]), [durationRange]);
   const ratingArg = minRating > 0 ? minRating : undefined;
-  const rightsArg = rights === "all" ? undefined : (rights as "public_domain" | "free" | "premium");
+  const rightsArg = rights === "all" ? undefined : (rights as "free" | "premium");
 
   // Cascading facet pills: within the current result set, what sub-filters exist.
   const facets = useQuery(api.content.browseFacets, {
     q: debouncedQ || undefined,
     contentType: TYPE_KEYS.includes(type as any) ? (type as any) : undefined,
     categorySlug: categorySlug === "all" ? undefined : categorySlug,
-    authorId: authorId === "all" ? undefined : (authorId as any),
-    narratorId: narratorId === "all" ? undefined : (narratorId as any),
     rights: rightsArg,
     minDurationMin: minDur,
     maxDurationMin: maxDur,
+    yearFrom,
+    yearTo,
   });
 
   const results = useQuery(api.content.browse, {
@@ -163,10 +180,10 @@ export default function Browse() {
     contentType: TYPE_KEYS.includes(type as any) ? (type as any) : undefined,
     categorySlug: categorySlug === "all" ? undefined : categorySlug,
     rights: rightsArg,
-    authorId: authorId === "all" ? undefined : (authorId as any),
-    narratorId: narratorId === "all" ? undefined : (narratorId as any),
     minDurationMin: minDur,
     maxDurationMin: maxDur,
+    yearFrom,
+    yearTo,
     minRating: ratingArg,
     sort: sort as any,
   });
@@ -187,7 +204,7 @@ export default function Browse() {
 
   const activeAdvanced =
     rightsArg !== undefined || ratingArg !== undefined || minDur !== undefined || maxDur !== undefined ||
-    authorId !== "all" || narratorId !== "all";
+    yearFrom !== undefined || yearTo !== undefined;
 
   const resetAll = () => {
     setQ("");
@@ -196,8 +213,9 @@ export default function Browse() {
     setRights("all");
     setMinRating(0);
     setDurationRange([DURATION_MIN, DURATION_MAX]);
-    setAuthorId("all");
-    setNarratorId("all");
+    setYearInputs(["", ""]);
+    setYearFrom(undefined);
+    setYearTo(undefined);
     setSort("newest");
   };
 
@@ -221,7 +239,9 @@ export default function Browse() {
             )}
           </div>
           <p className="text-sm text-muted-foreground">
-            {ar ? "اكتشف آلاف الكتب والمحتوى الصوتي" : "Discover thousands of books and audio content"}
+            {ar
+              ? "اكتشف المكتبة بالأنواع والتصنيفات والفلاتر المتقدمة."
+              : "Discover the library by types, categories and advanced filters."}
           </p>
         </div>
 
@@ -354,8 +374,7 @@ export default function Browse() {
                     rightsArg !== undefined ? 1 : 0,
                     ratingArg !== undefined ? 1 : 0,
                     minDur !== undefined || maxDur !== undefined ? 1 : 0,
-                    authorId !== "all" ? 1 : 0,
-                    narratorId !== "all" ? 1 : 0,
+                    yearFrom !== undefined || yearTo !== undefined ? 1 : 0,
                   ].reduce((a, b) => a + b, 0)}
                 </span>
               )}
@@ -406,7 +425,6 @@ export default function Browse() {
                   <AccessPill active={rights === "all"} onClick={() => setRights("all")} label={ar ? "الكل" : "All"} />
                   <AccessPill active={rights === "free"} onClick={() => setRights("free")} label={ar ? "مجاني" : "Free"} icon={<Sparkles className="size-3.5" />} />
                   <AccessPill active={rights === "premium"} onClick={() => setRights("premium")} label={ar ? "مدفوع" : "Premium"} icon={<Crown className="size-3.5" />} />
-                  <AccessPill active={rights === "public_domain"} onClick={() => setRights("public_domain")} label={ar ? "ملكية عامة" : "Public domain"} icon={<Globe className="size-3.5" />} />
                 </div>
               </div>
 
@@ -456,59 +474,65 @@ export default function Browse() {
                 </div>
               </div>
 
-              {/* Authors within results */}
-              {(facets?.authors?.length ?? 0) > 0 && (
-                <div className="space-y-2">
-                  <p className="text-sm font-extrabold">{ar ? "المؤلف" : "Author"}</p>
-                  <div className="no-scrollbar max-h-40 space-y-1 overflow-y-auto pe-1">
-                    {facets?.authors.map((a) => (
-                      <button
-                        key={a.id}
-                        type="button"
-                        onClick={() => setAuthorId((prev) => (prev === a.id ? "all" : a.id))}
-                        className={cn(
-                          "flex w-full items-center justify-between rounded-xl border px-3 py-2 text-start text-sm transition-colors",
-                          a.active || authorId === a.id
-                            ? "border-primary bg-primary/10 font-bold text-primary"
-                            : "hover:bg-muted",
-                        )}
-                      >
-                        <span className="truncate">{a.name}</span>
-                        <span className="shrink-0 rounded-full bg-muted px-1.5 text-[10px] font-bold text-muted-foreground">
-                          {a.count}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
+              {/* Publication-year range (originalYear → releaseDate fallback) */}
+              <div className="space-y-2">
+                <p className="text-sm font-extrabold">{ar ? "سنة الإنتاج" : "Production year"}</p>
+                <div className="flex items-center gap-2" dir="ltr">
+                  <Input
+                    type="number"
+                    inputMode="numeric"
+                    min={1000}
+                    max={CURRENT_YEAR}
+                    placeholder={ar ? "من" : "From"}
+                    value={yearInputs[0]}
+                    onChange={(e) => setYearInputs((p) => [e.target.value, p[1]])}
+                    onBlur={commitYears}
+                    onKeyDown={(e) => e.key === "Enter" && commitYears()}
+                    className="h-9 flex-1 rounded-xl text-center text-sm"
+                    aria-label={ar ? "سنة من" : "Year from"}
+                  />
+                  <span className="text-xs font-bold text-muted-foreground">—</span>
+                  <Input
+                    type="number"
+                    inputMode="numeric"
+                    min={1000}
+                    max={CURRENT_YEAR}
+                    placeholder={ar ? "إلى" : "To"}
+                    value={yearInputs[1]}
+                    onChange={(e) => setYearInputs((p) => [p[0], e.target.value])}
+                    onBlur={commitYears}
+                    onKeyDown={(e) => e.key === "Enter" && commitYears()}
+                    className="h-9 flex-1 rounded-xl text-center text-sm"
+                    aria-label={ar ? "سنة إلى" : "Year to"}
+                  />
                 </div>
-              )}
-
-              {/* Narrators within results */}
-              {(facets?.narrators?.length ?? 0) > 0 && (
-                <div className="space-y-2">
-                  <p className="text-sm font-extrabold">{ar ? "الراوي" : "Narrator"}</p>
-                  <div className="no-scrollbar max-h-40 space-y-1 overflow-y-auto pe-1">
-                    {facets?.narrators.map((n) => (
-                      <button
-                        key={n.id}
-                        type="button"
-                        onClick={() => setNarratorId((prev) => (prev === n.id ? "all" : n.id))}
-                        className={cn(
-                          "flex w-full items-center justify-between rounded-xl border px-3 py-2 text-start text-sm transition-colors",
-                          n.active || narratorId === n.id
-                            ? "border-primary bg-primary/10 font-bold text-primary"
-                            : "hover:bg-muted",
-                        )}
-                      >
-                        <span className="truncate">{n.name}</span>
-                        <span className="shrink-0 rounded-full bg-muted px-1.5 text-[10px] font-bold text-muted-foreground">
-                          {n.count}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
+                {yearError ? (
+                  <p className="text-xs font-semibold text-destructive">{yearError}</p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    {facets?.yearRange?.min
+                      ? ar
+                        ? `السنوات المتوفرة: ${facets.yearRange.min} — ${facets.yearRange.max}`
+                        : `Available years: ${facets.yearRange.min} — ${facets.yearRange.max}`
+                      : ar ? "مثال: 2010 إلى 2025" : "e.g. 2010 to 2025"}
+                  </p>
+                )}
+                {(yearFrom !== undefined || yearTo !== undefined) && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 w-full gap-1 text-xs text-muted-foreground"
+                    onClick={() => {
+                      setYearInputs(["", ""]);
+                      setYearFrom(undefined);
+                      setYearTo(undefined);
+                    }}
+                  >
+                    <X className="size-3" />
+                    {ar ? "مسح السنوات" : "Clear years"}
+                  </Button>
+                )}
+              </div>
 
               <Button variant="outline" className="w-full gap-2" onClick={resetAll}>
                 <Filter className="size-4" />
@@ -617,7 +641,7 @@ function CategoryPill({
   );
 }
 
-/** Access pill for the filters panel (free / premium / public domain). */
+/** Access pill for the filters panel (free / premium). */
 function AccessPill({
   active,
   onClick,
