@@ -137,7 +137,7 @@ export function LiveDot({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
       {/* النواة الصلبة — تضيء وتخفت */}
       <span
         className={cn(
-          "relative inline-flex rounded-full bg-red-500 shadow-[0_0_10px_2px_rgba(239,68,68,0.65)]",
+          "relative inline-flex rounded-full bg-red-500 shadow-[0_0_6px_1px_rgba(239,68,68,0.55)]",
           "animate-pulse [animation-duration:1.4s]",
           dim,
         )}

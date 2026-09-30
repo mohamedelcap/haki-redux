@@ -93,11 +93,14 @@ export function Header() {
               key={item.href}
               to={item.href}
               className={cn(
-                "relative rounded-lg px-3 py-2 text-sm font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
+                "relative inline-flex items-center rounded-lg px-3 py-2 text-sm font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
+                item.href === "/live" && "gap-4",
               )}
             >
-              {item.href === "/live" && <LiveDot size="sm" />}
+              {/* EN: dot before the word — AR: dot after «مباشر» (left side in RTL) */}
+              {item.href === "/live" && lang !== "ar" && <LiveDot size="sm" />}
               {item.label}
+              {item.href === "/live" && lang === "ar" && <LiveDot size="sm" />}
             </Link>
           ))}
         </nav>
