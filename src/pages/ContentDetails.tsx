@@ -29,7 +29,6 @@ import {
   Flag,
   Lock,
   Play,
-  ShieldCheck,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link, useParams } from "react-router";
@@ -349,55 +348,6 @@ export default function ContentDetails() {
                 </span>
               )}
             </div>
-
-            {/* Imported-book provenance & rights badge */}
-            {item.sourceName && (
-              <div className="mt-4 rounded-xl border bg-background/60 p-3 text-xs">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-bold">
-                    {lang === "ar" ? "حالة الحقوق:" : "Rights:"}
-                  </span>
-                  <Badge
-                    variant="outline"
-                    className={cn(
-                      item.rightsStatus === "public_domain" && "border-green-600/40 bg-green-600/10 text-green-700 dark:text-green-400",
-                      item.rightsStatus === "copyrighted" && "border-amber-600/40 bg-amber-600/10 text-amber-700 dark:text-amber-400",
-                      (item.rightsStatus === "unknown" || item.rightsStatus === "requires_review") && "text-muted-foreground",
-                    )}
-                  >
-                    <ShieldCheck className="size-3" />
-                    {item.rightsStatus === "public_domain"
-                      ? lang === "ar" ? "ملكية عامة" : "Public domain"
-                      : item.rightsStatus === "copyrighted"
-                        ? lang === "ar" ? "محفوظ الحقوق" : "Copyrighted"
-                        : item.rightsStatus === "requires_review"
-                          ? lang === "ar" ? "قيد المراجعة" : "Under review"
-                          : lang === "ar" ? "غير معروف" : "Unknown"}
-                  </Badge>
-                  <span className="text-muted-foreground">
-                    {lang === "ar" ? "المصدر:" : "Source:"} {item.sourceName}
-                  </span>
-                  {item.sourceUrl && (
-                    <a
-                      href={item.sourceUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="font-semibold text-primary hover:underline"
-                    >
-                      {lang === "ar" ? "صفحة العمل الأصلية" : "Original page"}
-                    </a>
-                  )}
-                  <Link to="/copyright" className="text-muted-foreground hover:text-primary hover:underline">
-                    {lang === "ar" ? "حقوق النشر و DMCA" : "Copyright & DMCA"}
-                  </Link>
-                </div>
-                {item.rightsInfo && (
-                  <p className="mt-1.5 truncate text-muted-foreground" title={item.rightsInfo}>
-                    {item.rightsInfo}
-                  </p>
-                )}
-              </div>
-            )}
 
             {/* Actions */}
             <div className="mt-6 flex flex-wrap items-center gap-2.5">
