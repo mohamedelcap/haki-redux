@@ -2,6 +2,7 @@ import { formatDuration, useLang } from "@/lib/i18n";
 import { usePlayer, demoAudioUrl } from "@/lib/player";
 import { LOGO_COVER } from "@/lib/logoAsset";
 import type { EnrichedContent } from "@/convex/lib";
+import { iaFirstPageUrl } from "@/convex/importCore";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
@@ -62,6 +63,11 @@ export function ContentCard({ item, className, onPlay }: CardProps) {
   const player = usePlayer();
   const label = TYPE_LABELS[item.contentType]?.[lang] ?? item.contentType;
   const inProgress = item.duration > 0;
+  // Cover priority: real cover → first-page scan of the imported book → logo.
+  const coverSrc =
+    item.coverImage ||
+    (item.externalId && item.sourceName ? iaFirstPageUrl(item.externalId) : undefined) ||
+    LOGO_COVER;
 
   const handlePlay = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -91,7 +97,7 @@ export function ContentCard({ item, className, onPlay }: CardProps) {
     >
       <div className="relative aspect-[3/4] overflow-hidden bg-muted">
         <img
-          src={item.coverImage || LOGO_COVER}
+          src={coverSrc}
           alt={item.title}
           loading="lazy"
           onError={(e) => {

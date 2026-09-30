@@ -14,7 +14,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { formatDuration, formatTime, useLang } from "@/lib/i18n";
 import { usePlayer } from "@/lib/player";
 import { cn } from "@/lib/utils";
-import { sanitizeDescription, pickAudioFormat } from "@/convex/importCore";
+import { sanitizeDescription, pickAudioFormat, iaFirstPageUrl } from "@/convex/importCore";
 import { useAction, useMutation, useQuery } from "convex/react";
 import {
   BookOpen,
@@ -22,7 +22,6 @@ import {
   BookmarkCheck,
   Check,
   Clock,
-  Download,
   FileText,
   Headphones,
   Link2,
@@ -30,8 +29,9 @@ import {
   Flag,
   Lock,
   Play,
+  Type,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type JSX } from "react";
 import { Link, useParams } from "react-router";
 import { toast } from "sonner";
 
@@ -89,9 +89,17 @@ export default function ContentDetails() {
   const shownAudioFiles = audioDisplayFormat
     ? audioFiles.filter((f) => f.format === audioDisplayFormat)
     : [];
+  // HAKI policy: only EPUB / PDF / TXT are shown as readable editions, and
+  // nothing is ever downloadable — reading happens inside the site reader.
+  const READABLE_EXTS = ["epub", "pdf", "txt"];
   const readableFormats = availableFiles
-    .filter((f) => ["epub", "pdf", "txt"].includes(f.format))
+    .filter((f) => READABLE_EXTS.includes(f.format))
     .map((f) => f.format);
+  const shownReadableFiles = useMemo(
+    () => availableFiles.filter((f) => READABLE_EXTS.includes(f.format)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [availableFiles],
+  );
   const hasReadable =
     item?.contentType === "ebook" &&
     (Boolean(item.fileUrl && /\.(epub|pdf|txt|html?)($|\?)/i.test(item.fileUrl)) ||
@@ -137,6 +145,13 @@ export default function ContentDetails() {
 
   const typeLabel = TYPE_LABELS[item.contentType]?.[lang] ?? item.contentType;
   const resumePosition = progress?.position ?? 0;
+
+  // Cover priority: real cover → first-page scan of the imported book → logo.
+  const coverFallback = useMemo(() => {
+    if (item.coverImage) return item.coverImage;
+    const ext = (item as any).externalId as string | undefined;
+    return ext && (item as any).sourceName ? iaFirstPageUrl(ext) : undefined;
+  }, [item.coverImage, (item as any).externalId, (item as any).sourceName]);
 
   const startPlayback = (opts?: { chapterId?: string; fromStart?: boolean }) => {
     if (hasChapters || hasEpisodes) {
@@ -262,10 +277,14 @@ export default function ContentDetails() {
         <div className="haki-container relative grid gap-8 py-10 lg:grid-cols-[280px_1fr]">
           <div className="mx-auto w-48 sm:w-56 lg:w-full lg:max-w-[280px]">
             <img
-              src={item.coverImage || LOGO_COVER}
+              src={coverFallback || LOGO_COVER}
               alt={item.title}
               className="aspect-[3/4] w-full rounded-2xl border object-cover card-shadow"
               loading="lazy"
+              onError={(e) => {
+                const img = e.currentTarget;
+                if (coverFallback && img.src !== LOGO_COVER) img.src = LOGO_COVER;
+              }}
             />
           </div>
 
@@ -455,59 +474,30 @@ export default function ContentDetails() {
         )}
       </div>
 
-      {/* Real files of imported books */}
-      {importFiles.length > 0 && (
+      {/* Readable formats of imported books — EPUB / PDF / TXT only, no downloads */}
+      {importFiles.length > 0 && shownReadableFiles.length > 0 && (
         <div className="haki-container">
           <h2 className="text-lg font-extrabold">
-            {lang === "ar" ? "ملفات الكتاب" : "Book files"}
+            {lang === "ar" ? "نسخ الكتاب للقراءة" : "Readable editions"}
           </h2>
-          <div className="mt-3 space-y-1.5">
-            {/* One audio format only (mp3 preferred) + the readable format. */}
-            {[...shownAudioFiles, ...availableFiles.filter((f) => f.kind !== "audio" && f.format === readableFormat)].map((f) => (
-              <div
-                key={f.url}
-                className="flex flex-wrap items-center gap-2 rounded-xl border bg-card p-3 text-sm"
-              >
-                <FileText className="size-4 shrink-0 text-primary" />
-                <Badge variant="secondary" className="text-[10px] uppercase">{f.format}</Badge>
-                <span className="min-w-0 flex-1 truncate" dir="ltr" title={f.name}>{f.name}</span>
-                {f.kind === "audio" ? (
-                  <Button size="sm" variant="secondary" onClick={() => playImportedAudio(f)}>
-                    <Headphones className="size-3.5" />
-                    {lang === "ar" ? "استمع" : "Listen"}
-                  </Button>
-                ) : readableFormat === f.format ? (
-                  <Button size="sm" variant="secondary" asChild>
-                    <Link to={`/read/${item.slug}`}>
-                      <BookOpen className="size-3.5" />
-                      {lang === "ar" ? "اقرأ" : "Read"}
-                    </Link>
-                  </Button>
-                ) : null}
-                <Button size="sm" variant="ghost" asChild>
-                  <a href={f.url} target="_blank" rel="noopener noreferrer">
-                    <Download className="size-3.5" />
-                    {lang === "ar" ? "تحميل" : "Download"}
-                  </a>
-                </Button>
-              </div>
-            ))}
-            {restrictedFiles.map((f) => (
-              <div
-                key={f.url}
-                className="flex flex-wrap items-center gap-2 rounded-xl border bg-muted/40 p-3 text-sm text-muted-foreground"
-              >
-                <Lock className="size-4 shrink-0" />
-                <Badge variant="secondary" className="text-[10px] uppercase">{f.format}</Badge>
-                <span className="min-w-0 flex-1 truncate" dir="ltr">{f.name}</span>
-                <Badge variant="outline" className="text-[10px]">
-                  {f.availability === "restricted"
-                    ? lang === "ar" ? "الوصول مقيد من المصدر" : "Access restricted"
-                    : lang === "ar" ? "غير قابل للتنزيل" : "Not downloadable"}
-                </Badge>
-              </div>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {lang === "ar"
+              ? "اقرأ مباشرة داخل حكي — محتوى محمي ولا يمكن تحميله."
+              : "Read right inside HAKI — protected content, downloads disabled."}
+          </p>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            {shownReadableFiles.map((f) => (
+              <FormatCard key={f.url} file={f} itemSlug={item.slug} lang={lang} onPlay={playImportedAudio} />
             ))}
           </div>
+          {restrictedFiles.length > 0 && (
+            <p className="mt-3 flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Lock className="size-3.5" />
+              {lang === "ar"
+                ? `${restrictedFiles.length} نسخة إضافية غير متاحة حاليًا من المصدر.`
+                : `${restrictedFiles.length} more edition(s) currently unavailable at the source.`}
+            </p>
+          )}
         </div>
       )}
 
@@ -522,6 +512,112 @@ export default function ContentDetails() {
       <div className="haki-container pb-12">
         <RatingsSection contentId={item._id} />
       </div>
+    </div>
+  );
+}
+
+/**
+ * Professional per-format card for a readable edition.
+ * - EPUB: the flagship — reading experience with chapters.
+ * - PDF: exact page layout, opens in the site's PDF viewer.
+ * - TXT: lightweight plain text.
+ * No download action exists anywhere — reading stays inside HAKI.
+ */
+function FormatCard({
+  file,
+  itemSlug,
+  lang,
+  onPlay,
+}: {
+  file: ImportFile;
+  itemSlug: string;
+  lang: string;
+  onPlay: (f: ImportFile) => void;
+}) {
+  const ar = lang === "ar";
+  const fmt = file.format;
+  const meta: Record<
+    string,
+    { label: string; en: string; desc: string; descEn: string; accent: string; icon: JSX.Element }
+  > = {
+    epub: {
+      label: "EPUB",
+      en: "EPUB",
+      desc: "تجربة قراءة متقدمة مع فهرس وتنسيق متكيف",
+      descEn: "Advanced reading experience with TOC and adaptive layout",
+      accent: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+      icon: <BookOpen className="size-5" />,
+    },
+    pdf: {
+      label: "PDF",
+      en: "PDF",
+      desc: "الصفحات كما طبعت originally — عرض ثابت مطابق للمطبوع",
+      descEn: "Fixed page layout exactly as printed",
+      accent: "bg-red-500/10 text-red-600 dark:text-red-400",
+      icon: <FileText className="size-5" />,
+    },
+    txt: {
+      label: "TXT",
+      en: "TXT",
+      desc: "نص خفيف سريع التحميل للقراءة المتصلة",
+      descEn: "Lightweight plain text for quick reading",
+      accent: "bg-sky-500/10 text-sky-600 dark:text-sky-400",
+      icon: <Type className="size-5" />,
+    },
+  };
+  const m = meta[fmt] ?? {
+    label: fmt.toUpperCase(),
+    en: fmt.toUpperCase(),
+    desc: "نسخة قابلة للقراءة",
+    descEn: "Readable edition",
+    accent: "bg-muted text-foreground",
+    icon: <FileText className="size-5" />,
+  };
+  const sizeLabel =
+    file.size && file.size > 0
+      ? file.size > 1024 * 1024
+        ? `${(file.size / (1024 * 1024)).toFixed(1)} MB`
+        : `${Math.max(1, Math.round(file.size / 1024))} KB`
+      : undefined;
+
+  if (file.kind === "audio") {
+    return (
+      <div className="group flex items-center gap-3 rounded-2xl border bg-card p-4 transition-colors hover:border-primary/40">
+        <div className={cn("flex size-11 shrink-0 items-center justify-center rounded-xl", "bg-primary/10 text-primary")}>
+          <Headphones className="size-5" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-bold">{file.name}</p>
+          <p className="text-xs text-muted-foreground">
+            {ar ? "نسخة صوتية — استمع داخل حكي" : "Audio edition — listen inside HAKI"}
+          </p>
+        </div>
+        <Button size="sm" variant="secondary" className="gap-1.5 font-bold" onClick={() => onPlay(file)}>
+          <Headphones className="size-3.5" />
+          {ar ? "استمع" : "Listen"}
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="group flex items-center gap-3 rounded-2xl border bg-card p-4 transition-colors hover:border-primary/40">
+      <div className={cn("flex size-11 shrink-0 items-center justify-center rounded-xl", m.accent)}>
+        {m.icon}
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="flex items-center gap-2 text-sm font-bold">
+          {m.label}
+          {sizeLabel && <span className="text-[10px] font-semibold text-muted-foreground">· {sizeLabel}</span>}
+        </p>
+        <p className="truncate text-xs text-muted-foreground">{ar ? m.desc : m.descEn}</p>
+      </div>
+      <Button size="sm" variant="secondary" className="gap-1.5 font-bold" asChild>
+        <Link to={`/read/${itemSlug}`}>
+          <BookOpen className="size-3.5" />
+          {ar ? "اقرأ الآن" : "Read now"}
+        </Link>
+      </Button>
     </div>
   );
 }

@@ -536,6 +536,7 @@ export const analyzeBatchInternal = internalAction({
           rightsInfo: item.rights.info,
           rightsVerified: item.rights.verified,
           coverUrl,
+          coverFallbackUrl: item.coverFallbackUrl,
           files: JSON.stringify(files),
           formats: [...new Set(files.map((f) => f.format))],
           filesCount: files.length,
@@ -699,7 +700,8 @@ export const updateExisting = mutation({
       title: args.overrides?.title ?? meta.title ?? undefined,
       description:
         args.overrides?.description ?? (sanitizeDescription(meta.description) || undefined),
-      coverImage: item.coverUrl ?? undefined,
+      // Cover wins; first-page scan is the automatic fallback when no cover exists.
+      coverImage: item.coverUrl ?? item.coverFallbackUrl ?? undefined,
       fileUrl: audio.length === 0 ? (chosen.find((f) => f.kind === "electronic")?.url ?? undefined) : undefined,
       updatedAt: Date.now(),
     });
@@ -1286,6 +1288,7 @@ export const finalizeAnalyzeInternal = internalMutation({
     rightsInfo: v.optional(v.string()),
     rightsVerified: v.optional(v.boolean()),
     coverUrl: v.optional(v.string()),
+    coverFallbackUrl: v.optional(v.string()),
     files: v.optional(v.string()),
     formats: v.optional(v.array(v.string())),
     filesCount: v.optional(v.number()),
@@ -1329,6 +1332,7 @@ export const finalizeAnalyzeInternal = internalMutation({
       isAudiobook: args.isAudiobook ?? false,
       audioDuration: args.audioDuration,
       coverUrl: args.coverUrl,
+      coverFallbackUrl: args.coverFallbackUrl,
       error: undefined,
       updatedAt: now,
     });
@@ -1449,7 +1453,8 @@ export const publishFromAnalysisInternal = internalMutation({
       title,
       slug,
       description: description || "كتاب مستورد من مصدر عام.",
-      coverImage: item.coverUrl ?? undefined,
+      // Cover wins; first-page scan is the automatic fallback when no cover exists.
+      coverImage: item.coverUrl ?? item.coverFallbackUrl ?? undefined,
       contentType: isAudiobook ? "audiobook" : "ebook",
       authorId,
       narratorId,

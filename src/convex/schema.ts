@@ -541,6 +541,8 @@ const schema = defineSchema(
       rightsStatus: v.optional(v.string()),
       formats: v.optional(v.array(v.string())),
       coverUrl: v.optional(v.string()),
+      /** First-page scan fallback used automatically when no real cover exists. */
+      coverFallbackUrl: v.optional(v.string()),
       fileUrls: v.optional(v.string()),
       error: v.optional(v.string()),
       /** Content id created (when imported). */

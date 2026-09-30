@@ -202,7 +202,7 @@ function kindOfExt(ext: string): UnifiedFile["kind"] {
 }
 
 /**
- * HAKI policy: e-books publish in EPUB and PDF only — based on what the
+ * HAKI policy: e-books publish in EPUB, PDF and TXT — based on what the
  * source actually provides. Every other electronic format (txt, html, mobi,
  * djvu…) stays LISTED but UNSELECTED: the data-entry employee controls it
  * manually from the dashboard (file-selection checkboxes).
@@ -210,7 +210,7 @@ function kindOfExt(ext: string): UnifiedFile["kind"] {
  * - Archives/other: listed but NOT selected automatically.
  * - Never removes any file: nothing is dropped from the list.
  */
-export const PUBLISHABLE_ELECTRONIC = ["epub", "pdf"];
+export const PUBLISHABLE_ELECTRONIC = ["epub", "pdf", "txt"];
 export function selectFiles(
   raw: { name: string; format?: string; size?: number; url: string; duration?: number; availability?: UnifiedFile["availability"]; mime?: string }[],
 ): UnifiedFile[] {
@@ -241,8 +241,8 @@ export function selectFiles(
     };
   });
 
-  // Electronic: EPUB and PDF only (auto-selected when the source has them).
-  // Priority order keeps EPUB ahead of PDF when both exist — both are marked.
+  // Electronic: EPUB, PDF and TXT only (auto-selected when the source has them).
+  // Priority order keeps EPUB ahead of PDF ahead of TXT — all found are marked.
   const electronic = files
     .filter((f) => f.kind === "electronic")
     .sort((a, b) => ELECTRONIC_PRIORITY.indexOf(a.format) - ELECTRONIC_PRIORITY.indexOf(b.format));
@@ -268,11 +268,12 @@ export function audioDurationOf(files: UnifiedFile[]): number {
 }
 
 /**
- * The single publishable e-book file, in HAKI policy order:
- * EPUB (epub.js reader) > PDF (embeddable). The site publishes e-books in
- * these two formats only; txt/html stay selectable from the dashboard but
- * never become the automatic fileUrl. Never returns archive containers.
- * Availability is respected: restricted/unavailable files are skipped first.
+ * The single publishable e-book file, in HAKI policy order (epub > pdf > txt):
+ * EPUB (epub.js reader) > PDF (embeddable) > TXT (plain-text reader). The
+ * site displays these three formats only; html/mobi/djvu stay listed for the
+ * dashboard but never become the automatic fileUrl. Never returns archive
+ * containers. Availability is respected: restricted/unavailable files are
+ * skipped first.
  */
 export function bestReadableFile(files: UnifiedFile[]): UnifiedFile | undefined {
   // Only VERIFIED-available files qualify — the reader must never open a
