@@ -227,7 +227,7 @@ export default function Browse() {
         <div className="mt-5 flex flex-wrap items-center gap-2">
           <TypePill
             active={type === "all"}
-            onClick={() => setType("all")}
+            onClick={() => { setType("all"); setCategorySlug("all"); }}
             label={ar ? "الكل" : "All"}
             icon={LayoutGrid}
             soft="bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-500/15 dark:text-orange-300 dark:border-orange-500/30"
@@ -236,7 +236,7 @@ export default function Browse() {
             <TypePill
               key={k}
               active={type === k}
-              onClick={() => setType(k)}
+              onClick={() => { setType(k); setCategorySlug("all"); }}
               label={TYPE_LABELS[k][lang]}
               icon={TYPE_PILLS[k].icon}
               soft={TYPE_PILLS[k].soft}
@@ -245,7 +245,7 @@ export default function Browse() {
         </div>
 
         {/* ===== Cascading sub-category pills (spawn from the chosen type) ===== */}
-        {(facets?.categories?.length ?? 0) > 0 && (
+        {type !== "all" && (facets?.categories?.length ?? 0) > 0 && (
           <div className="mt-4">
             <p className="mb-2 text-xs font-bold text-muted-foreground">
               {ar ? "التصنيفات الفرعية" : "Sub-categories"}
@@ -264,7 +264,7 @@ export default function Browse() {
                   key={c.id}
                   active={c.active || categorySlug === c.slug}
                   onClick={() => setCategorySlug(c.active ? "all" : c.slug)}
-                  label={`${ar ? c.name : c.nameEn || c.name} (${c.count})`}
+                  label={ar ? c.name : c.nameEn || c.name}
                   color={
                     c.active || categorySlug === c.slug
                       ? "bg-primary text-primary-foreground shadow-sm"
