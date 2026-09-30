@@ -326,12 +326,12 @@ describe("selectFiles (automatic selection rules)", () => {
       { name: "2657.zip", format: "ZIP", url: "u-zip", size: 249027 },
     ]);
     expect(files.map((f) => f.format).sort()).toEqual(["txt", "zip"]);
-    // HAKI policy: txt is NOT auto-published (epub/pdf only) — it stays
-    // listed for manual dashboard control.
-    expect(files.find((f) => f.format === "txt")!.selected).toBe(false);
+    // HAKI policy: txt IS auto-published (epub/pdf/txt) as a last-resort
+    // readable format; zip stays unselected.
+    expect(files.find((f) => f.format === "txt")!.selected).toBe(true);
   });
 
-  it("auto-selects only EPUB and PDF among electronic formats (HAKI policy)", () => {
+  it("auto-selects EPUB, PDF and TXT among electronic formats (HAKI policy)", () => {
     const files = selectFiles([
       { name: "book.epub", format: "epub", url: "u-epub", size: 100 },
       { name: "book.pdf", format: "Text PDF", url: "u-pdf", size: 200 },
@@ -341,7 +341,7 @@ describe("selectFiles (automatic selection rules)", () => {
     const byUrl = Object.fromEntries(files.map((f) => [f.url, f]));
     expect(byUrl["u-epub"].selected).toBe(true);
     expect(byUrl["u-pdf"].selected).toBe(true);
-    expect(byUrl["u-txt"].selected).toBe(false);
+    expect(byUrl["u-txt"].selected).toBe(true);
     expect(byUrl["u-html"].selected).toBe(false);
   });
 
@@ -404,11 +404,12 @@ describe("selectFiles (automatic selection rules)", () => {
       { name: "2657.zip", format: "ZIP", url: "u-zip", size: 249027 },
     ]);
     expect(files.map((f) => f.format).sort()).toEqual(["txt", "zip"]);
-    // HAKI policy: txt is NOT auto-published (epub/pdf only).
-    expect(files.find((f) => f.format === "txt")!.selected).toBe(false);
+    // HAKI policy: txt IS auto-published (epub/pdf/txt) as a last-resort
+    // readable format; zip stays unselected.
+    expect(files.find((f) => f.format === "txt")!.selected).toBe(true);
   });
 
-  it("auto-selects only EPUB and PDF among electronic formats (HAKI policy)", () => {
+  it("auto-selects EPUB, PDF and TXT among electronic formats (HAKI policy)", () => {
     const files = selectFiles([
       { name: "book.epub", format: "epub", url: "u-epub", size: 100 },
       { name: "book.pdf", format: "Text PDF", url: "u-pdf", size: 200 },
@@ -418,7 +419,7 @@ describe("selectFiles (automatic selection rules)", () => {
     const byUrl = Object.fromEntries(files.map((f) => [f.url, f]));
     expect(byUrl["u-epub"].selected).toBe(true);
     expect(byUrl["u-pdf"].selected).toBe(true);
-    expect(byUrl["u-txt"].selected).toBe(false);
+    expect(byUrl["u-txt"].selected).toBe(true);
     expect(byUrl["u-html"].selected).toBe(false);
   });
 
