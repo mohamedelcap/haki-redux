@@ -325,6 +325,111 @@ export const browse = query({
   },
 });
 
+/**
+ * Cascading facet counts for the browse page's drill-down pills:
+ * counts of sub-categories / authors / narrators **within the current
+ * filter result set**, so every next level only shows what actually has
+ * content (type → category → author → narrator).
+ */
+export const browseFacets = query({
+  args: {
+    q: v.optional(v.string()),
+    contentType: v.optional(contentTypeValidator),
+    categorySlug: v.optional(v.string()),
+    authorId: v.optional(v.id("authors")),
+    narratorId: v.optional(v.id("narrators")),
+  },
+  handler: async (ctx, args) => {
+    let rows: Doc<"content">[];
+    if (args.contentType) {
+      rows = await ctx.db
+        .query("content")
+        .withIndex("by_type_status", (q) =>
+          q.eq("contentType", args.contentType!).eq("status", "published"),
+        )
+        .collect();
+    } else {
+      rows = await ctx.db
+        .query("content")
+        .withIndex("by_status", (q) => q.eq("status", "published"))
+        .collect();
+    }
+
+    if (args.q) {
+      const needle = args.q.toLowerCase();
+      rows = rows.filter(
+        (r) =>
+          r.title.toLowerCase().includes(needle) ||
+          r.description.toLowerCase().includes(needle),
+      );
+    }
+
+    // Resolve category slug → id and filter by it.
+    let activeCategoryId: Id<"categories"> | undefined;
+    if (args.categorySlug) {
+      const cat = await ctx.db
+        .query("categories")
+        .withIndex("by_slug", (q) => q.eq("slug", args.categorySlug!))
+        .first();
+      activeCategoryId = cat?._id;
+      if (cat) {
+        const links = await ctx.db.query("content_categories").collect();
+        const ids = new Set(links.filter((l) => l.categoryId === cat._id).map((l) => l.contentId));
+        rows = rows.filter((r) => ids.has(r._id));
+      }
+    }
+    if (args.authorId) rows = rows.filter((r) => r.authorId === args.authorId);
+    if (args.narratorId) rows = rows.filter((r) => r.narratorId === args.narratorId);
+
+    // Category counts (all categories, with how many matching items each has).
+    const allLinks = await ctx.db.query("content_categories").collect();
+    const rowIds = new Set(rows.map((r) => r._id));
+    const catCount = new Map<string, number>();
+    for (const l of allLinks) {
+      if (!rowIds.has(l.contentId)) continue;
+      catCount.set(l.categoryId, (catCount.get(l.categoryId) ?? 0) + 1);
+    }
+    const categories = (await ctx.db.query("categories").collect())
+      .map((c) => ({
+        id: c._id,
+        name: c.name,
+        nameEn: c.nameEn,
+        slug: c.slug,
+        count: catCount.get(c._id) ?? 0,
+        active: c._id === activeCategoryId,
+      }))
+      .filter((c) => c.count > 0 || c.active)
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 14);
+
+    // Author counts within the filtered rows.
+    const authorCount = new Map<string, number>();
+    for (const r of rows) {
+      if (!r.authorId) continue;
+      authorCount.set(r.authorId, (authorCount.get(r.authorId) ?? 0) + 1);
+    }
+    const authors: { id: string; name: string; count: number; active: boolean }[] = [];
+    for (const [id, count] of [...authorCount.entries()].sort((a, b) => b[1] - a[1]).slice(0, 12)) {
+      const a = await ctx.db.get(id as Id<"authors">);
+      if (a) authors.push({ id, name: a.name, count, active: id === args.authorId });
+    }
+
+    // Narrator counts within the filtered rows.
+    const narratorCount = new Map<string, number>();
+    for (const r of rows) {
+      if (!r.narratorId) continue;
+      narratorCount.set(r.narratorId, (narratorCount.get(r.narratorId) ?? 0) + 1);
+    }
+    const narrators: { id: string; name: string; count: number; active: boolean }[] = [];
+    for (const [id, count] of [...narratorCount.entries()].sort((a, b) => b[1] - a[1]).slice(0, 12)) {
+      const n = await ctx.db.get(id as Id<"narrators">);
+      if (n) narrators.push({ id, name: n.name, count, active: id === args.narratorId });
+    }
+
+    return { categories, authors, narrators, total: rows.length };
+  },
+});
+
 /** Live search suggestions for the browse box (top 5 matches). */
 export const suggest = query({
   args: {
