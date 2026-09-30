@@ -20,6 +20,7 @@ import {
   iaDownloadUrl,
   bestReadableFile,
   sanitizeDescription,
+  pickAudioTitle,
   type ParsedLink,
   type UnifiedFile,
 } from "./importCore";
@@ -915,7 +916,12 @@ export const resyncBookInternal = internalAction({
           rightsInfo: item.rights.info,
           fileSize: chosen.reduce((a, f) => a + (f.size ?? 0), 0) || undefined,
         },
-        chapters: audio.map((f) => ({ title: f.name, url: f.url, duration: f.duration ?? 0 })),
+        chapters: audio.map((f) => ({
+          // Chapter name exactly as published on the source (file name only as fallback).
+          title: pickAudioTitle(f.name, (f as UnifiedFile).title),
+          url: f.url,
+          duration: f.duration ?? 0,
+        })),
       });
       changed.push("files", "cover", "metadata", "source");
 
@@ -1357,7 +1363,12 @@ export const publishFromAnalysisInternal = internalMutation({
     const chosen = files.filter((f) => f.selected);
     const audioChapters = chosen
       .filter((f) => f.kind === "audio")
-      .map((f) => ({ title: f.name, url: f.url, duration: f.duration ?? 0 }));
+      .map((f) => ({
+        // Chapter name exactly as published on the source (file name only as fallback).
+        title: pickAudioTitle(f.name, (f as UnifiedFile).title),
+        url: f.url,
+        duration: f.duration ?? 0,
+      }));
     const isAudiobook = audioChapters.length > 0;
     // The readable file is chosen by REAL usability (epub > pdf > txt), never
     // "the first file in the list" and never a zip/torrent container.

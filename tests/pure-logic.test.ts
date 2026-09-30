@@ -12,6 +12,8 @@ import {
   selectFiles,
   extOf,
   sanitizeDescription,
+  pickAudioTitle,
+  pickAudioFormat,
 } from "../src/convex/importCore";
 import { computePoolShares } from "../src/convex/royalties";
 import { computeChallengeProgress, statusFor } from "../src/convex/engagement";
@@ -543,5 +545,38 @@ describe("sanitizeDescription", () => {
     expect(sanitizeDescription(null)).toBe("");
     expect(sanitizeDescription(undefined)).toBe("");
     expect(sanitizeDescription("")).toBe("");
+  });
+});
+
+// ---------------- Chapter naming + single-format policy ----------------
+
+describe("pickAudioTitle", () => {
+  it("uses the source's published title when provided (IA chapter names)", () => {
+    expect(pickAudioTitle("tombstone_01_burns.mp3", "Chapter 01"), "Chapter 01").toBe("Chapter 01");
+    expect(pickAudioTitle("track02.mp3", "Tomstone — Section 2")).toBe("Tomstone — Section 2");
+  });
+
+  it("prettifies raw file names when the source has no title", () => {
+    expect(pickAudioTitle("tombstone_an_iliad_01_128kb.mp3")).toBe("tombstone an iliad 01");
+    expect(pickAudioTitle("tom_sawyer_ch_03_librivox_64kb.mp3")).toBe("tom sawyer ch 03");
+    expect(pickAudioTitle("Chapter_02.mp3")).toBe("Chapter_02".replace("_", " "));
+  });
+
+  it("falls back to the raw name minus extension when prettifying is meaningless", () => {
+    expect(pickAudioTitle("12.mp3")).toBe("12");
+    expect(pickAudioTitle("librivox.mp3")).toBe("librivox");
+  });
+});
+
+describe("pickAudioFormat", () => {
+  it("prefers mp3 when present among several audio formats", () => {
+    expect(pickAudioFormat(["ogg", "m4b", "mp3"])).toBe("mp3");
+    expect(pickAudioFormat(["mp3"])).toBe("mp3");
+  });
+
+  it("falls back to a known audio format, then to the first entry", () => {
+    expect(pickAudioFormat(["m4b", "ogg"])).toBe("m4b");
+    expect(pickAudioFormat(["flac"])).toBe("flac");
+    expect(pickAudioFormat([])).toBeUndefined();
   });
 });

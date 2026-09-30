@@ -14,7 +14,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { formatDuration, formatTime, useLang } from "@/lib/i18n";
 import { usePlayer } from "@/lib/player";
 import { cn } from "@/lib/utils";
-import { sanitizeDescription } from "@/convex/importCore";
+import { sanitizeDescription, pickAudioFormat } from "@/convex/importCore";
 import { useAction, useMutation, useQuery } from "convex/react";
 import {
   BookOpen,
@@ -80,6 +80,15 @@ export default function ContentDetails() {
   const availableFiles = importFiles.filter((f) => f.availability === "available");
   const restrictedFiles = importFiles.filter((f) => f.availability && f.availability !== "available");
   const audioFiles = availableFiles.filter((f) => f.kind === "audio");
+  // Single-format display policy: show ONE audio format only (mp3 preferred)
+  // instead of every variant the source carries.
+  const audioDisplayFormat = useMemo(
+    () => pickAudioFormat([...new Set(audioFiles.map((f) => f.format))]),
+    [audioFiles],
+  );
+  const shownAudioFiles = audioDisplayFormat
+    ? audioFiles.filter((f) => f.format === audioDisplayFormat)
+    : [];
   const readableFormats = availableFiles
     .filter((f) => ["epub", "pdf", "txt"].includes(f.format))
     .map((f) => f.format);
@@ -453,7 +462,8 @@ export default function ContentDetails() {
             {lang === "ar" ? "ملفات الكتاب" : "Book files"}
           </h2>
           <div className="mt-3 space-y-1.5">
-            {availableFiles.map((f) => (
+            {/* One audio format only (mp3 preferred) + the readable format. */}
+            {[...shownAudioFiles, ...availableFiles.filter((f) => f.kind !== "audio" && f.format === readableFormat)].map((f) => (
               <div
                 key={f.url}
                 className="flex flex-wrap items-center gap-2 rounded-xl border bg-card p-3 text-sm"

@@ -248,6 +248,9 @@ export function mapIaMetadata(meta: any, id: string): UnifiedItem {
   const rawFiles = (Array.isArray(meta?.files) ? meta.files : [])
     .map((f: any) => ({
       name: String(f.name ?? ""),
+      // IA publishes the human chapter/track title per audio file — keep it so
+      // chapters are imported with their published names, not file names.
+      title: String(f.title ?? "").trim() || undefined,
       format: String(f.format ?? "") || (String(f.name ?? "").split(".").pop() ?? ""),
       size: Number(f.size ?? 0) || undefined,
       url: iaDownloadUrl(id, String(f.name ?? "")),

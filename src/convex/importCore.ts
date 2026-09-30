@@ -148,6 +148,8 @@ export function classifySourceUrl(raw: string): ParsedLink {
 export type UnifiedFile = {
   /** File name on the source. */
   name: string;
+  /** Chapter/track title as published on the source (IA files carry it); used for chapter names. */
+  title?: string;
   /** File extension, lowercased (epub, pdf, mp3…). */
   format: string;
   /** Electronic | audio | archive | other. */
@@ -287,6 +289,45 @@ export function bestReadableFile(files: UnifiedFile[]): UnifiedFile | undefined 
 
 export function iaCoverUrl(id: string): string {
   return `https://archive.org/services/img/${encodeURIComponent(id)}`;
+}
+
+/**
+ * Human-readable name for an imported chapter/track.
+ *
+ * Rule: the source's own published title ALWAYS wins (IA audio files carry a
+ * `title` field — the chapter name as published). When the source doesn't
+ * provide one, prettify the raw file name instead of showing it as-is.
+ *
+ * Prettifying: strips the technical extensions/suffixes sources append to file
+ * names ("128kbps", "_chapters", "librivox", "m4b"...), separators ("_", "-")
+ * become spaces, and numbers are preserved ("Chapter 02" stays "Chapter 02").
+ * Returns the original name unchanged when nothing technical can be removed.
+ */
+export function pickAudioTitle(name: string, sourceTitle?: string): string {
+  const t = String(sourceTitle ?? "").trim();
+  if (t) return t;
+  let s = String(name ?? "").trim();
+  if (!s) return "";
+  s = s.replace(/\.[a-z0-9]{2,5}$/i, "");
+  s = s.replace(
+    /[\s_\-.(]*(?:(?:128|64|32|96|160|192|256|320)\s*k?bps?|\d{1,3}kb|librivox|archive\.org|audiobook|chapters)(?=$|[\s_\-.)])/gi,
+    " ",
+  );
+  s = s.replace(/[\s_\-.]+/g, " ").trim();
+  // Only keep the prettified form if it is still meaningful (not blank, not
+  // just digits) — otherwise the raw name is more honest than "12".
+  if (s.length >= 3 && !/^\d+$/.test(s)) return s;
+  return String(name ?? "").replace(/\.[a-z0-9]{2,5}$/i, "").trim() || String(name ?? "").trim();
+}
+
+/**
+ * Single display format for the site ("one format only" policy): prefer MP3
+ * among audio formats, otherwise the first known audio format.
+ */
+export function pickAudioFormat(formats: string[]): string | undefined {
+  if (formats.includes("mp3")) return "mp3";
+  for (const f of AUDIO_EXTS) if (formats.includes(f)) return f;
+  return formats[0];
 }
 
 /**
