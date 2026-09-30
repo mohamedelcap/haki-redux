@@ -319,3 +319,87 @@ export function formatBytes(n?: number): string {
   }
   return `${v.toFixed(v >= 10 || i === 0 ? 0 : 1)} ${units[i]}`;
 }
+
+/**
+ * Clean an imported book description so the site never shows external links,
+ * external-site mentions, or boilerplate — only the work's own synopsis.
+ *
+ * Pure function (no network, no Convex APIs) so both the importer pipeline and
+ * the UI can use it, and so it is unit-testable.
+ *
+ * Pipeline:
+ *  1. Strip HTML tags, decode common entities (e.g. "<br />" → space).
+ *  2. Drop link-anchored sentences: "For further information … LibriVox
+ *     catalog page …", "For more free audio books … librivox.org …" etc.
+ *  3. Remove remaining URLs, e-mail addresses and bare domain mentions
+ *     (librivox.org, archive.org, gutenberg.org …) plus any dangling
+ *     "… visit", "… go to the", "… see" fragments they leave behind.
+ *  4. Drop source-promotion headers/footers ("LibriVox recording of …",
+ *     "- Summary by X" narrator credits, "Book from Project Gutenberg").
+ *  5. Collapse whitespace and cap the length.
+ */
+export function sanitizeDescription(v: any, maxLen = 4000): string {
+  if (v == null) return "";
+  let s = Array.isArray(v) ? v.map(String).join(" ") : String(v);
+
+  // 1) HTML → text (same entity map as sanitizeText, order matters).
+  s = s
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<iframe[\s\S]*?<\/iframe>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;|&apos;/g, "'")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    // Entities like &lt;br /&gt; become real tags after decoding — strip again.
+    .replace(/<[^>]+>/g, " ");
+
+  // 2) Sentences that exist only to send the reader to the source site.
+  //    These are HTML-free at this point; split on sentence enders and drop
+  //    any sentence that contains a URL or a source-site name.
+  const SOURCE_HOSTS =
+    "librivox\.org|archive\.org|gutenberg\.org|openlibrary\.org|wikisource\.org|wikipedia\.org|goodreads\.com|ia\d{6,}\.us\.archive\.org";
+  const URL_RE = new RegExp(`(?:https?:\\/\\/|www\\.)[a-z0-9.-]+\\.[a-z]{2,}\\S*|\\b(?:${SOURCE_HOSTS})\\b[^\\s]*`, "gi");
+  const PROMO_RE = new RegExp(
+    `(for further information|for more (?:free )?(?:audio(?:books)?|information|details)|visit (?:us at )?(?:${SOURCE_HOSTS})|go to the|please go to|download at|available at|streamed at|listen at|recorded at)`,
+    "i",
+  );
+  const sentences = s.split(/(?<=[.!؟?])\s+|\n+/);
+  s = sentences
+    .filter((sent) => {
+      const t = sent.trim();
+      if (!t) return false;
+      if (URL_RE.test(t)) return false;
+      if (PROMO_RE.test(t)) return false;
+      return true;
+    })
+    .join(" ");
+
+  // 3) Sweep any leftover URLs/emails/domains (e.g. mid-sentence links).
+  s = s
+    .replace(new RegExp(`(?:https?:\\/\\/|www\\.)[a-z0-9.-]+\\.[a-z]{2,}\\S*`, "gi"), " ")
+    .replace(new RegExp(`\\b(?:${SOURCE_HOSTS})\\b[^\\s]*`, "gi"), " ")
+    .replace(/[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/gi, " ");
+
+  // 4) Source boilerplate headers/footers and dangling connective fragments.
+  s = s
+    .replace(/^\s*(?:this is )?(?:an? )?librivox recording of /i, "")
+    .replace(/^\s*book from project gutenberg:?\s*/i, "")
+    .replace(/^\s*(?:[-–—•*]\s*)?summary by [^.!؟?]*[.!؟?]?/i, "")
+    .replace(/\s*[-–—•*]\s*summary by [^.!؟?]*[.!؟?]?$/i, "")
+    .replace(/\b(?:visit|go to|see|check out)\s+(?:the\s+)?(?:catalog(?:ue)? page|project page|website|site)\b[^.!؟?]*/gi, " ")
+    .replace(/\b(?:visit|go to|see|check out)\s*$/i, "");
+
+  // 5) Tidy and cap.
+  s = s
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "")
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/\s+([.!؟?])/g, "$1")
+    .trim()
+    .replace(/^[.,;:!\-–—\s]+/, "")
+    .replace(/\s{2,}/g, " ");
+  return s.slice(0, maxLen);
+}

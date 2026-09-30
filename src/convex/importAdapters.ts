@@ -18,6 +18,7 @@ import {
   iaFirstPageUrl,
   iaDownloadUrl,
   audioDurationOf,
+  sanitizeDescription,
   type ParsedLink,
   type UnifiedFile,
 } from "./importCore";
@@ -224,7 +225,9 @@ export function mapIaMetadata(meta: any, id: string): UnifiedItem {
   item.language = lang ? lang.replace(/^eng$/i, "en").replace(/^ara$/i, "ar") : undefined;
   item.publicationDate = str(md.date);
   item.publicationYear = yearOf(md.date ?? md.year);
-  item.description = str(md.description);
+  // Strip HTML/external links/source boilerplate — only the work's synopsis
+  // ever reaches the site.
+  item.description = sanitizeDescription(md.description) || undefined;
   item.subjects = [...arr(md.subject), ...arr(md.keywords)];
   item.keywords = [...arr(md.subject), ...arr(md.keywords)];
   item.isbn = str(md.isbn);
@@ -345,7 +348,7 @@ export function mapGutenbergBook(b: any): UnifiedItem {
   const year = b.authors?.[0]?.death_year ?? b.authors?.[0]?.birth_year ?? undefined;
   item.publicationYear = year ?? undefined;
   item.publicationDate = year ? String(year) : undefined;
-  item.description = str(b.summaries?.join(" "));
+  item.description = sanitizeDescription(b.summaries?.join(" ")) || undefined;
   item.subjects = [...arr(b.subjects), ...arr(b.bookshelves)];
   item.keywords = item.subjects;
   item.rights = { status: "public_domain", info: "Project Gutenberg — public domain", verified: true };
@@ -407,7 +410,9 @@ export async function fetchOpenLibraryItem(id: string): Promise<UnifiedItem> {
   item.title = str(data.title);
   item.subtitle = str(data.subtitle);
   item.description =
-    typeof data.description === "string" ? data.description : str(data.description?.value);
+    sanitizeDescription(
+      typeof data.description === "string" ? data.description : data.description?.value,
+    ) || undefined;
   item.subjects = arr(data.subjects);
   item.keywords = item.subjects;
   item.publicationDate = str(data.first_publish_date);

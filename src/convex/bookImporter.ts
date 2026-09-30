@@ -19,6 +19,7 @@ import {
   iaFirstPageUrl,
   iaDownloadUrl,
   bestReadableFile,
+  sanitizeDescription,
   type ParsedLink,
   type UnifiedFile,
 } from "./importCore";
@@ -695,7 +696,8 @@ export const updateExisting = mutation({
     const audio = chosen.filter((f) => f.kind === "audio");
     await ctx.db.patch(targetId, {
       title: args.overrides?.title ?? meta.title ?? undefined,
-      description: args.overrides?.description ?? meta.description ?? undefined,
+      description:
+        args.overrides?.description ?? (sanitizeDescription(meta.description) || undefined),
       coverImage: item.coverUrl ?? undefined,
       fileUrl: audio.length === 0 ? (chosen.find((f) => f.kind === "electronic")?.url ?? undefined) : undefined,
       updatedAt: Date.now(),
@@ -897,7 +899,9 @@ export const resyncBookInternal = internalAction({
         patch: {
           fileUrl: audio.length === 0 ? readableFinal?.url : undefined,
           coverImage: cover ?? "",
-          description: item.description ? item.description.slice(0, 4000) : undefined,
+          description: item.description
+            ? (sanitizeDescription(item.description) || undefined)
+            : undefined,
           releaseDate: item.publicationDate,
           subtitle: item.subtitle,
           isbn: item.isbn,
@@ -1380,7 +1384,7 @@ export const publishFromAnalysisInternal = internalMutation({
     }
 
     const title = (item.title ?? meta.title ?? "كتاب مستورد").trim();
-    const description = (meta.description ?? "").slice(0, 4000);
+    const description = sanitizeDescription(meta.description) || "كتاب مستورد من مصدر عام.";
     const authorName = (item.author ?? meta.author ?? "").trim();
 
     let authorId: Id<"authors"> | undefined;

@@ -14,6 +14,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { formatDuration, formatTime, useLang } from "@/lib/i18n";
 import { usePlayer } from "@/lib/player";
 import { cn } from "@/lib/utils";
+import { sanitizeDescription } from "@/convex/importCore";
 import { useAction, useMutation, useQuery } from "convex/react";
 import {
   BookOpen,
@@ -224,14 +225,14 @@ export default function ContentDetails() {
     <div className="pb-10">
       <SEO
         title={`${item.title} | حكي`}
-        description={item.description.slice(0, 150)}
+        description={sanitizeDescription(item.description).slice(0, 150)}
         jsonLd={{
           "@context": "https://schema.org",
           "@type": "Audiobook",
           name: item.title,
           author: item.authorName ? { "@type": "Person", name: item.authorName } : undefined,
           readBy: item.narratorName ? { "@type": "Person", name: item.narratorName } : undefined,
-          description: item.description,
+          description: sanitizeDescription(item.description),
           inLanguage: "ar",
           image: item.coverImage ?? undefined,
         }}
@@ -399,7 +400,11 @@ export default function ContentDetails() {
       <div className="haki-container grid gap-10 py-10 lg:grid-cols-[1fr_360px]">
         <div>
           <h2 className="text-lg font-extrabold">{lang === "ar" ? "عن هذا المحتوى" : "About"}</h2>
-          <p className="mt-3 leading-loose text-muted-foreground">{item.description}</p>
+          <p className="mt-3 leading-loose text-muted-foreground">
+            {/* Imported descriptions can still carry source-site links from
+                before this rule existed — clean them at render time too. */}
+            {sanitizeDescription(item.description)}
+          </p>
         </div>
 
         {(hasChapters || hasEpisodes) && (

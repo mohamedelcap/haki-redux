@@ -11,6 +11,7 @@ import {
   classifySourceUrl,
   selectFiles,
   extOf,
+  sanitizeDescription,
 } from "../src/convex/importCore";
 import { computePoolShares } from "../src/convex/royalties";
 import { computeChallengeProgress, statusFor } from "../src/convex/engagement";
@@ -490,5 +491,57 @@ describe("parseIaLength", () => {
     expect(parseIaLength(undefined)).toBe(0);
     expect(parseIaLength("")).toBe(0);
     expect(parseIaLength("not-a-time")).toBe(0);
+  });
+});
+
+// ---------------- Imported description sanitization ----------------
+
+describe("sanitizeDescription", () => {
+  it("strips HTML tags and decodes entities", () => {
+    const out = sanitizeDescription("First part.<br /><br />Second part &amp; more &lt;info&gt;");
+    expect(out).toContain("First part.");
+    expect(out).toContain("Second part & more");
+    expect(out).not.toMatch(/<[^>]+>/);
+    expect(out).not.toContain("&amp;");
+  });
+
+  it("removes URLs and source-site domains entirely", () => {
+    const out = sanitizeDescription("Read online at https://librivox.org/tombstone/ today.");
+    expect(out).not.toContain("librivox.org");
+    expect(out).not.toContain("https://");
+  });
+
+  it("drops link-anchored promotional sentences (LibriVox boilerplate)", () => {
+    const raw =
+      "A LibriVox recording of Tombstone: An Iliad of the Southwest by Walter Noble Burns. " +
+      "First published in 1927, the book defined the legend of Wyatt Earp. " +
+      "For further information, including links to online text, please go to the " +
+      '<a href="https://librivox.org/tombstone/">LibriVox catalog page</a> for this recording. ' +
+      "For more free audio books or to become a volunteer reader, visit " +
+      '<a href="https://librivox.org/">librivox.org</a>.';
+    const out = sanitizeDescription(raw);
+    expect(out).toContain("defined the legend of Wyatt Earp");
+    expect(out).not.toMatch(/for further information/i);
+    expect(out).not.toMatch(/volunteer reader/i);
+    expect(out).not.toContain("librivox.org");
+  });
+
+  it("keeps only the work's own synopsis when source mention is embedded", () => {
+    const out = sanitizeDescription("Great novel of the desert. More info at archive.org/details/x.");
+    expect(out).toContain("Great novel of the desert");
+    expect(out).not.toContain("archive.org");
+  });
+
+  it("removes narrator summary credits and recording headers", () => {
+    const out = sanitizeDescription("LibriVox recording of Moby Dick. The whale strikes. - Summary by John Doe");
+    expect(out).not.toMatch(/librivox recording/i);
+    expect(out).not.toMatch(/summary by/i);
+    expect(out).toContain("The whale strikes");
+  });
+
+  it("handles null/empty gracefully", () => {
+    expect(sanitizeDescription(null)).toBe("");
+    expect(sanitizeDescription(undefined)).toBe("");
+    expect(sanitizeDescription("")).toBe("");
   });
 });
