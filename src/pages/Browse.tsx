@@ -163,7 +163,6 @@ export default function Browse() {
     rights: rightsArg,
     authorId: authorId === "all" ? undefined : (authorId as any),
     narratorId: narratorId === "all" ? undefined : (narratorId as any),
-    duration: "all" as any, // custom sliders replace the legacy presets
     minDurationMin: minDur,
     maxDurationMin: maxDur,
     minRating: ratingArg,
