@@ -4,6 +4,7 @@ import { SEO } from "@/components/SEO";
 import { ContentCard, TYPE_LABELS } from "@/components/ContentCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Slider } from "@/components/ui/slider";
 import {
   Select,
   SelectContent,
@@ -17,7 +18,11 @@ import { cn } from "@/lib/utils";
 import { useQuery } from "convex/react";
 import {
   BookOpen,
+  Check,
   Clock,
+  Crown,
+  Filter,
+  Globe,
   Headphones,
   LayoutGrid,
   List,
@@ -27,7 +32,10 @@ import {
   Search,
   SearchX,
   SlidersHorizontal,
+  Sparkles,
+  Star,
   Theater,
+  X,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router";
@@ -50,7 +58,7 @@ const SLUG_TO_TYPE: Record<string, string> = {
   magazine: "magazine",
 };
 
-/** Type pill visuals (soft colored chip + icon, like the reference design). */
+/** Type pill visuals (soft colored chip + icon). */
 const TYPE_PILLS: Record<string, { icon: typeof BookOpen; soft: string }> = {
   audiobook: {
     icon: Headphones,
@@ -78,7 +86,7 @@ const TYPE_PILLS: Record<string, { icon: typeof BookOpen; soft: string }> = {
   },
 };
 
-/** Rotating soft palette for the category pills row. */
+/** Rotating soft palette for the cascading sub-category pills. */
 const CATEGORY_COLORS = [
   "bg-orange-100 text-orange-700 dark:bg-orange-500/15 dark:text-orange-300",
   "bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300",
@@ -90,8 +98,14 @@ const CATEGORY_COLORS = [
   "bg-pink-100 text-pink-700 dark:bg-pink-500/15 dark:text-pink-300",
 ];
 
+/** Duration slider bounds in minutes. */
+const DURATION_MIN = 0;
+const DURATION_MAX = 900;
+const DURATION_STEP = 10;
+
 export default function Browse() {
   const { lang, t } = useLang();
+  const ar = lang === "ar";
   const [searchParams] = useSearchParams();
   const { type: typeParam } = useParams<{ type: string }>();
   const pathType = typeParam ? SLUG_TO_TYPE[typeParam] : undefined;
@@ -114,17 +128,50 @@ export default function Browse() {
     debouncedQ.length >= 2 ? { q: debouncedQ, type: TYPE_KEYS.includes(type as any) ? (type as any) : undefined } : "skip",
   );
   const [categorySlug, setCategorySlug] = useState<string>(searchParams.get("category") ?? "all");
-  const [rights, setRights] = useState<string>(searchParams.get("rights") ?? "all");
-  const [authorId, setAuthorId] = useState<string>("all");
-  const [narratorId, setNarratorId] = useState<string>("all");
-  const [duration, setDuration] = useState<string>("all");
   const [sort, setSort] = useState<string>(searchParams.get("sort") ?? "newest");
   const [view, setView] = useState<"grid" | "list">("grid");
-  const [showAdvanced, setShowAdvanced] = useState(false);
-  const advancedActive = authorId !== "all" || narratorId !== "all" || duration !== "all" || rights !== "all";
 
-  // Sync filters when navigating between /browse/:type routes or query strings
-  // (the component instance is reused, so state must follow the new params).
+  // ===== Advanced filter panel state =====
+  const [panelOpen, setPanelOpen] = useState(false);
+  const [rights, setRights] = useState<string>(searchParams.get("rights") ?? "all");
+  const [minRating, setMinRating] = useState<number>(0);
+  const [durationRange, setDurationRange] = useState<[number, number]>([DURATION_MIN, DURATION_MAX]);
+  const [authorId, setAuthorId] = useState<string>("all");
+  const [narratorId, setNarratorId] = useState<string>("all");
+
+  // Keep duration + rights filter args stable for queries (rounded to step).
+  const minDur = useMemo(() => (durationRange[0] <= DURATION_MIN ? undefined : durationRange[0]), [durationRange]);
+  const maxDur = useMemo(() => (durationRange[1] >= DURATION_MAX ? undefined : durationRange[1]), [durationRange]);
+  const ratingArg = minRating > 0 ? minRating : undefined;
+  const rightsArg = rights === "all" ? undefined : (rights as "public_domain" | "free" | "premium");
+
+  // Cascading facet pills: within the current result set, what sub-filters exist.
+  const facets = useQuery(api.content.browseFacets, {
+    q: debouncedQ || undefined,
+    contentType: TYPE_KEYS.includes(type as any) ? (type as any) : undefined,
+    categorySlug: categorySlug === "all" ? undefined : categorySlug,
+    authorId: authorId === "all" ? undefined : (authorId as any),
+    narratorId: narratorId === "all" ? undefined : (narratorId as any),
+    rights: rightsArg,
+    minDurationMin: minDur,
+    maxDurationMin: maxDur,
+  });
+
+  const results = useQuery(api.content.browse, {
+    q: debouncedQ || undefined,
+    contentType: TYPE_KEYS.includes(type as any) ? (type as any) : undefined,
+    categorySlug: categorySlug === "all" ? undefined : categorySlug,
+    rights: rightsArg,
+    authorId: authorId === "all" ? undefined : (authorId as any),
+    narratorId: narratorId === "all" ? undefined : (narratorId as any),
+    duration: "all" as any, // custom sliders replace the legacy presets
+    minDurationMin: minDur,
+    maxDurationMin: maxDur,
+    minRating: ratingArg,
+    sort: sort as any,
+  });
+
+  // Sync filters when navigating between /browse/:type routes or query strings.
   useEffect(() => {
     setType(pathType ?? searchParams.get("type") ?? "all");
     setCategorySlug(searchParams.get("category") ?? "all");
@@ -132,46 +179,31 @@ export default function Browse() {
     setSort(searchParams.get("sort") ?? "newest");
   }, [typeParam, searchParams]);
 
-  const categories = useQuery(api.content.listCategories, {});
-  const authors = useQuery(api.content.listAuthors, {});
-  const narrators = useQuery(api.content.listNarrators, {});
+  const heading = type !== "all" && TYPE_LABELS[type] ? TYPE_LABELS[type][lang] : ar ? "تصفح المكتبة" : "Browse the library";
 
-  const results = useQuery(api.content.browse, {
-    q: debouncedQ || undefined,
-    contentType: TYPE_KEYS.includes(type as any) ? (type as any) : undefined,
-    categorySlug: categorySlug === "all" ? undefined : categorySlug,
-    rights: rights === "all" ? undefined : (rights as "public_domain" | "free"),
-    authorId: authorId === "all" ? undefined : (authorId as any),
-    narratorId: narratorId === "all" ? undefined : (narratorId as any),
-    duration: duration === "all" ? undefined : (duration as any),
-    sort: sort as any,
-  });
-
-  const heading = type !== "all" && TYPE_LABELS[type] ? TYPE_LABELS[type][lang] : lang === "ar" ? "تصفح المكتبة" : "Browse the library";
-
-  const hasFilters = type !== "all" || categorySlug !== "all" || rights !== "all" || authorId !== "all" || narratorId !== "all" || duration !== "all" || debouncedQ;
+  const activeAdvanced =
+    rightsArg !== undefined || ratingArg !== undefined || minDur !== undefined || maxDur !== undefined ||
+    authorId !== "all" || narratorId !== "all";
 
   const resetAll = () => {
     setQ("");
     setType("all");
     setCategorySlug("all");
     setRights("all");
+    setMinRating(0);
+    setDurationRange([DURATION_MIN, DURATION_MAX]);
     setAuthorId("all");
     setNarratorId("all");
-    setDuration("all");
     setSort("newest");
   };
 
-  const countLabel = useMemo(() => {
-    if (results === undefined) return "…";
-    return `${results.length}`;
-  }, [results]);
+  const formatMin = (m: number) => (m >= 60 ? `${Math.floor(m / 60)} ${ar ? "س" : "h"}${m % 60 ? ` ${m % 60}` : ""}` : `${m}`);
 
   return (
     <div className="py-8">
       <SEO
         title={`${heading} | حكي`}
-        description={lang === "ar" ? "تصفح مكتبة حكي: كتب صوتية وإلكترونية، دراما، بودكاست، ومجلات." : "Browse the HAKI library: audiobooks, ebooks, drama, podcasts and magazines."}
+        description={ar ? "تصفح مكتبة حكي: كتب صوتية وإلكترونية، دراما، بودكاست، ومجلات." : "Browse the HAKI library: audiobooks, ebooks, drama, podcasts and magazines."}
       />
       <div className="haki-container">
         {/* ===== Header ===== */}
@@ -180,21 +212,21 @@ export default function Browse() {
             <h1 className="text-3xl font-black sm:text-4xl">{heading}</h1>
             {results !== undefined && results.length > 0 && (
               <span className="shrink-0 rounded-full bg-primary/10 px-3 py-1 text-xs font-bold text-primary">
-                {countLabel} {lang === "ar" ? "مصنّف" : "items"}
+                {results.length} {ar ? "مصنّف" : "items"}
               </span>
             )}
           </div>
           <p className="text-sm text-muted-foreground">
-            {lang === "ar" ? "اكتشف آلاف الكتب والمحتوى الصوتي" : "Discover thousands of books and audio content"}
+            {ar ? "اكتشف آلاف الكتب والمحتوى الصوتي" : "Discover thousands of books and audio content"}
           </p>
         </div>
 
         {/* ===== Type pills row ===== */}
-        <div className="mt-5 flex flex-wrap items-center gap-2" dir="rtl">
+        <div className="mt-5 flex flex-wrap items-center gap-2">
           <TypePill
             active={type === "all"}
             onClick={() => setType("all")}
-            label={lang === "ar" ? "الكل" : "All"}
+            label={ar ? "الكل" : "All"}
             icon={LayoutGrid}
             soft="bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-500/15 dark:text-orange-300 dark:border-orange-500/30"
           />
@@ -210,33 +242,37 @@ export default function Browse() {
           ))}
         </div>
 
-        {/* ===== Category pills row (horizontal scroll) ===== */}
-        <div className="mt-4">
-          <p className="mb-2 text-xs font-bold text-muted-foreground">
-            {lang === "ar" ? "التصنيفات الفرعية" : "Sub-categories"}
-          </p>
-          <div className="no-scrollbar -mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
-            <CategoryPill
-              active={categorySlug === "all"}
-              onClick={() => setCategorySlug("all")}
-              label={lang === "ar" ? "الكل" : "All"}
-              color="bg-primary text-primary-foreground shadow-sm"
-            />
-            {(categories ?? []).map((c, i) => (
-              <CategoryPill
-                key={c._id}
-                active={categorySlug === c.slug}
-                onClick={() => setCategorySlug(c.slug)}
-                label={lang === "ar" ? c.name : c.nameEn || c.name}
-                color={
-                  categorySlug === c.slug
-                    ? "bg-primary text-primary-foreground shadow-sm"
-                    : CATEGORY_COLORS[i % CATEGORY_COLORS.length]
-                }
-              />
-            ))}
+        {/* ===== Cascading sub-category pills (spawn from the chosen type) ===== */}
+        {(facets?.categories?.length ?? 0) > 0 && (
+          <div className="mt-4">
+            <p className="mb-2 text-xs font-bold text-muted-foreground">
+              {ar ? "التصنيفات الفرعية" : "Sub-categories"}
+            </p>
+            <div className="no-scrollbar -mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+              {categorySlug !== "all" && (
+                <CategoryPill
+                  active
+                  onClick={() => setCategorySlug("all")}
+                  label={ar ? "الكل" : "All"}
+                  color="bg-primary text-primary-foreground shadow-sm"
+                />
+              )}
+              {(facets?.categories ?? []).map((c, i) => (
+                <CategoryPill
+                  key={c.id}
+                  active={c.active || categorySlug === c.slug}
+                  onClick={() => setCategorySlug(c.active ? "all" : c.slug)}
+                  label={`${ar ? c.name : c.nameEn || c.name} (${c.count})`}
+                  color={
+                    c.active || categorySlug === c.slug
+                      ? "bg-primary text-primary-foreground shadow-sm"
+                      : CATEGORY_COLORS[i % CATEGORY_COLORS.length]
+                  }
+                />
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* ===== Search + sort + view toolbar ===== */}
         <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -247,11 +283,10 @@ export default function Browse() {
               onChange={(e) => { setQ(e.target.value); setShowSuggest(true); }}
               onFocus={() => setShowSuggest(true)}
               onBlur={() => window.setTimeout(() => setShowSuggest(false), 150)}
-              placeholder={lang === "ar" ? "ابحث عن كتاب، مؤلف، أو موضوع..." : "Search a book, author, or topic..."}
+              placeholder={ar ? "ابحث عن كتاب، مؤلف، أو موضوع..." : "Search a book, author, or topic..."}
               className="h-12 rounded-full pe-10 ps-4"
               aria-label={t("search")}
             />
-            {/* Live suggestions (top 5, debounced) */}
             {showSuggest && debouncedQ.length >= 2 && suggestions !== undefined && suggestions.length > 0 && (
               <div className="absolute inset-x-0 top-full z-30 mt-1 overflow-hidden rounded-xl border bg-popover shadow-lg">
                 <p className="border-b px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
@@ -264,12 +299,7 @@ export default function Browse() {
                     className="flex items-center gap-3 px-3 py-2 transition-colors hover:bg-accent"
                     onMouseDown={(e) => e.preventDefault()}
                   >
-                    <img
-                      src={s.coverImage || "/logo.png"}
-                      alt=""
-                      loading="lazy"
-                      className="size-9 rounded-md object-cover"
-                    />
+                    <img src={s.coverImage || "/logo.png"} alt="" loading="lazy" className="size-9 rounded-md object-cover" />
                     <span className="min-w-0 flex-1 truncate text-sm font-semibold">{s.title}</span>
                     <span className="shrink-0 text-[10px] font-bold uppercase text-muted-foreground">
                       {TYPE_LABELS[s.contentType]?.[lang] ?? ""}
@@ -281,21 +311,8 @@ export default function Browse() {
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Rights quick filter */}
-            <Select value={rights} onValueChange={setRights}>
-              <SelectTrigger className="h-12 w-auto min-w-28 rounded-full" aria-label={lang === "ar" ? "الحقوق" : "Rights"}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">{lang === "ar" ? "كل الأعمال" : "All works"}</SelectItem>
-                <SelectItem value="free">{lang === "ar" ? "مجاني" : "Free"}</SelectItem>
-                <SelectItem value="public_domain">{lang === "ar" ? "ملكية عامة" : "Public domain"}</SelectItem>
-              </SelectContent>
-            </Select>
-
-            {/* Sort */}
             <Select value={sort} onValueChange={setSort}>
-              <SelectTrigger className="h-12 w-auto min-w-28 rounded-full" aria-label={t("sort")}>
+              <SelectTrigger className="h-12 w-auto min-w-32 rounded-full" aria-label={t("sort")}>
                 <span className="flex items-center gap-1.5">
                   <Clock className="size-4 text-muted-foreground" />
                   <SelectValue />
@@ -309,24 +326,37 @@ export default function Browse() {
               </SelectContent>
             </Select>
 
-            {/* Advanced filters toggle */}
             <Button
               type="button"
-              variant={advancedActive || showAdvanced ? "default" : "outline"}
-              size="icon"
-              className="size-12 shrink-0 rounded-full"
-              onClick={() => setShowAdvanced((v) => !v)}
-              aria-label={lang === "ar" ? "فلاتر متقدمة" : "Advanced filters"}
+              size="lg"
+              className={cn(
+                "h-12 shrink-0 gap-2 rounded-full px-5 font-bold",
+                activeAdvanced && "shadow-md shadow-primary/25",
+              )}
+              variant={activeAdvanced ? "default" : "outline"}
+              onClick={() => setPanelOpen((v) => !v)}
+              aria-expanded={panelOpen}
             >
               <SlidersHorizontal className="size-4" />
+              {ar ? "الفلاتر" : "Filters"}
+              {activeAdvanced && (
+                <span className="flex size-5 items-center justify-center rounded-full bg-primary-foreground text-[10px] font-black text-primary">
+                  {[
+                    rightsArg !== undefined ? 1 : 0,
+                    ratingArg !== undefined ? 1 : 0,
+                    minDur !== undefined || maxDur !== undefined ? 1 : 0,
+                    authorId !== "all" ? 1 : 0,
+                    narratorId !== "all" ? 1 : 0,
+                  ].reduce((a, b) => a + b, 0)}
+                </span>
+              )}
             </Button>
 
-            {/* View toggle (grid / list) */}
             <div className="flex shrink-0 items-center overflow-hidden rounded-full border">
               <button
                 type="button"
                 onClick={() => setView("grid")}
-                aria-label={lang === "ar" ? "عرض شبكي" : "Grid view"}
+                aria-label={ar ? "عرض شبكي" : "Grid view"}
                 className={cn(
                   "flex size-12 items-center justify-center transition-colors",
                   view === "grid" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted",
@@ -337,7 +367,7 @@ export default function Browse() {
               <button
                 type="button"
                 onClick={() => setView("list")}
-                aria-label={lang === "ar" ? "عرض قائمة" : "List view"}
+                aria-label={ar ? "عرض قائمة" : "List view"}
                 className={cn(
                   "flex size-12 items-center justify-center transition-colors",
                   view === "list" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted",
@@ -349,81 +379,173 @@ export default function Browse() {
           </div>
         </div>
 
-        {/* ===== Advanced filters (collapsed by default) ===== */}
-        {showAdvanced && (
-          <div className="mt-3 grid gap-2 rounded-2xl border bg-card p-3 sm:grid-cols-3">
-            <Select value={authorId} onValueChange={setAuthorId}>
-              <SelectTrigger aria-label={t("author")}>
-                <SelectValue placeholder={t("author")} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">{lang === "ar" ? "كل المؤلفين" : "All authors"}</SelectItem>
-                {authors?.map((a) => (
-                  <SelectItem key={a._id} value={a._id}>
-                    {a.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+        {/* ===== Advanced filters panel + results ===== */}
+        <div className={cn("mt-6 flex flex-col gap-6", panelOpen && "lg:flex-row lg:items-start")}>
+          {panelOpen && (
+            <aside className="w-full shrink-0 space-y-5 rounded-3xl border bg-card p-5 card-shadow lg:sticky lg:top-24 lg:w-80">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-black">{ar ? "الفلاتر" : "Filters"}</h2>
+                <Button variant="ghost" size="icon" className="size-8" onClick={() => setPanelOpen(false)} aria-label={ar ? "إغلاق" : "Close"}>
+                  <X className="size-4" />
+                </Button>
+              </div>
 
-            <Select value={narratorId} onValueChange={setNarratorId}>
-              <SelectTrigger aria-label={t("narrator")}>
-                <SelectValue placeholder={t("narrator")} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">{lang === "ar" ? "كل الرواة" : "All narrators"}</SelectItem>
-                {narrators?.map((n) => (
-                  <SelectItem key={n._id} value={n._id}>
-                    {n.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <Select value={duration} onValueChange={setDuration}>
-              <SelectTrigger aria-label={t("duration")}>
-                <SelectValue placeholder={t("duration")} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">{lang === "ar" ? "كل المدد" : "Any duration"}</SelectItem>
-                <SelectItem value="short">{lang === "ar" ? "أقل من ساعتين" : "Under 2h"}</SelectItem>
-                <SelectItem value="medium">{lang === "ar" ? "2 - 8 ساعات" : "2 - 8h"}</SelectItem>
-                <SelectItem value="long">{lang === "ar" ? "أكثر من 8 ساعات" : "Over 8h"}</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        )}
-
-        {/* ===== Results ===== */}
-        {results === undefined ? (
-          <div className={cn("mt-8", view === "grid"
-            ? "grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6"
-            : "space-y-3")}>
-            {Array.from({ length: view === "grid" ? 12 : 6 }).map((_, i) => (
-              <div key={i} className={view === "grid" ? "space-y-2" : "flex items-center gap-4"}>
-                <Skeleton className={view === "grid" ? "aspect-[3/4] rounded-xl" : "h-24 w-20 rounded-xl"} />
-                <div className={cn(view === "grid" && "w-full space-y-2")}>
-                  <Skeleton className="h-4 w-3/4" />
-                  <Skeleton className="h-3 w-1/2" />
+              {/* Rights: free / paid */}
+              <div className="space-y-2">
+                <p className="text-sm font-extrabold">{ar ? "نوع الوصول" : "Access"}</p>
+                <div className="flex flex-wrap gap-2">
+                  <AccessPill active={rights === "all"} onClick={() => setRights("all")} label={ar ? "الكل" : "All"} />
+                  <AccessPill active={rights === "free"} onClick={() => setRights("free")} label={ar ? "مجاني" : "Free"} icon={<Sparkles className="size-3.5" />} />
+                  <AccessPill active={rights === "premium"} onClick={() => setRights("premium")} label={ar ? "مدفوع" : "Premium"} icon={<Crown className="size-3.5" />} />
+                  <AccessPill active={rights === "public_domain"} onClick={() => setRights("public_domain")} label={ar ? "ملكية عامة" : "Public domain"} icon={<Globe className="size-3.5" />} />
                 </div>
               </div>
-            ))}
+
+              {/* Minimum rating */}
+              <div className="space-y-2">
+                <p className="text-sm font-extrabold">{ar ? "التقييم" : "Rating"}</p>
+                <div className="flex items-center gap-1.5" dir="ltr">
+                  {[1, 2, 3, 4, 5].map((n) => (
+                    <button
+                      key={n}
+                      type="button"
+                      onClick={() => setMinRating((prev) => (prev === n ? 0 : n))}
+                      aria-label={`${ar ? "تقييم" : "Rating"} ${n}+`}
+                      className={cn(
+                        "flex size-10 items-center justify-center rounded-xl border text-sm font-bold transition-all",
+                        minRating >= n && minRating > 0
+                          ? "border-primary bg-primary text-primary-foreground shadow-sm"
+                          : "bg-muted/50 text-muted-foreground hover:border-primary/40 hover:text-foreground",
+                      )}
+                    >
+                      {n}
+                    </button>
+                  ))}
+                </div>
+                {minRating > 0 && (
+                  <p className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <Star className="size-3.5 fill-primary text-primary" />
+                    {ar ? `${minRating} نجوم وأعلى` : `${minRating} stars and up`}
+                  </p>
+                )}
+              </div>
+
+              {/* Duration range slider */}
+              <div className="space-y-3">
+                <p className="text-sm font-extrabold">{ar ? "مدة الاستماع (دقائق)" : "Duration (minutes)"}</p>
+                <Slider
+                  value={durationRange}
+                  min={DURATION_MIN}
+                  max={DURATION_MAX}
+                  step={DURATION_STEP}
+                  onValueChange={(v) => setDurationRange([v[0] ?? DURATION_MIN, v[1] ?? DURATION_MAX])}
+                  aria-label={ar ? "مدة الاستماع" : "Duration"}
+                />
+                <div className="flex items-center justify-between text-xs font-bold text-primary" dir="ltr">
+                  <span>{formatMin(durationRange[0])}</span>
+                  <span>{durationRange[1] >= DURATION_MAX ? "∞" : formatMin(durationRange[1])}</span>
+                </div>
+              </div>
+
+              {/* Authors within results */}
+              {(facets?.authors?.length ?? 0) > 0 && (
+                <div className="space-y-2">
+                  <p className="text-sm font-extrabold">{ar ? "المؤلف" : "Author"}</p>
+                  <div className="no-scrollbar max-h-40 space-y-1 overflow-y-auto pe-1">
+                    {facets?.authors.map((a) => (
+                      <button
+                        key={a.id}
+                        type="button"
+                        onClick={() => setAuthorId((prev) => (prev === a.id ? "all" : a.id))}
+                        className={cn(
+                          "flex w-full items-center justify-between rounded-xl border px-3 py-2 text-start text-sm transition-colors",
+                          a.active || authorId === a.id
+                            ? "border-primary bg-primary/10 font-bold text-primary"
+                            : "hover:bg-muted",
+                        )}
+                      >
+                        <span className="truncate">{a.name}</span>
+                        <span className="shrink-0 rounded-full bg-muted px-1.5 text-[10px] font-bold text-muted-foreground">
+                          {a.count}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Narrators within results */}
+              {(facets?.narrators?.length ?? 0) > 0 && (
+                <div className="space-y-2">
+                  <p className="text-sm font-extrabold">{ar ? "الراوي" : "Narrator"}</p>
+                  <div className="no-scrollbar max-h-40 space-y-1 overflow-y-auto pe-1">
+                    {facets?.narrators.map((n) => (
+                      <button
+                        key={n.id}
+                        type="button"
+                        onClick={() => setNarratorId((prev) => (prev === n.id ? "all" : n.id))}
+                        className={cn(
+                          "flex w-full items-center justify-between rounded-xl border px-3 py-2 text-start text-sm transition-colors",
+                          n.active || narratorId === n.id
+                            ? "border-primary bg-primary/10 font-bold text-primary"
+                            : "hover:bg-muted",
+                        )}
+                      >
+                        <span className="truncate">{n.name}</span>
+                        <span className="shrink-0 rounded-full bg-muted px-1.5 text-[10px] font-bold text-muted-foreground">
+                          {n.count}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <Button variant="outline" className="w-full gap-2" onClick={resetAll}>
+                <Filter className="size-4" />
+                {ar ? "مسح الفلاتر" : "Clear filters"}
+              </Button>
+            </aside>
+          )}
+
+          {/* Results grid/list */}
+          <div className="min-w-0 flex-1">
+            {results === undefined ? (
+              <div className={cn(view === "grid"
+                ? "grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4"
+                : "space-y-3")}>
+                {Array.from({ length: view === "grid" ? 12 : 6 }).map((_, i) => (
+                  <div key={i} className={view === "grid" ? "space-y-2" : "flex items-center gap-4"}>
+                    <Skeleton className={view === "grid" ? "aspect-[3/4] rounded-xl" : "h-24 w-20 rounded-xl"} />
+                    <div className={cn(view === "grid" && "w-full space-y-2")}>
+                      <Skeleton className="h-4 w-3/4" />
+                      <Skeleton className="h-3 w-1/2" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : results.length === 0 ? (
+              <EmptyState hasFilters onReset={resetAll} />
+            ) : view === "grid" ? (
+              <div className={cn(
+                "grid gap-4",
+                panelOpen
+                  ? "grid-cols-2 sm:grid-cols-3"
+                  : "grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6",
+              )}>
+                {results.map((item) => (
+                  <ContentCard key={item._id} item={item} />
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {results.map((item) => (
+                  <ListRow key={item._id} item={item} />
+                ))}
+              </div>
+            )}
           </div>
-        ) : results.length === 0 ? (
-          <EmptyState hasFilters={Boolean(hasFilters)} onReset={resetAll} />
-        ) : view === "grid" ? (
-          <div className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
-            {results.map((item) => (
-              <ContentCard key={item._id} item={item} />
-            ))}
-          </div>
-        ) : (
-          <div className="mt-8 space-y-3">
-            {results.map((item) => (
-              <ListRow key={item._id} item={item} />
-            ))}
-          </div>
-        )}
+        </div>
       </div>
     </div>
   );
@@ -478,9 +600,7 @@ function CategoryPill({
       onClick={onClick}
       className={cn(
         "shrink-0 rounded-full px-4 py-1.5 text-xs font-bold transition-all",
-        active
-          ? color
-          : cn(color, "opacity-80 hover:opacity-100"),
+        active ? color : cn(color, "opacity-80 hover:opacity-100"),
       )}
     >
       {label}
@@ -488,8 +608,38 @@ function CategoryPill({
   );
 }
 
+/** Access pill for the filters panel (free / premium / public domain). */
+function AccessPill({
+  active,
+  onClick,
+  label,
+  icon,
+}: {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+  icon?: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-bold transition-all",
+        active
+          ? "bg-primary text-primary-foreground shadow-sm"
+          : "bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground",
+      )}
+    >
+      {icon}
+      {label}
+      {active && <Check className="size-3" />}
+    </button>
+  );
+}
+
 /** Horizontal result row for the list view. */
-function ListRow({ item }: { item: EnrichedLike }) {
+function ListRow({ item }: { item: RowItem }) {
   const { lang, t } = useLang();
   return (
     <Link
@@ -527,7 +677,7 @@ function ListRow({ item }: { item: EnrichedLike }) {
   );
 }
 
-type EnrichedLike = {
+type RowItem = {
   _id: string;
   slug: string;
   title: string;

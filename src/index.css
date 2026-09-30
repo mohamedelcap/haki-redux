@@ -112,6 +112,14 @@
   --sidebar-ring: oklch(0.705 0.19 45);
 }
 
+/*
+ * شعار حكي: الرسم أسود على خلفية شفافة. في الوضع الليلي يقلب الفلتر
+ * الألوان الغامقة إلى الأبيض (البرتقالي يتأثر بالحد الأدنى لأن سطوعه عالٍ).
+ */
+.dark .haki-logo {
+  filter: invert(1) brightness(1.6) saturate(0.25);
+}
+
 .dark .hero-gradient {
   background:
     radial-gradient(1000px 480px at 85% -10%, rgba(249, 115, 22, 0.10), transparent 60%),

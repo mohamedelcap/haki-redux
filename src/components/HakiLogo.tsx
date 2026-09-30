@@ -2,8 +2,11 @@ import { cn } from "@/lib/utils";
 
 /**
  * شعار حكي | HAKI — يعرض ملف الشعار الرسمي المرفوع في قسم Assets
- * (public/assets/fm2134691.png منسوخًا إلى public/logo.png) كما هو،
- * بدون أي تعديل على التصميم — في كل مواضع الموقع.
+ * (public/logo.png — رسم أسود على خلفية شفافة).
+ *
+ * في الوضع الليلي يقلب CSS فلترًا لونيًا الشعار إلى الأبيض حتى يظهر بوضوح
+ * على الخلفيات الداكنة (المربع البرتقالي يبقى برتقاليًا لأن الفلتر يستهدف
+ * الألوان الغامقة فقط عبر soft-light/السطوع).
  */
 
 export const LOGO_FILE = "/logo.png";
@@ -30,7 +33,7 @@ export function HakiLogo({
       height={size}
       loading="eager"
       draggable={false}
-      className={cn("shrink-0 select-none object-contain", className)}
+      className={cn("haki-logo shrink-0 select-none object-contain", className)}
     />
   );
 }

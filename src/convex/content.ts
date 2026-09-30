@@ -233,8 +233,20 @@ export const browse = query({
     categorySlug: v.optional(v.string()),
     authorId: v.optional(v.id("authors")),
     narratorId: v.optional(v.id("narrators")),
-    rights: v.optional(v.union(v.literal("public_domain"), v.literal("free"))),
+    /** all | public_domain | free | premium (requires subscription) */
+    rights: v.optional(
+      v.union(
+        v.literal("public_domain"),
+        v.literal("free"),
+        v.literal("premium"),
+      ),
+    ),
     duration: v.optional(v.union(v.literal("short"), v.literal("medium"), v.literal("long"))),
+    /** Custom duration bounds in minutes (advanced filter sliders). */
+    minDurationMin: v.optional(v.number()),
+    maxDurationMin: v.optional(v.number()),
+    /** Minimum average rating 1–5 (advanced filter). */
+    minRating: v.optional(v.number()),
     sort: v.optional(
       v.union(v.literal("newest"), v.literal("popular"), v.literal("title"), v.literal("topRated")),
     ),
@@ -283,11 +295,22 @@ export const browse = query({
     if (args.authorId) out = out.filter((r) => r.authorId === args.authorId);
     if (args.narratorId) out = out.filter((r) => r.narratorId === args.narratorId);
     if (args.rights) {
-      out = out.filter((r) =>
-        args.rights === "public_domain"
-          ? r.rightsStatus === "public_domain"
-          : r.rightsStatus === "public_domain" || r.rightsStatus === "copyrighted",
-      );
+      if (args.rights === "public_domain") {
+        out = out.filter((r) => r.rightsStatus === "public_domain");
+      } else if (args.rights === "free") {
+        // Free-to-consume: public-domain works and any active free plan.
+        out = out.filter(
+          (r) =>
+            r.rightsStatus === "public_domain" || r.rightsStatus === "copyrighted",
+        );
+      }
+      // "premium": everything that is NOT public-domain free content —
+      // works whose rights are copyrighted-unknown/review or paid placements.
+      else {
+        const paidPlans = await ctx.db.query("subscription_plans").collect();
+        const hasPaidPlan = paidPlans.some((p) => p.isActive && p.price > 0);
+        out = out.filter((r) => hasPaidPlan && r.rightsStatus !== "public_domain");
+      }
     }
     if (args.duration) {
       out = out.filter((r) => {
@@ -296,6 +319,12 @@ export const browse = query({
         if (args.duration === "medium") return h >= 2 && h <= 8;
         return h > 8;
       });
+    }
+    // Custom duration sliders (minutes) — takes precedence when provided.
+    if (args.minDurationMin !== undefined || args.maxDurationMin !== undefined) {
+      const min = (args.minDurationMin ?? 0) * 60;
+      const max = (args.maxDurationMin ?? Number.MAX_SAFE_INTEGER) * 60;
+      out = out.filter((r) => r.duration >= min && r.duration <= max);
     }
 
     const sort = args.sort ?? "newest";
@@ -321,6 +350,22 @@ export const browse = query({
       });
     } else out.sort((a, b) => a.title.localeCompare(b.title, "ar"));
 
+    // Minimum average rating (advanced filter) — applied after computing scores.
+    if (args.minRating !== undefined && args.minRating > 0) {
+      const scores = new Map<string, { sum: number; n: number }>();
+      const ratings = await ctx.db.query("ratings").collect();
+      for (const r of ratings) {
+        const s = scores.get(r.contentId) ?? { sum: 0, n: 0 };
+        s.sum += r.value;
+        s.n += 1;
+        scores.set(r.contentId, s);
+      }
+      out = out.filter((r) => {
+        const s = scores.get(r._id);
+        return s !== undefined && s.n > 0 && s.sum / s.n >= args.minRating!;
+      });
+    }
+
     return out;
   },
 });
@@ -338,6 +383,11 @@ export const browseFacets = query({
     categorySlug: v.optional(v.string()),
     authorId: v.optional(v.id("authors")),
     narratorId: v.optional(v.id("narrators")),
+    rights: v.optional(
+      v.union(v.literal("public_domain"), v.literal("free"), v.literal("premium")),
+    ),
+    minDurationMin: v.optional(v.number()),
+    maxDurationMin: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     let rows: Doc<"content">[];
@@ -380,6 +430,22 @@ export const browseFacets = query({
     }
     if (args.authorId) rows = rows.filter((r) => r.authorId === args.authorId);
     if (args.narratorId) rows = rows.filter((r) => r.narratorId === args.narratorId);
+    if (args.rights) {
+      if (args.rights === "public_domain") {
+        rows = rows.filter((r) => r.rightsStatus === "public_domain");
+      } else if (args.rights === "free") {
+        rows = rows.filter(
+          (r) => r.rightsStatus === "public_domain" || r.rightsStatus === "copyrighted",
+        );
+      } else {
+        rows = rows.filter((r) => r.rightsStatus !== "public_domain");
+      }
+    }
+    if (args.minDurationMin !== undefined || args.maxDurationMin !== undefined) {
+      const min = (args.minDurationMin ?? 0) * 60;
+      const max = (args.maxDurationMin ?? Number.MAX_SAFE_INTEGER) * 60;
+      rows = rows.filter((r) => r.duration >= min && r.duration <= max);
+    }
 
     // Category counts (all categories, with how many matching items each has).
     const allLinks = await ctx.db.query("content_categories").collect();
