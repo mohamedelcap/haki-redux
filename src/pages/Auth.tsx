@@ -17,18 +17,25 @@ import {
 
 import { useAuth } from "@/hooks/use-auth";
 import { api } from "@/convex/_generated/api";
-import { useMutation, useAction } from "convex/react";
+import { useMutation, useAction, useQuery } from "convex/react";
+import { motion } from "framer-motion";
 import { HakiLogo } from "@/components/HakiLogo";
 import {
   ArrowLeft,
+  BookOpen,
   Eye,
   EyeOff,
+  Headphones,
   KeyRound,
+  Library,
   Loader2,
   Mail,
+  Mic,
+  Newspaper,
+  Podcast,
   UserX,
 } from "lucide-react";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { toast } from "sonner";
 
@@ -49,6 +56,8 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
   const { isLoading: authLoading, isAuthenticated, signIn } = useAuth();
   const navigate = useNavigate();
   const checkLoginAllowed = useMutation(api.account.checkLoginAllowed);
+  // Google readiness (server-side env check — never exposes any values).
+  const googleStatus = useQuery(api.account.googleAuthStatus);
   const recordLoginAttempt = useMutation(api.account.recordLoginAttempt);
   const setUsername = useMutation(api.account.setUsername);
   const sendEmail = useAction(api.email.send);
@@ -224,19 +233,27 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
 
   // ---------- Google sign-in (OAuth redirect flow) ----------
   const handleGoogleLogin = async () => {
+    // Clear, immediate feedback when the deployment has no Google keys yet —
+    // otherwise the OAuth round-trip fails silently (redirect → error page).
+    if (googleStatus && !googleStatus.configured) {
+      setError(
+        "تسجيل الدخول بجوجل غير مُفعّل بعد: أضف المفتاحين AUTH_GOOGLE_ID و AUTH_GOOGLE_SECRET في قسم المفاتيح، ثم أعد المحاولة.",
+      );
+      return;
+    }
     setIsLoading(true);
     setError(null);
     try {
-      // Convex Auth handles the redirect to Google and back; the session is
+      // Convex Auth redirects the browser to Google and back; the session is
       // picked up automatically when the user returns to this page.
       await signIn("google", { redirectTo: redirect });
       // If we get here without a redirect (unexpected), stop the spinner.
       setIsLoading(false);
     } catch (e: any) {
-      // Common case: Google keys are not configured yet.
+      const raw = String(e?.message ?? "");
       setError(
-        e?.message?.includes("Unrecognized provider") || e?.message?.includes("provider")
-          ? "تسجيل الدخول بجوجل غير مُفعّل بعد — أضف مفاتيح AUTH_GOOGLE_ID و AUTH_GOOGLE_SECRET."
+        raw.includes("Unrecognized") || raw.includes("provider")
+          ? "تسجيل الدخول بجوجل غير مُفعّل بعد — أضف المفتاحين AUTH_GOOGLE_ID و AUTH_GOOGLE_SECRET."
           : "تعذّر تسجيل الدخول بجوجل، حاول مرة أخرى.",
       );
       setIsLoading(false);
@@ -248,8 +265,9 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
   // ================= OTP code entry =================
   if (otpStep) {
     return (
-      <div className="hero-gradient flex min-h-screen flex-col">
-        <div className="flex flex-1 items-center justify-center px-4 py-12">
+      <div className="hero-gradient relative flex min-h-screen flex-col overflow-hidden">
+        <FloatingIcons />
+        <div className="relative flex flex-1 items-center justify-center px-4 py-12">
           <Card className="min-w-[350px] border pb-0 shadow-md">
             <CardHeader className="mt-4 text-center">
               <CardTitle>تفقّد بريدك الإلكتروني</CardTitle>
@@ -293,8 +311,9 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
   // ================= Password reset flow =================
   if (resetStep) {
     return (
-      <div className="hero-gradient flex min-h-screen flex-col">
-        <div className="flex flex-1 items-center justify-center px-4 py-12">
+      <div className="hero-gradient relative flex min-h-screen flex-col overflow-hidden">
+        <FloatingIcons />
+        <div className="relative flex flex-1 items-center justify-center px-4 py-12">
           <Card className="min-w-[350px] border pb-0 shadow-md">
             {resetStep.stage === "code" ? (
               <>
@@ -381,9 +400,10 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
 
   // ================= Sign in / Sign up / Forgot =================
   return (
-    <div className="hero-gradient flex min-h-screen flex-col">
-      <div className="flex flex-1 items-center justify-center px-4 py-12">
-        <Card className="min-w-[350px] border pb-0 shadow-md">
+    <div className="hero-gradient relative flex min-h-screen flex-col overflow-hidden">
+      <FloatingIcons />
+      <div className="relative flex flex-1 items-center justify-center px-4 py-12">
+        <Card className="relative min-w-[350px] border pb-0 shadow-md">
           {mode === "forgot" ? (
             <>
               <CardHeader className="text-center">
@@ -567,6 +587,11 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                       className="mt-4 w-full gap-2 border-input bg-white font-semibold text-[#1f1f1f] hover:bg-gray-50"
                       onClick={handleGoogleLogin}
                       disabled={isLoading}
+                      title={
+                        googleStatus && !googleStatus.configured
+                          ? "غير مُفعّل — أضف AUTH_GOOGLE_ID و AUTH_GOOGLE_SECRET في قسم المفاتيح"
+                          : undefined
+                      }
                     >
                       <svg viewBox="0 0 24 24" className="size-4" aria-hidden="true">
                         <path
@@ -714,6 +739,57 @@ function AuthFooter({ goHome }: { goHome: () => void }) {
       >
         حكي
       </button>
+    </div>
+  );
+}
+
+/**
+ * Light animated background: slowly drifting HAKI content icons behind the
+ * auth card. Purely decorative (pointer-events-none, aria-hidden) and very
+ * low-opacity so it reads as a professional texture, never noise.
+ */
+const FLOATING_ICONS = [BookOpen, Headphones, Library, Mic, Newspaper, Podcast] as const;
+
+function FloatingIcons() {
+  const items = useMemo(
+    () =>
+      Array.from({ length: 12 }, (_, i) => ({
+        Icon: FLOATING_ICONS[i % FLOATING_ICONS.length],
+        left: (i * 83) % 100,
+        top: (i * 37 + 13) % 100,
+        size: 18 + ((i * 7) % 22),
+        duration: 9 + ((i * 5) % 10),
+        delay: (i * 1.3) % 8,
+        drift: 22 + ((i * 11) % 26),
+      })),
+    [],
+  );
+  return (
+    <div
+      aria-hidden="true"
+      className="pointer-events-none absolute inset-0 overflow-hidden"
+    >
+      {items.map(({ Icon, left, top, size, duration, delay, drift }, i) => (
+        <motion.div
+          key={i}
+          className="absolute text-primary/10 dark:text-primary/10"
+          style={{ left: `${left}%`, top: `${top}%` }}
+          animate={{
+            y: [0, -drift, 0],
+            x: [0, drift * 0.6, 0],
+            rotate: [0, i % 2 === 0 ? 8 : -8, 0],
+            opacity: [0.5, 1, 0.5],
+          }}
+          transition={{
+            duration,
+            delay,
+            repeat: Infinity,
+            ease: "easeInOut",
+          }}
+        >
+          <Icon style={{ width: size, height: size }} strokeWidth={1.5} />
+        </motion.div>
+      ))}
     </div>
   );
 }

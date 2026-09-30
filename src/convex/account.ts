@@ -24,6 +24,19 @@ export const usernameAvailable = query({
   },
 });
 
+/**
+ * Google sign-in readiness for the auth page UI.
+ * Never exposes the values — only whether the client id/secret exist.
+ */
+export const googleAuthStatus = query({
+  args: {},
+  handler: async () => {
+    const id = process.env.AUTH_GOOGLE_ID;
+    const secret = process.env.AUTH_GOOGLE_SECRET;
+    return { configured: Boolean(id && secret) };
+  },
+});
+
 /** Set or change my username (unique, 3–20 chars: letters/digits/_). */
 export const setUsername = mutation({
   args: { username: v.string() },
