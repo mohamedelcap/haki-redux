@@ -56,6 +56,43 @@ export const challengeStatusValidator = v.union(
   ...CHALLENGE_STATUS.map((t) => v.literal(t)),
 );
 
+/** Content scheduling states (dashboard section «جدولة المحتوى»). */
+export const SCHEDULE_STATUS = [
+  "draft", // مسودة — لن يُنشر تلقائيًا حتى يُجدول
+  "scheduled", // مجدول — سينشر في موعده بواسطة cron
+  "publishing", // قيد النشر — انتقال ذرّي يمنع النشر المزدوج
+  "published", // منشور — تم فعليًا
+  "failed", // فشل النشر — بعد استنفاد المحاولات
+  "cancelled", // ملغي
+] as const;
+export const scheduleStatusValidator = v.union(
+  ...SCHEDULE_STATUS.map((t) => v.literal(t)),
+);
+export type ScheduleStatus = (typeof SCHEDULE_STATUS)[number];
+
+/** Recurrence rule stored on the schedule (times interpreted in `timezone`). */
+export const recurrenceValidator = v.object({
+  /** none = one-off occurrence. */
+  freq: v.union(
+    v.literal("none"),
+    v.literal("daily"),
+    v.literal("weekly"),
+    v.literal("monthly"),
+    v.literal("interval_days"),
+  ),
+  /** For weekly: selected weekdays 0=Sun..6=Sat. */
+  weekdays: v.optional(v.array(v.number())),
+  /** For interval_days: every N days (2..30). */
+  intervalDays: v.optional(v.number()),
+  /** For monthly: day of month 1..28 (clamped to month length). */
+  monthDay: v.optional(v.number()),
+  /** "HH:mm" wall-clock time in the schedule timezone. */
+  timeOfDay: v.string(),
+  /** Inclusive end of the series (UTC ms). Absent = no end. */
+  endsAt: v.optional(v.number()),
+});
+export type RecurrenceRule = Infer<typeof recurrenceValidator>;
+
 export const SUBMISSION_STATUS = [
   "pending",
   "reviewing",
@@ -654,6 +691,61 @@ const schema = defineSchema(
       createdAt: v.number(),
       updatedAt: v.number(),
     }).index("by_slug", ["slug"]),
+
+    // ---- Content scheduling & auto-publishing ----
+    /**
+     * One scheduled publish occurrence, always bound to a real content row
+     * (no separate content store). scheduledAt is UTC ms; timezone is kept for
+     * display and recurrence math. Convex cron runs the sweep every minute.
+     */
+    content_schedules: defineTable({
+      contentId: v.id("content"),
+      scheduledAt: v.number(), // UTC ms
+      timezone: v.string(), // e.g. "Africa/Cairo"
+      status: scheduleStatusValidator,
+      recurrence: v.optional(recurrenceValidator),
+      /** Original recurring definition this occurrence was generated from. */
+      recurrenceOf: v.optional(v.id("content_schedules")),
+      /** Publish-attempt bookkeeping (requirement 21). */
+      attempts: v.optional(v.number()),
+      maxAttempts: v.optional(v.number()),
+      lastError: v.optional(v.string()),
+      lastAttemptAt: v.optional(v.number()),
+      /** Actual publish time (requirement 4). */
+      publishedAt: v.optional(v.number()),
+      publishDurationMs: v.optional(v.number()),
+      /** Set once the "publishing soon" reminder notification has been sent. */
+      reminderSentAt: v.optional(v.number()),
+      /** Validation snapshot captured when the publish runs. */
+      publishInfo: v.optional(v.string()),
+      createdBy: v.optional(v.id("users")),
+      createdByName: v.optional(v.string()),
+      updatedBy: v.optional(v.id("users")),
+      createdAt: v.number(),
+      updatedAt: v.number(),
+    })
+      .index("by_status", ["status"])
+      .index("by_content", ["contentId"])
+      .index("by_scheduled", ["scheduledAt"]),
+
+    /**
+     * Per-schedule activity + error log (requirements 10 & 21): who did what,
+     * when, result, and the error message when a publish attempt failed.
+     */
+    content_schedule_events: defineTable({
+      scheduleId: v.id("content_schedules"),
+      /** create | update | reschedule | cancel | delete | duplicate | convert_draft | publish_now | bulk_* | publish_success | publish_failed | retry | validation_error */
+      action: v.string(),
+      /** null actor = system (cron worker). */
+      actorId: v.optional(v.id("users")),
+      actorName: v.optional(v.string()),
+      detail: v.optional(v.string()),
+      success: v.boolean(),
+      error: v.optional(v.string()),
+      createdAt: v.number(),
+    })
+      .index("by_schedule", ["scheduleId"])
+      .index("by_created", ["createdAt"]),
 
     /**
      * GitHub issue reports (transparency). Every createIssue attempt from the

@@ -44,4 +44,17 @@ crons.interval(
   { maxItems: 5 },
 );
 
+/**
+ * Content publishing scheduler: every minute, flips due scheduled rows to
+ * "publishing" (atomic, duplicate-safe) and runs their publish, reclaims
+ * stuck rows, and sends upcoming-publish reminders. Runs server-side —
+ * independent of any open dashboard/browser.
+ */
+crons.interval(
+  "content-publish-scheduler",
+  { minutes: 1 },
+  internal.scheduler.dueSweep,
+  {},
+);
+
 export default crons;
