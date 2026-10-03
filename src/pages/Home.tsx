@@ -48,14 +48,22 @@ export default function Home() {
     isAuthenticated ? {} : "skip",
   );
 
-  const handlePlay = (item: { _id: any; title: any; coverImage: any; authorName: any; narratorName: any }) => {
+  const handlePlay = (item: {
+    _id: any;
+    title: any;
+    coverImage: any;
+    authorName: any;
+    narratorName: any;
+    audioUrl?: string | null;
+  }) => {
     play({
       contentId: item._id,
       title: item.title,
       coverImage: item.coverImage,
       authorName: item.authorName,
       narratorName: item.narratorName,
-      audioUrl: demoAudioUrl(item._id),
+      // Prefer the real uploaded file; the silent demo WAV is only a fallback.
+      audioUrl: item.audioUrl || demoAudioUrl(item._id),
       startOffset: 0,
     });
   };

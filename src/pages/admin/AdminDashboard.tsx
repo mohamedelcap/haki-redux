@@ -169,7 +169,7 @@ function AdminInner() {
       label: L("المحتوى", "Content"),
       items: [
         { key: "allContent", label: L("كل المحتوى", "All content"), icon: Package },
-        { key: "audiobooks", label: L("كتب صوتية", "Audiobooks"), icon: Trash2 },
+        { key: "audiobooks", label: L("كتب صوتية", "Audiobooks"), icon: Headphones },
         { key: "ebooks", label: L("كتب إلكترونية", "E-books"), icon: BookOpen },
         { key: "podcasts", label: L("بودكاست", "Podcasts"), icon: Podcast },
         { key: "drama", label: L("دراما صوتية", "Audio drama"), icon: Theater },
@@ -384,12 +384,68 @@ function Overview({
   const n = (v: number | undefined) =>
     v === undefined ? "…" : v.toLocaleString(lang === "ar" ? "ar" : "en");
 
+  // Work queues — admin-only queries are skipped for publisher/author roles
+  // (they would throw and trip the global error boundary).
+  const me = useQuery(api.adminUsers.me, {});
+  const isManager = me?.role === "super_admin" || me?.role === "admin";
+  const submissions = useQuery(
+    api.adminContent.listSubmissions,
+    isManager ? {} : "skip",
+  );
+  const pendingPays = useQuery(
+    api.manualPayments.listPending,
+    isManager ? {} : "skip",
+  );
+  const reports = useQuery(
+    api.moderation.listPendingReports,
+    isManager ? {} : "skip",
+  );
+  const sched = useQuery(api.scheduler.getStats, {});
+
   const cards = [
     { label: L("المستخدمون", "Users"), value: stats?.users, icon: Users },
     { label: L("المشتركون", "Subscribers"), value: stats?.subscribers, icon: Crown, accent: true },
     { label: L("المحتويات", "Content"), value: stats?.content, icon: Headphones },
     { label: L("طبقات النشر", "Publishing layers"), value: stats?.publishingEntities, icon: Building2 },
   ];
+
+  const queues = [
+    {
+      tab: "submissions" as TabKey,
+      label: L("طلبات نشر معلّقة", "Pending submissions"),
+      value: submissions?.filter((s) => s.status === "pending").length,
+      icon: FileText,
+      tone: "text-amber-600",
+    },
+    {
+      tab: "manualPayments" as TabKey,
+      label: L("دفعات بانتظار الموافقة", "Payments awaiting approval"),
+      value: pendingPays?.length,
+      icon: Wallet,
+      tone: "text-amber-600",
+    },
+    {
+      tab: "moderation" as TabKey,
+      label: L("بلاغات إشراف", "Moderation reports"),
+      value: reports?.length,
+      icon: Shield,
+      tone: "text-destructive",
+    },
+    {
+      tab: "scheduler" as TabKey,
+      label: L("مجدول اليوم", "Scheduled today"),
+      value: sched?.dueToday,
+      icon: CalendarClock,
+      tone: "text-primary",
+    },
+    {
+      tab: "scheduler" as TabKey,
+      label: L("نشر فاشل يحتاج انتباهًا", "Failed publishes"),
+      value: sched?.failed,
+      icon: AlertTriangle,
+      tone: "text-destructive",
+    },
+  ].filter((q) => q.value !== undefined);
 
   const quick = [
     { tab: "addContent" as TabKey, label: L("المحتوى", "Content"), desc: L("إضافة المحتوى والتعديل", "Add & edit content"), icon: CirclePlus },
@@ -430,6 +486,49 @@ function Overview({
           </div>
         ))}
       </div>
+
+      {/* Work queues */}
+      <section className="mt-8">
+        <div className="flex items-center justify-between gap-4">
+          <h2 className="text-lg font-black">
+            {L("طوابير العمل", "Work queues")}
+          </h2>
+          <p className="text-xs text-muted-foreground">
+            {L("اضغط للانتقال إلى القسم", "Click to open the section")}
+          </p>
+        </div>
+        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
+          {queues.length === 0
+            ? Array.from({ length: 5 }).map((_, i) => (
+                <Skeleton key={i} className="h-24 rounded-2xl" />
+              ))
+            : queues.map((q) => (
+                <button
+                  key={q.label}
+                  type="button"
+                  onClick={() => go(q.tab)}
+                  className="group rounded-2xl border bg-card p-4 text-start transition-all hover:card-shadow-hover"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="flex size-9 items-center justify-center rounded-xl bg-secondary">
+                      <q.icon className={cn("size-4", q.tone)} />
+                    </span>
+                    <span
+                      className={cn(
+                        "text-2xl font-black tabular-nums",
+                        q.value ? q.tone : "text-muted-foreground/60",
+                      )}
+                    >
+                      {n(q.value)}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-xs font-bold leading-tight text-muted-foreground">
+                    {q.label}
+                  </p>
+                </button>
+              ))}
+        </div>
+      </section>
 
       {/* Welcome + quick access */}
       <section className="mt-8 rounded-3xl border bg-card p-6 card-shadow">
@@ -595,6 +694,11 @@ function ContentManager({ L, lang, defaultType, featuredOnly, autoOpen }: { L: (
   const [editing, setEditing] = useState<any>(null);
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [q, setQ] = useState("");
+  const [page, setPage] = useState(0);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const PAGE_SIZE = 12;
 
   // Live preview values derived from the editing form state.
   const previewCover = editing?.coverImage ?? "";
@@ -697,9 +801,77 @@ function ContentManager({ L, lang, defaultType, featuredOnly, autoOpen }: { L: (
     }
   };
 
+  const needle = q.trim().toLowerCase();
   const visible = (items ?? [])
     .filter((i) => typeFilter === "all" || i.contentType === typeFilter)
-    .filter((i) => (featuredOnly ? i.isFeatured : true));
+    .filter((i) => (featuredOnly ? i.isFeatured : true))
+    .filter(
+      (i) =>
+        !needle ||
+        i.title.toLowerCase().includes(needle) ||
+        i.slug.toLowerCase().includes(needle) ||
+        (i.authorName ?? "").toLowerCase().includes(needle),
+    );
+
+  // Client-side search + pagination keep large libraries responsive.
+  const pageCount = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
+  const current = Math.min(page, pageCount - 1);
+  const rows = visible.slice(current * PAGE_SIZE, (current + 1) * PAGE_SIZE);
+
+  const pageIds = rows.map((r) => r._id as string);
+  const allPageSelected =
+    pageIds.length > 0 && pageIds.every((id) => selected.has(id));
+  const toggleOne = (id: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const togglePage = () =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      const every = pageIds.every((id) => next.has(id));
+      for (const id of pageIds) {
+        if (every) next.delete(id);
+        else next.add(id);
+      }
+      return next;
+    });
+
+  const runBulk = async (kind: "publish" | "draft" | "delete") => {
+    const ids = [...selected];
+    if (ids.length === 0 || bulkBusy) return;
+    if (
+      kind === "delete" &&
+      !confirm(L(`تأكيد حذف ${ids.length} عنصرًا؟`, `Delete ${ids.length} items?`))
+    ) {
+      return;
+    }
+    setBulkBusy(true);
+    try {
+      for (const id of ids) {
+        if (kind === "delete") {
+          await remove({ id: id as any });
+        } else {
+          await setFlags({
+            contentId: id as any,
+            status: kind === "publish" ? "published" : "draft",
+          });
+        }
+      }
+      toast.success(
+        kind === "delete"
+          ? L(`تم حذف ${ids.length} عنصرًا`, `Deleted ${ids.length} items`)
+          : L(`تم تحديث ${ids.length} عنصرًا`, `Updated ${ids.length} items`),
+      );
+      setSelected(new Set());
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setBulkBusy(false);
+    }
+  };
 
   return (
     <div>
@@ -717,11 +889,76 @@ function ContentManager({ L, lang, defaultType, featuredOnly, autoOpen }: { L: (
         </Button>
       </div>
 
+      {/* Search + bulk actions */}
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        <Input
+          value={q}
+          onChange={(e) => {
+            setQ(e.target.value);
+            setPage(0);
+          }}
+          placeholder={L(
+            "ابحث بالعنوان أو المؤلف أو Slug…",
+            "Search title, author or slug…",
+          )}
+          className="h-9 w-full max-w-xs"
+          aria-label={L("بحث في المحتوى", "Search content")}
+        />
+        <span className="text-xs font-semibold text-muted-foreground">
+          {L(`${visible.length} عنصر`, `${visible.length} items`)}
+        </span>
+      </div>
+
+      {selected.size > 0 && (
+        <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl border bg-primary/5 p-2.5">
+          <span className="px-1 text-xs font-black">
+            {L(`تم تحديد ${selected.size}`, `${selected.size} selected`)}
+          </span>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 font-bold"
+            disabled={bulkBusy}
+            onClick={() => runBulk("publish")}
+          >
+            {L("نشر", "Publish")}
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 font-bold"
+            disabled={bulkBusy}
+            onClick={() => runBulk("draft")}
+          >
+            {L("إخفاء (مسودة)", "Unpublish")}
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 gap-1 font-bold text-destructive hover:text-destructive"
+            disabled={bulkBusy}
+            onClick={() => runBulk("delete")}
+          >
+            <Trash2 className="size-3.5" />
+            {L("حذف", "Delete")}
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-8 font-bold"
+            disabled={bulkBusy}
+            onClick={() => setSelected(new Set())}
+          >
+            {L("إلغاء التحديد", "Clear selection")}
+          </Button>
+        </div>
+      )}
+
       {/* Type filter pills */}
       <div className="no-scrollbar mt-4 flex gap-1.5 overflow-x-auto pb-1">
         <button
           type="button"
-          onClick={() => setTypeFilter("all")}
+          onClick={() => { setTypeFilter("all"); setPage(0); }}
           className={cn(
             "shrink-0 rounded-full border px-3 py-1.5 text-xs font-bold transition-colors",
             typeFilter === "all" ? "border-primary bg-primary text-white" : "hover:bg-muted",
@@ -733,7 +970,7 @@ function ContentManager({ L, lang, defaultType, featuredOnly, autoOpen }: { L: (
           <button
             key={k}
             type="button"
-            onClick={() => setTypeFilter(k)}
+            onClick={() => { setTypeFilter(k); setPage(0); }}
             className={cn(
               "shrink-0 rounded-full border px-3 py-1.5 text-xs font-bold transition-colors",
               typeFilter === k ? "border-primary bg-primary text-white" : "hover:bg-muted",
@@ -764,6 +1001,14 @@ function ContentManager({ L, lang, defaultType, featuredOnly, autoOpen }: { L: (
             <Table>
               <THead>
                 <TR>
+                  <TH>
+                    <input
+                      type="checkbox"
+                      aria-label={L("تحديد كل الصفحة", "Select page")}
+                      checked={allPageSelected}
+                      onChange={togglePage}
+                    />
+                  </TH>
                   <TH>{L("العنوان", "Title")}</TH>
                   <TH>{L("الحالة", "Status")}</TH>
                   <TH>{L("إجراءات سريعة", "Quick actions")}</TH>
@@ -771,9 +1016,17 @@ function ContentManager({ L, lang, defaultType, featuredOnly, autoOpen }: { L: (
                 </TR>
               </THead>
               <TBody>
-                {visible
+                {rows
                   .map((item) => (
                   <TR key={item._id}>
+                    <TD>
+                      <input
+                        type="checkbox"
+                        aria-label={L("تحديد العنصر", "Select item")}
+                        checked={selected.has(item._id)}
+                        onChange={() => toggleOne(item._id)}
+                      />
+                    </TD>
                     <TD>
                       <div className="flex items-center gap-2.5">
                         <img src={item.coverImage || LOGO_COVER} alt="" loading="lazy" className="size-9 rounded-md object-cover" />
@@ -875,6 +1128,37 @@ function ContentManager({ L, lang, defaultType, featuredOnly, autoOpen }: { L: (
               </TBody>
             </Table>
           </div>
+        </div>
+      )}
+
+      {visible.length > PAGE_SIZE && (
+        <div className="mt-3 flex items-center justify-between gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="font-bold"
+            disabled={current === 0}
+            onClick={() => setPage(current - 1)}
+          >
+            {L("السابق", "Prev")}
+          </Button>
+          <span className="text-xs font-semibold text-muted-foreground">
+            {L(
+              `صفحة ${current + 1} من ${pageCount}`,
+              `Page ${current + 1} of ${pageCount}`,
+            )}
+          </span>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="font-bold"
+            disabled={current >= pageCount - 1}
+            onClick={() => setPage(current + 1)}
+          >
+            {L("التالي", "Next")}
+          </Button>
         </div>
       )}
 
@@ -1452,6 +1736,7 @@ function ChallengesManager({ L }: { L: (ar: string, en: string) => string }) {
   const upsert = useMutation(api.adminContent.upsertChallenge);
   const remove = useMutation(api.adminContent.deleteChallenge);
   const [editing, setEditing] = useState<any>(null);
+  const [viewing, setViewing] = useState<any>(null);
 
   return (
     <div>
@@ -1473,10 +1758,35 @@ function ChallengesManager({ L }: { L: (ar: string, en: string) => string }) {
           {items.map((ch) => (
             <div key={ch._id} className="flex items-center justify-between rounded-2xl border bg-card p-4">
               <div>
-                <p className="font-bold">{ch.name}</p>
+                <p className="font-bold">
+                  {ch.name}
+                  <Badge
+                    className={cn(
+                      "ms-2",
+                      ch.status === "active" && "bg-green-100 text-green-700",
+                      ch.status === "upcoming" && "bg-amber-100 text-amber-700",
+                      ch.status === "ended" && "bg-muted text-muted-foreground",
+                    )}
+                  >
+                    {ch.status === "active"
+                      ? L("نشط", "Active")
+                      : ch.status === "upcoming"
+                        ? L("قريبًا", "Upcoming")
+                        : L("منتهٍ", "Ended")}
+                  </Badge>
+                </p>
                 <p className="text-xs text-muted-foreground">{ch.startDate} → {ch.endDate} · {ch.participants} {L("مشارك", "participants")}</p>
               </div>
               <div className="flex gap-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="gap-1 font-bold"
+                  onClick={() => setViewing(ch._id)}
+                >
+                  <Users className="size-3.5" />
+                  {L("المشاركون", "Participants")}
+                </Button>
                 <Button variant="ghost" size="icon" onClick={() => setEditing({ ...ch })}>
                   <Pencil className="size-3.5" />
                 </Button>
@@ -1504,7 +1814,6 @@ function ChallengesManager({ L }: { L: (ar: string, en: string) => string }) {
                   startDate: String(form.get("startDate")),
                   endDate: String(form.get("endDate")),
                   reward: String(form.get("reward")) || undefined,
-                  status: String(form.get("status")) as any,
                   isActive: form.get("isActive") === "on",
                   goalType: (String(form.get("goalType")) || "listen_minutes") as any,
                   goalTarget: Number(form.get("goalTarget")) || undefined,
@@ -1542,14 +1851,12 @@ function ChallengesManager({ L }: { L: (ar: string, en: string) => string }) {
               </div>
               <div className="space-y-1.5">
                 <Label>{L("الحالة", "Status")}</Label>
-                <Select name="status" defaultValue={editing.status}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="upcoming">upcoming</SelectItem>
-                    <SelectItem value="active">active</SelectItem>
-                    <SelectItem value="ended">ended</SelectItem>
-                  </SelectContent>
-                </Select>
+                <p className="rounded-xl bg-muted p-2.5 text-xs font-semibold text-muted-foreground">
+                  {L(
+                    "تُحسب تلقائيًا من تاريخي البدء والانتهاء",
+                    "Derived automatically from the start/end dates",
+                  )}
+                </p>
               </div>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
@@ -1580,6 +1887,117 @@ function ChallengesManager({ L }: { L: (ar: string, en: string) => string }) {
           </form>
         </div>
       )}
+
+      {viewing && (
+        <ChallengeParticipants
+          L={L}
+          id={viewing}
+          onClose={() => setViewing(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+/** Admin: per-challenge participant leaderboard (top 20, same ranking as the public page). */
+function ChallengeParticipants({
+  L,
+  id,
+  onClose,
+}: {
+  L: (ar: string, en: string) => string;
+  id: string;
+  onClose: () => void;
+}) {
+  const details = useQuery(api.engagement.challengeDetails, { id: id as any });
+
+  const goalLabel =
+    details?.goalType === "finished_works"
+      ? L("أعمال مكتملة", "finished works")
+      : details?.goalType === "rated_items"
+        ? L("تقييمات", "ratings")
+        : L("دقيقة استماع", "listen minutes");
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label={L("المشاركون", "Participants")}
+    >
+      <div
+        className="my-8 w-full max-w-2xl rounded-3xl border bg-background p-6"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h3 className="text-lg font-black">
+              {details?.name ?? L("المشاركون", "Participants")}
+            </h3>
+            {details && (
+              <p className="mt-1 text-xs text-muted-foreground">
+                {details.startDate} → {details.endDate} · {details.participants} {L("مشارك", "participants")} · {L("الهدف", "Goal")}: {details.goalTarget} {goalLabel}
+              </p>
+            )}
+          </div>
+          <Button variant="ghost" size="icon" onClick={onClose} aria-label={L("إغلاق", "Close")}>
+            <X className="size-4" />
+          </Button>
+        </div>
+
+        {details == null ? (
+          <Skeleton className="mt-6 h-48 rounded-2xl" />
+        ) : details.leaderboard.length === 0 ? (
+          <div className="mt-6 rounded-2xl border bg-card p-8 text-center">
+            <Users className="mx-auto size-8 text-muted-foreground/50" />
+            <p className="mt-3 text-sm font-bold">
+              {L("لا يوجد مشاركون بعد", "No participants yet")}
+            </p>
+          </div>
+        ) : (
+          <div className="mt-6 overflow-x-auto rounded-2xl border bg-card">
+            <table className="w-full min-w-[520px] text-sm">
+              <thead>
+                <tr className="border-b bg-secondary/60 text-xs text-muted-foreground">
+                  <th className="p-3 text-start font-semibold">#</th>
+                  <th className="p-3 text-start font-semibold">{L("المستخدم", "User")}</th>
+                  <th className="p-3 text-start font-semibold">{L("التقدم", "Progress")}</th>
+                  <th className="p-3 text-start font-semibold">{L("الإنجاز", "Completion")}</th>
+                  <th className="p-3 text-start font-semibold">{L("تاريخ الانضمام", "Joined")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {details.leaderboard.map((u, i) => (
+                  <tr key={u.userId} className="border-b last:border-0">
+                    <td className="p-3 tabular-nums text-muted-foreground">{i + 1}</td>
+                    <td className="p-3 font-semibold">{u.name}</td>
+                    <td className="p-3 tabular-nums">
+                      {u.progress} / {details.goalTarget}
+                    </td>
+                    <td className="p-3">
+                      {u.completed ? (
+                        <Badge className="bg-green-100 text-green-700">{L("مكتمل", "Done")}</Badge>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">{L("جارٍ", "In progress")}</span>
+                      )}
+                    </td>
+                    <td className="p-3 tabular-nums text-muted-foreground" dir="ltr">
+                      {new Date(u.joinedAt).toISOString().slice(0, 10)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <p className="mt-4 text-[11px] leading-relaxed text-muted-foreground">
+          {L(
+            "يُعرض أعلى ٢٠ مشاركًا — نفس ترتيب الصفحة العامة: المكتملون أولًا حسب وقت الإكمال، ثم حسب التقدم.",
+            "Top 20 shown — same ranking as the public page: completions first (by completion time), then by progress.",
+          )}
+        </p>
+      </div>
     </div>
   );
 }

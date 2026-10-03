@@ -3,6 +3,7 @@ import { SEO } from "@/components/SEO";
 import { ContentCard, TYPE_LABELS } from "@/components/ContentCard";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useLang } from "@/lib/i18n";
@@ -10,7 +11,7 @@ import { cn } from "@/lib/utils";
 import { useQuery } from "convex/react";
 import { SearchX, UserRound } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useSearchParams } from "react-router";
+import { Link, useSearchParams } from "react-router";
 
 const TABS = [
   { key: "all", ar: "الكل", en: "All" },
@@ -18,6 +19,7 @@ const TABS = [
   { key: "audiobooks", ar: "كتب صوتية", en: "Audiobooks" },
   { key: "ebooks", ar: "كتب إلكترونية", en: "E-books" },
   { key: "drama", ar: "دراما", en: "Drama" },
+  { key: "micro_drama", ar: "مايكرو دراما", en: "Micro drama" },
   { key: "podcast", ar: "بودكاست", en: "Podcasts" },
   { key: "magazine", ar: "مجلات", en: "Magazines" },
 ] as const;
@@ -29,6 +31,7 @@ export default function SearchPage() {
   const [input, setInput] = useState(urlQuery);
   const [debounced, setDebounced] = useState(urlQuery);
   const [tab, setTab] = useState<string>("all");
+  const [limit, setLimit] = useState(30);
 
   useEffect(() => {
     const id = setTimeout(() => setDebounced(input), 300);
@@ -44,6 +47,7 @@ export default function SearchPage() {
   const results = useQuery(api.content.search, {
     q: debounced,
     type: tab,
+    limit,
   });
 
   const hasQuery = debounced.trim().length > 0;
@@ -129,7 +133,11 @@ export default function SearchPage() {
                 <h2 className="text-lg font-extrabold">{t("author")}</h2>
                 <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
                   {results.authors.map((a) => (
-                    <div key={a._id} className="flex items-center gap-3 rounded-xl border bg-card p-3">
+                    <Link
+                      key={a._id}
+                      to={`/author/${a._id}`}
+                      className="flex items-center gap-3 rounded-xl border bg-card p-3 transition-colors hover:border-primary/40 hover:bg-muted/50"
+                    >
                       <Avatar className="size-10">
                         {a.image && <AvatarImage src={a.image} alt={a.name} loading="lazy" />}
                         <AvatarFallback className="bg-accent text-accent-foreground">
@@ -140,7 +148,7 @@ export default function SearchPage() {
                         <p className="truncate text-sm font-bold">{a.name}</p>
                         <p className="truncate text-xs text-muted-foreground">{a.nameEn}</p>
                       </div>
-                    </div>
+                    </Link>
                   ))}
                 </div>
               </section>
@@ -151,7 +159,11 @@ export default function SearchPage() {
                 <h2 className="text-lg font-extrabold">{t("narrator")}</h2>
                 <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
                   {results.narrators.map((n) => (
-                    <div key={n._id} className="flex items-center gap-3 rounded-xl border bg-card p-3">
+                    <Link
+                      key={n._id}
+                      to={`/narrator/${n._id}`}
+                      className="flex items-center gap-3 rounded-xl border bg-card p-3 transition-colors hover:border-primary/40 hover:bg-muted/50"
+                    >
                       <Avatar className="size-10">
                         {n.image && <AvatarImage src={n.image} alt={n.name} loading="lazy" />}
                         <AvatarFallback className="bg-secondary">
@@ -162,10 +174,23 @@ export default function SearchPage() {
                         <p className="truncate text-sm font-bold">{n.name}</p>
                         <p className="truncate text-xs text-muted-foreground">{n.nameEn}</p>
                       </div>
-                    </div>
+                    </Link>
                   ))}
                 </div>
               </section>
+            )}
+
+            {results.hasMore && (
+              <div className="pt-2 text-center">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="font-bold"
+                  onClick={() => setLimit((l) => l + 30)}
+                >
+                  {lang === "ar" ? "عرض المزيد من النتائج" : "Load more results"}
+                </Button>
+              </div>
             )}
           </div>
         )}

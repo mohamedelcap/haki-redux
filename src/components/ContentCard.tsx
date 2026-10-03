@@ -81,7 +81,8 @@ export function ContentCard({ item, className, onPlay }: CardProps) {
         coverImage: item.coverImage,
         authorName: item.authorName,
         narratorName: item.narratorName,
-        audioUrl: demoAudioUrl(item._id),
+        // Prefer the real uploaded file; the silent demo WAV is only a fallback.
+        audioUrl: item.audioUrl || demoAudioUrl(item._id),
         startOffset: 0,
       });
     }

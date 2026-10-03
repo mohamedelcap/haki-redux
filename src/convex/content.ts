@@ -154,6 +154,8 @@ export const search = query({
   args: {
     q: v.string(),
     type: v.optional(v.string()),
+    /** How many matched items to return (powers the "load more" button). */
+    limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const needle = args.q.trim().toLowerCase();
@@ -191,6 +193,7 @@ export const search = query({
         audiobooks: ["audiobook"],
         ebooks: ["ebook"],
         drama: ["audio_drama", "micro_drama"],
+        micro_drama: ["micro_drama"],
         podcast: ["podcast"],
         magazine: ["magazine"],
         live: ["live"],
@@ -199,8 +202,10 @@ export const search = query({
       if (allowed) filtered = matchedContent.filter((c) => allowed.includes(c.contentType));
     }
 
-    // enrich matched content (limit to 30 for perf)
-    const enriched = await enrichContent(ctx, filtered.slice(0, 30));
+    // enrich matched content (bounded for perf; the client can raise the
+    // limit to page through more results)
+    const limit = Math.min(Math.max(args.limit ?? 30, 10), 120);
+    const enriched = await enrichContent(ctx, filtered.slice(0, limit));
 
     // also match content by author names
     const authorMatchedIds = new Set<Id<"content">>();
@@ -219,6 +224,7 @@ export const search = query({
       authors: authors.slice(0, 8),
       narrators: narrators.slice(0, 8),
       podcasts: [] as Doc<"podcasts">[],
+      hasMore: filtered.length > limit,
     };
   },
 });

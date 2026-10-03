@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { query, mutation } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { requireAdmin, requireContentAccess, requireSuperAdmin, isAdminRole, auditLog } from "./lib";
+import { statusFor } from "./engagement";
 import {
   contentTypeValidator,
   contentStatusValidator,
@@ -240,19 +241,26 @@ export const upsertChallenge = mutation({
     startDate: v.string(),
     endDate: v.string(),
     reward: v.optional(v.string()),
-    status: challengeStatusValidator,
+    /** Ignored — status is always derived from the dates (see handler). */
+    status: v.optional(challengeStatusValidator),
     isActive: v.boolean(),
     goalType: v.optional(challengeGoalTypeValidator),
     goalTarget: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     await requireSuperAdmin(ctx);
-    const { id, ...data } = args;
+    const { id, status: _ignoredStatus, ...data } = args;
+    // The stored status is only a cache: derive it from the dates so the
+    // dashboard and the public site can never disagree.
+    const payload = {
+      ...data,
+      status: statusFor(data.startDate, data.endDate),
+    };
     if (id) {
-      await ctx.db.patch(id, data);
+      await ctx.db.patch(id, payload);
       return id;
     }
-    return await ctx.db.insert("challenges", { ...data, participants: 0 });
+    return await ctx.db.insert("challenges", { ...payload, participants: 0 });
   },
 });
 
