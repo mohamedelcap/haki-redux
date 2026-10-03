@@ -52,7 +52,7 @@ crons.interval(
  */
 crons.interval(
   "content-publish-scheduler",
-  { minutes: 5 },
+  { minutes: 1 },
   internal.scheduler.dueSweep,
   {},
 );

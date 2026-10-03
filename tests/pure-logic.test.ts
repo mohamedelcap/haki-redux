@@ -17,6 +17,20 @@ import {
 } from "../src/convex/importCore";
 import { computePoolShares } from "../src/convex/royalties";
 import { computeChallengeProgress, statusFor } from "../src/convex/engagement";
+import {
+  DEFAULT_TIMEZONE,
+  MAX_PUBLISH_ATTEMPTS,
+  isBlockingScheduleStatus,
+  isValidTimezone,
+  nextOccurrenceUtc,
+  parseFormDateTime,
+  retryDelayMs,
+  scheduleStatusAr,
+  validateContentForPublish,
+  zonedDateStr,
+  zonedTimeStr,
+  zonedToUtc,
+} from "../src/convex/scheduleLogic";
 
 // ---------------- importSources.classifyRights ----------------
 
@@ -579,5 +593,211 @@ describe("pickAudioFormat", () => {
     expect(pickAudioFormat(["m4b", "ogg"])).toBe("m4b");
     expect(pickAudioFormat(["flac"])).toBe("flac");
     expect(pickAudioFormat([])).toBeUndefined();
+  });
+});
+
+// ---------------- scheduleLogic (content scheduling) ----------------
+
+describe("scheduleLogic: timezone conversion", () => {
+  it("round-trips Cairo wall clock through UTC (winter, UTC+2)", () => {
+    const utc = zonedToUtc("2026-01-15", "20:30", "Africa/Cairo");
+    // Cairo is UTC+2 in winter: 20:30 local → 18:30 UTC
+    expect(new Date(utc).toISOString()).toBe("2026-01-15T18:30:00.000Z");
+    expect(zonedDateStr(utc, "Africa/Cairo")).toBe("2026-01-15");
+    expect(zonedTimeStr(utc, "Africa/Cairo")).toBe("20:30");
+  });
+
+  it("round-trips Cairo wall clock through UTC (summer, UTC+3)", () => {
+    const utc = zonedToUtc("2026-07-10", "09:00", "Africa/Cairo");
+    // Cairo is UTC+3 in summer (DST resumed 2023): 09:00 local → 06:00 UTC
+    expect(new Date(utc).toISOString()).toBe("2026-07-10T06:00:00.000Z");
+    expect(zonedDateStr(utc, "Africa/Cairo")).toBe("2026-07-10");
+    expect(zonedTimeStr(utc, "Africa/Cairo")).toBe("09:00");
+  });
+
+  it("rejects invalid timezones and accepts real ones", () => {
+    expect(isValidTimezone("Africa/Cairo")).toBe(true);
+    expect(isValidTimezone("UTC")).toBe(true);
+    expect(isValidTimezone("Bogus/Zone")).toBe(false);
+    expect(isValidTimezone("")).toBe(false);
+  });
+
+  it("uses Africa/Cairo as the platform default", () => {
+    expect(DEFAULT_TIMEZONE).toBe("Africa/Cairo");
+  });
+
+  it("parses form date/time and rejects malformed input", () => {
+    expect(parseFormDateTime("2026-05-01", "08:05")).toEqual({ date: "2026-05-01", time: "08:05" });
+    expect(parseFormDateTime("bad", "08:05")).toEqual({ error: "اختر تاريخ النشر" });
+    expect(parseFormDateTime("2026-05-01", "")).toEqual({ error: "اختر وقت النشر" });
+  });
+});
+
+describe("scheduleLogic: nextOccurrenceUtc", () => {
+  const base = zonedToUtc("2026-03-01", "09:00", "Africa/Cairo");
+
+  it("returns null for one-off (freq none)", () => {
+    expect(
+      nextOccurrenceUtc(base, { freq: "none", timeOfDay: "09:00" }, DEFAULT_TIMEZONE),
+    ).toBeNull();
+  });
+
+  it("computes the next daily occurrence strictly after the anchor", () => {
+    const next = nextOccurrenceUtc(base, { freq: "daily", timeOfDay: "09:00" }, DEFAULT_TIMEZONE);
+    expect(next).not.toBeNull();
+    // Exactly +1 day at the same wall clock
+    expect(next! - base).toBe(24 * 3600_000);
+  });
+
+  it("weekly picks the next matching weekday", () => {
+    // 2026-03-01 is a Sunday. Next Sunday is the 8th.
+    const next = nextOccurrenceUtc(
+      base,
+      { freq: "weekly", weekdays: [0], timeOfDay: "09:00" },
+      DEFAULT_TIMEZONE,
+    );
+    expect(next).not.toBeNull();
+    expect(zonedDateStr(next!, DEFAULT_TIMEZONE)).toBe("2026-03-08");
+    expect(zonedTimeStr(next!, DEFAULT_TIMEZONE)).toBe("09:00");
+  });
+
+  it("weekly can match tomorrow when today's weekday is not selected", () => {
+    // Monday Mar 2 → next Thursday Mar 5 (weekdays: [4])
+    const monday = zonedToUtc("2026-03-02", "10:00", DEFAULT_TIMEZONE);
+    const next = nextOccurrenceUtc(
+      monday,
+      { freq: "weekly", weekdays: [4], timeOfDay: "10:00" },
+      DEFAULT_TIMEZONE,
+    );
+    expect(zonedDateStr(next!, DEFAULT_TIMEZONE)).toBe("2026-03-05");
+  });
+
+  it("monthly clamps to the last day of short months (day 30 → Feb 28)", () => {
+    // Jan 30 09:00 Cairo, monthly on day 30 → Feb 28 2026 (non-leap)
+    const jan30 = zonedToUtc("2026-01-30", "09:00", DEFAULT_TIMEZONE);
+    const next = nextOccurrenceUtc(
+      jan30,
+      { freq: "monthly", monthDay: 30, timeOfDay: "09:00" },
+      DEFAULT_TIMEZONE,
+    );
+    expect(next).not.toBeNull();
+    expect(zonedDateStr(next!, DEFAULT_TIMEZONE)).toBe("2026-02-28");
+  });
+
+  it("interval_days skips N-1 days between occurrences", () => {
+    const next = nextOccurrenceUtc(
+      base,
+      { freq: "interval_days", intervalDays: 3, timeOfDay: "09:00" },
+      DEFAULT_TIMEZONE,
+    );
+    expect(next).not.toBeNull();
+    expect(zonedDateStr(next!, DEFAULT_TIMEZONE)).toBe("2026-03-04");
+  });
+
+  it("stops at endsAt when the next occurrence would exceed it", () => {
+    const next = nextOccurrenceUtc(
+      base,
+      {
+        freq: "daily",
+        timeOfDay: "09:00",
+        endsAt: base + 2 * 24 * 3600_000,
+      },
+      DEFAULT_TIMEZONE,
+    );
+    // base+1d ≤ endsAt → still allowed; base+2d === endsAt boundary: first call returns base+1d
+    expect(next).not.toBeNull();
+    expect(next! - base).toBe(24 * 3600_000);
+
+    // After that, the series ends.
+    const after = nextOccurrenceUtc(
+      next!,
+      { freq: "daily", timeOfDay: "09:00", endsAt: base + 2 * 24 * 3600_000 },
+      DEFAULT_TIMEZONE,
+    );
+    // next = base+1d; candidate base+2d > endsAt? base+2d == endsAt → allowed... but next candidate base+3d > endsAt → null
+    // base+2d is allowed since next > endsAt is false (equal), so we get base+2d.
+    expect(after).not.toBeNull();
+    // Third call: from base+2d, next would be base+3d > endsAt → null.
+    const third = nextOccurrenceUtc(
+      after!,
+      { freq: "daily", timeOfDay: "09:00", endsAt: base + 2 * 24 * 3600_000 },
+      DEFAULT_TIMEZONE,
+    );
+    expect(third).toBeNull();
+  });
+});
+
+describe("scheduleLogic: publish validation & retry policy", () => {
+  it("accepts complete content with an audio URL", () => {
+    const r = validateContentForPublish(
+      { title: "كتاب", description: "وصف", audioUrl: "https://x/a.mp3" },
+      { chapters: 0, episodes: 0 },
+    );
+    expect(r.ok).toBe(true);
+    expect(r.info).toContain("ملف صوتي");
+  });
+
+  it("accepts content with chapters as the delivery mechanism", () => {
+    const r = validateContentForPublish(
+      { title: "كتاب", description: "وصف" },
+      { chapters: 3, episodes: 0 },
+    );
+    expect(r.ok).toBe(true);
+  });
+
+  it("rejects content without a description", () => {
+    const r = validateContentForPublish(
+      { title: "كتاب", description: "" },
+      { chapters: 0, episodes: 0 },
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toContain("وصف");
+  });
+
+  it("rejects content with no delivery mechanism", () => {
+    const r = validateContentForPublish(
+      { title: "كتاب", description: "وصف" },
+      { chapters: 0, episodes: 0 },
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toContain("لا يمكن نشره");
+  });
+
+  it("treats unavailable import files as missing", () => {
+    const r = validateContentForPublish(
+      {
+        title: "كتاب",
+        description: "وصف",
+        importFiles: [{ url: "https://x/a.mp3", availability: "unavailable" }],
+      },
+      { chapters: 0, episodes: 0 },
+    );
+    expect(r.ok).toBe(false);
+  });
+
+  it("retry backoff is 1 min, 5 min, 15 min and caps at 3 attempts", () => {
+    expect(retryDelayMs(1)).toBe(60_000);
+    expect(retryDelayMs(2)).toBe(5 * 60_000);
+    expect(retryDelayMs(3)).toBe(15 * 60_000);
+    expect(MAX_PUBLISH_ATTEMPTS).toBe(3);
+  });
+
+  it("blocking statuses are exactly scheduled and publishing", () => {
+    expect(isBlockingScheduleStatus("scheduled")).toBe(true);
+    expect(isBlockingScheduleStatus("publishing")).toBe(true);
+    expect(isBlockingScheduleStatus("draft")).toBe(false);
+    expect(isBlockingScheduleStatus("failed")).toBe(false);
+    expect(isBlockingScheduleStatus("published")).toBe(false);
+    expect(isBlockingScheduleStatus("cancelled")).toBe(false);
+  });
+
+  it("labels every schedule status in Arabic", () => {
+    expect(scheduleStatusAr("draft")).toBe("مسودة");
+    expect(scheduleStatusAr("scheduled")).toBe("مجدول");
+    expect(scheduleStatusAr("publishing")).toBe("قيد النشر");
+    expect(scheduleStatusAr("published")).toBe("منشور");
+    expect(scheduleStatusAr("failed")).toBe("فشل النشر");
+    expect(scheduleStatusAr("cancelled")).toBe("ملغي");
+    expect(scheduleStatusAr("unknown")).toBe("unknown");
   });
 });

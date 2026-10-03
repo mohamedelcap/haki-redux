@@ -15,6 +15,7 @@ import { RoyaltiesManager } from "@/pages/admin/RoyaltiesManager";
 import { BookImporterManager } from "@/pages/admin/BookImporterManager";
 import { GitHubManager, GitHubStatsCard } from "@/pages/admin/GitHubManager";
 import { CollectionsManager } from "@/pages/admin/CollectionsManager";
+import { ContentSchedulerManager } from "@/pages/admin/ContentSchedulerManager";
 import { VercelManager, VercelStatsCard } from "@/pages/admin/VercelManager";
 import { SEO } from "@/components/SEO";
 import { HakiLogo } from "@/components/HakiLogo";
@@ -50,6 +51,7 @@ import {
   AlertTriangle,
   ArrowLeft,
   Rocket,
+  CalendarClock,
   LayoutGrid as LayoutGridIcon,
   AudioLines,
   CirclePlus,
@@ -135,6 +137,7 @@ type TabKey =
   | "bookImporter"
   | "github"
   | "collections"
+  | "scheduler"
   | "vercel"
   | "settings";
 
@@ -182,6 +185,7 @@ function AdminInner() {
         { key: "media", label: L("الوسائط", "Media"), icon: Images },
         { key: "live", label: L("البث المباشر", "Live streaming"), icon: Radio },
         { key: "submissions", label: L("طلبات النشر", "Submissions"), icon: FileText },
+        { key: "scheduler", label: L("جدولة المحتوى", "Content scheduling"), icon: CalendarClock },
         { key: "analytics", label: L("التحليلات", "Analytics"), icon: BarChart3 },
         { key: "moderation", label: L("الإشراف", "Moderation"), icon: Shield },
         { key: "audit", label: L("سجل التدقيق", "Audit log"), icon: History },
@@ -342,9 +346,9 @@ function AdminInner() {
           {tab === "media" && <MediaLibrary L={L} />}
           {tab === "plans" && <PlansManager L={L} lang={lang} />}
           {tab === "challenges" && <ChallengesManager L={L} />}
-          {tab === "live" && <LiveManager L={L} />}
-          {tab === "submissions" && <SubmissionsManager L={L} />}
-          {tab === "analytics" && <AnalyticsPanel />}
+          {tab === "live" && <LiveManager L={L} />}          { tab === "submissions" && <SubmissionsManager L={L} /> }
+          { tab === "scheduler" && <ContentSchedulerManager L={L} /> }
+          { tab === "analytics" && <AnalyticsPanel /> }
           {tab === "moderation" && <ModerationManager L={L} />}
           {tab === "audit" && <AuditLogManager L={L} />}
           {tab === "notifications" && <NotificationsManager L={L} />}
