@@ -302,7 +302,8 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
               >
                 استخدام بريد مختلف
               </Button>
-            </CardFooter>          </Card>
+            </CardFooter>
+          </Card>
         </div>
       </div>
     );
@@ -342,22 +343,136 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                     رجوع
                   </Button>
                 </CardContent>
-                </>
-          ) : (
+              </>
+            ) : (
+              <>
+                <CardHeader className="mt-4 text-center">
+                  <CardTitle className="flex items-center justify-center gap-2">
+                    <KeyRound className="size-5 text-primary" />
+                    تعيين كلمة مرور جديدة
+                  </CardTitle>
+                  <CardDescription>
+                    اختر كلمة مرور جديدة لحساب {resetStep.email}
+                  </CardDescription>
+                </CardHeader>
+                <form onSubmit={handleNewPasswordSubmit}>
+                  <CardContent className="space-y-3 pb-4">
+                    <input type="hidden" name="code" value={resetStep.code} />
+                    <div className="space-y-1.5">
+                      <Label htmlFor="new-password">كلمة المرور الجديدة</Label>
+                      <Input
+                        id="new-password"
+                        name="password"
+                        type="password"
+                        dir="ltr"
+                        minLength={8}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="confirm-password">تأكيد كلمة المرور</Label>
+                      <Input
+                        id="confirm-password"
+                        name="confirmPassword"
+                        type={showConfirm ? "text" : "password"}
+                        dir="ltr"
+                        minLength={8}
+                        required
+                        placeholder="تأكيد كلمة المرور"
+                      />
+                      <button
+                        type="button"
+                        aria-label={showConfirm ? "إخفاء تأكيد كلمة المرور" : "إظهار تأكيد كلمة المرور"}
+                        className="absolute end-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                        onClick={() => setShowConfirm((v) => !v)}
+                      >
+                        {showConfirm ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                      </button>
+                    </div>
+                    {error && <p className="auth-error mt-1 text-sm text-red-500">{error}</p>}
+                  </CardContent>
+                  <CardFooter className="flex-col gap-2 pb-6">
+                    <Button type="submit" className="w-full" disabled={isLoading}>
+                      {isLoading && <Loader2 className="ml-2 size-4 animate-spin" />}
+                      حفظ كلمة المرور والدخول
+                    </Button>
+                  </CardFooter>
+                </form>
+              </>
+            )}
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
+  // ================= Sign in / Sign up / Forgot =================
+  return (
+    <div className="hero-gradient relative flex min-h-screen flex-col overflow-hidden auth-bg">
+      <FloatingIcons />
+      <div className="relative flex flex-1 items-center justify-center px-4 py-12">
+        <Card className="auth-card auth-shot">
+          {mode === "forgot" ? (
             <>
               <CardHeader className="text-center">
                 <div className="flex justify-center">
-                  <button
+                  <div className="mb-4 mt-4 flex size-12 items-center justify-center rounded-full bg-accent">
+                    <KeyRound className="size-5 text-accent-foreground" />
+                  </div>
+                </div>
+                <CardTitle>استعادة كلمة المرور</CardTitle>
+                <CardDescription>
+                  أدخل بريدك وسنرسل لك رمزًا لتعيين كلمة مرور جديدة
+                </CardDescription>
+              </CardHeader>
+              <form onSubmit={handleForgotSubmit}>
+                <CardContent className="pb-4">
+                  <div className="relative">
+                    <Mail className="absolute start-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      name="email"
+                      placeholder="name@example.com"
+                      type="email"
+                      className="ps-9"
+                      dir="ltr"
+                      disabled={isLoading}
+                      required
+                    />
+                  </div>
+                  {error && <p className="mt-2 text-sm text-red-500">{error}</p>}
+                </CardContent>
+                <CardFooter className="flex-col gap-2 pb-6">
+                  <Button type="submit" className="w-full" disabled={isLoading}>
+                    {isLoading && <Loader2 className="ml-2 size-4 animate-spin" />}
+                    إرسال رمز الاستعادة
+                  </Button>
+                  <Button
                     type="button"
-                    onClick={goHome}
-                    aria-label="حكي — الصفحة الرئيسية"
-                    className="auth-brand mb-4 mt-4 cursor-pointer transition-transform hover:scale-105
+                    variant="ghost"
+                    className="w-full"
+                    onClick={() => {
+                      setMode("signIn");
+                      setError(null);
+                    }}
+                  >
+                    رجوع لتسجيل الدخول
+                  </Button>
+                </CardFooter>
+              </form>
+            </>
+          ) : (
+            <>
+              <CardHeader className="text-center">
+                <button
+                  type="button"
+                  onClick={goHome}
+                  aria-label="حكي — الصفحة الرئيسية"
+                  className="auth-brand mb-4 mt-4 cursor-pointer transition-transform hover:scale-105
                               [animation-delay:0.3s]
                               [animation-name:auth-brand-park]"
-                  >
-                    <HakiLogo variant="colored" size={72} />
-                  </button>
-                </div>
+                >
+                  <HakiLogo variant="colored" size={72} />
+                </button>
                 <CardTitle className="text-2xl">
                   {mode === "signUp" ? "أنشئ حسابك في حكي" : "مرحبًا بك في حكي"}
                 </CardTitle>
@@ -384,7 +499,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                         dir="ltr"
                         minLength={3}
                         maxLength={20}
-                        pattern="[a-zA-Z0-9_]+"
+                        pattern="[a-zA-Z0-9_]"
                         autoComplete="username"
                         disabled={isLoading}
                       />
@@ -447,7 +562,11 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                   {error && <p className="auth-error mt-1 text-sm text-red-500">{error}</p>}
                 </CardContent>
                 <CardFooter className="flex-col gap-2">
-                  <Button type="submit" className="mt-4 w-full py-3.5 text-base font-bold tracking-wide font-logo auth-primary" disabled={isLoading}>
+                  <Button
+                    type="submit"
+                    className="mt-4 w-full py-3.5 text-base font-bold tracking-wide font-logo auth-primary"
+                    disabled={isLoading}
+                  >
                     {isLoading && <Loader2 className="ml-2 size-4 animate-spin" />}
                     {mode === "signUp" ? "إنشاء الحساب الآن" : "دخول إلى حسابك"}
                   </Button>
@@ -473,7 +592,10 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                         <span className="bg-background px-2 text-muted-foreground">أو</span>
                       </div>
                     </div>
-                    <Button type="button" variant="outline" className="auth-google mt-4 w-full gap-2 py-3.5 border-input"
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="auth-google mt-4 w-full gap-2 py-3.5 border-input"
                       onClick={handleGoogleLogin}
                       disabled={isLoading}
                       title={
@@ -501,8 +623,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                         />
                       </svg>
                       المتابعة بحساب جوجل
-                    </Button>
-                    <Button
+                    </Button>                    <Button
                       type="button"
                       variant="outline"
                       className="auth-btn-outline mt-2 w-full py-3"
@@ -511,10 +632,11 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                     >
                       <UserX className="ml-2 h-4 w-4" />
                       المتابعة كضيف
-                    </Button>                    <OtpRequestInline disabled={isLoading} onRequested={(email) => setOtpStep({ email })} />
-                    </div>
-                  </CardFooter>
-                  <AuthFooterBanner goHome={goHome} />
+                    </Button>
+                    <OtpRequestInline disabled={isLoading} onRequested={(email) => setOtpStep({ email })} />
+                  </div>
+                </CardFooter>
+                <AuthFooterBanner goHome={goHome} />
               </form>
             </>
           )}
@@ -561,7 +683,12 @@ function OtpRequestInline({
         className="auth-ott h-11 text-sm"
         disabled={disabled || busy}
       />
-      <Button type="submit" size="sm" className="auth-btn-outline py-2.5 px-5" disabled={disabled || busy}>
+      <Button
+        type="submit"
+        size="sm"
+        className="auth-btn-outline py-2.5 px-5"
+        disabled={disabled || busy}
+      >
         {busy ? <Loader2 className="size-4 animate-spin" /> : "إدخال الرمز"}
       </Button>
     </form>
