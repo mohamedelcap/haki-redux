@@ -77,6 +77,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
     | { stage: "newPassword"; email: string; code: string }
   >(null);
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -200,7 +201,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
     const password = formData.get("password") as string;
     const confirmPassword = formData.get("confirmPassword") as string;
     if (password !== confirmPassword) {
-      setError("كلمتا المرور غير متطابقتين.");
+      setError("كلمتا المرور غير متطابقتين — أعد المحاولة.");
       return;
     }
     setIsLoading(true);
@@ -266,10 +267,10 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
   // ================= OTP code entry =================
   if (otpStep) {
     return (
-      <div className="hero-gradient relative flex min-h-screen flex-col overflow-hidden">
+      <div className="hero-gradient relative flex min-h-screen flex-col overflow-hidden auth-bg">
         <FloatingIcons />
         <div className="relative flex flex-1 items-center justify-center px-4 py-12">
-          <Card className="min-w-[350px] border pb-0 shadow-md">
+          <Card className="auth-card auth-shot">
             <CardHeader className="mt-4 text-center">
               <CardTitle>تفقّد بريدك الإلكتروني</CardTitle>
               <CardDescription>أرسلنا رمز التحقق إلى {otpStep.email}</CardDescription>
@@ -312,10 +313,10 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
   // ================= Password reset flow =================
   if (resetStep) {
     return (
-      <div className="hero-gradient relative flex min-h-screen flex-col overflow-hidden">
+      <div className="hero-gradient relative flex min-h-screen flex-col overflow-hidden auth-bg">
         <FloatingIcons />
         <div className="relative flex flex-1 items-center justify-center px-4 py-12">
-          <Card className="min-w-[350px] border pb-0 shadow-md">
+          <Card className="auth-card auth-shot">
             {resetStep.stage === "code" ? (
               <>
                 <CardHeader className="mt-4 text-center">
@@ -375,13 +376,22 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                       <Input
                         id="confirm-password"
                         name="confirmPassword"
-                        type="password"
+                        type={showConfirm ? "text" : "password"}
                         dir="ltr"
                         minLength={8}
                         required
+                        placeholder="تأكيد كلمة المرور"
                       />
+                      <button
+                        type="button"
+                        aria-label={showConfirm ? "إخفاء تأكيد كلمة المرور" : "إظهار تأكيد كلمة المرور"}
+                        className="absolute end-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                        onClick={() => setShowConfirm((v) => !v)}
+                      >
+                        {showConfirm ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                      </button>
                     </div>
-                    {error && <p className="text-sm text-red-500">{error}</p>}
+                    {error && <p className="auth-error mt-1 text-sm text-red-500">{error}</p>}
                   </CardContent>
                   <CardFooter className="flex-col gap-2 pb-6">
                     <Button type="submit" className="w-full" disabled={isLoading}>
@@ -401,10 +411,10 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
 
   // ================= Sign in / Sign up / Forgot =================
   return (
-    <div className="hero-gradient relative flex min-h-screen flex-col overflow-hidden">
+    <div className="hero-gradient relative flex min-h-screen flex-col overflow-hidden auth-bg">
       <FloatingIcons />
       <div className="relative flex flex-1 items-center justify-center px-4 py-12">
-        <Card className="relative min-w-[350px] border pb-0 shadow-md">
+        <Card className="auth-card auth-shot">
           {mode === "forgot" ? (
             <>
               <CardHeader className="text-center">
@@ -462,18 +472,20 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                     type="button"
                     onClick={goHome}
                     aria-label="حكي — الصفحة الرئيسية"
-                    className="mb-4 mt-4 cursor-pointer transition-transform hover:scale-105"
+                    className="auth-brand mb-4 mt-4 cursor-pointer transition-transform hover:scale-105
+                              [animation-delay:0.3s]
+                              [animation-name:auth-brand-park]"
                   >
                     <HakiLogo variant="colored" size={72} />
                   </button>
                 </div>
-                <CardTitle className="text-xl">
+                <CardTitle className="text-2xl">
                   {mode === "signUp" ? "أنشئ حسابك في حكي" : "مرحبًا بك في حكي"}
                 </CardTitle>
                 <CardDescription>
                   {mode === "signUp"
-                    ? "سجّل الآن واستمع لآلاف الأعمال العربية الصوتية"
-                    : "سجّل دخولك بكلمة المرور للمتابعة"}
+                    ? "سجّل الآن واستمع لآلاف الأعمال العربية الصوتية والدراما الصوتية والبودكاست"
+                    : "سجّل دخولك بكلمة المرور للمتابعة، أو ادخل بريدك لرمز تحقق سريع"}
                 </CardDescription>
                 {mode === "signUp" && (
                   <p className="mt-1 text-xs text-muted-foreground">
@@ -502,13 +514,13 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                   <div className="space-y-1.5">
                     <Label htmlFor="email">البريد الإلكتروني</Label>
                     <div className="relative">
-                      <Mail className="absolute start-3 top-3 h-4 w-4 text-muted-foreground" />
+                      <Mail className="absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                       <Input
                         id="email"
                         name="email"
-                        placeholder="name@example.com"
+                        placeholder="address@example.com"
                         type="email"
-                        className="ps-9"
+                        className="ps-9 [padding-top:calc(1.35rem+1px)] [padding-bottom:calc(1.35rem+1px)]"
                         dir="ltr"
                         disabled={isLoading}
                         required
@@ -536,8 +548,8 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                         id="password"
                         name="password"
                         type={showPassword ? "text" : "password"}
-                        placeholder={mode === "signUp" ? "8 أحرف على الأقل" : "••••••••"}
-                        className="pe-9"
+                        placeholder={mode === "signUp" ? "8 حروف على الأقل" : "كلمة المرور"}
+                        className="pe-10 [padding-top:calc(1.35rem+1px)] [padding-bottom:calc(1.35rem+1px)]"
                         dir="ltr"
                         minLength={8}
                         disabled={isLoading}
@@ -553,12 +565,12 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                       </button>
                     </div>
                   </div>
-                  {error && <p className="text-sm text-red-500">{error}</p>}
+                  {error && <p className="auth-error mt-1 text-sm text-red-500">{error}</p>}
                 </CardContent>
                 <CardFooter className="flex-col gap-2">
-                  <Button type="submit" className="w-full" disabled={isLoading}>
+                  <Button type="submit" className="mt-4 w-full py-3.5 text-base font-bold tracking-wide font-logo" disabled={isLoading}>
                     {isLoading && <Loader2 className="ml-2 size-4 animate-spin" />}
-                    {mode === "signUp" ? "إنشاء الحساب" : "تسجيل الدخول"}
+                    {mode === "signUp" ? "إنشاء الحساب الآن" : "دخول إلى حسابك"})
                   </Button>
                   <p className="text-sm text-muted-foreground">
                     {mode === "signUp" ? "لديك حساب بالفعل؟" : "ليس لديك حساب؟"}{" "}
@@ -585,7 +597,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                     <Button
                       type="button"
                       variant="outline"
-                      className="mt-4 w-full gap-2 border-input bg-white font-semibold text-[#1f1f1f] hover:bg-gray-50"
+                      className="auth-google mt-4 w-full gap-2 py-3.5 border-input text-[#1f1f1f] hover:bg-gray-50"
                       onClick={handleGoogleLogin}
                       disabled={isLoading}
                       title={
@@ -617,7 +629,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                     <Button
                       type="button"
                       variant="outline"
-                      className="mt-2 w-full"
+                      className="auth-btn-outline mt-2 w-full py-3"
                       onClick={handleGuestLogin}
                       disabled={isLoading}
                     >
@@ -664,18 +676,18 @@ function OtpRequestInline({
   };
 
   return (
-    <form onSubmit={submit} className="mt-3 flex items-center gap-2">
+    <form onSubmit={submit} className="mt-3 flex w-full items-center justify-center gap-2">
       <Input
         value={email}
         onChange={(e) => setEmail(e.target.value)}
-        placeholder="أو ادخل بريدك لرمز سريع"
+        placeholder="أدخل بريدك لرمز سريع"
         type="email"
         dir="ltr"
-        className="h-9 text-xs"
+        className="auth-ott h-11 text-sm"
         disabled={disabled || busy}
       />
-      <Button type="submit" size="sm" variant="secondary" disabled={disabled || busy}>
-        {busy ? <Loader2 className="size-4 animate-spin" /> : "رمز"}
+      <Button type="submit" size="sm" className="auth-btn-outline py-2.5 px-5" disabled={disabled || busy}>
+        {busy ? <Loader2 className="size-4 animate-spin" /> : "إدخال الرمز"}
       </Button>
     </form>
   );
@@ -711,7 +723,7 @@ function OtpInput({
           ))}
         </InputOTPGroup>
       </InputOTP>
-      {error && <p className="text-sm text-red-500">{error}</p>}
+      {error && <p className="auth-error mt-1 text-sm text-red-500">{error}</p>}
       <Button
         type="button"
         className="w-full"
@@ -731,8 +743,22 @@ function isLoadingGate(otp: string) {
 
 function AuthFooter({ goHome }: { goHome: () => void }) {
   return (
-    <div className="rounded-b-lg border-t bg-muted px-6 py-4 text-center text-xs text-muted-foreground">
-      رحلتك مع المحتوى العربي تبدأ هنا —{" "}
+    <div className="auth-footer">
+      <span className="auth-pt auth-pt-2">رحلتك</span>
+      <span className="auth-pt">مع المحتوى العربي</span>
+      <span className="auth-pt">تبدأ هنا</span>
+      <span className="mx-2 text-muted-foreground">—</span>
+      <span className="auth-pt">وصول سريع</span>
+      <span className="auth-pt-2">إلى المحتوى</span>
+      <span className="auth-pt">العربي</span>
+      <span className="mx-2 text-muted-foreground">—</span>
+      <button
+        type="button"
+        onClick={goHome}
+        className="auth-link font-semibold text-primary transition-colors hover:underline"
+      >
+        حكي
+      </button>
       <button
         type="button"
         onClick={goHome}

@@ -13,6 +13,7 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { initErrorTelemetry, reportClientError } from "@/lib/telemetry";
 import { ThemeProvider } from "@/lib/theme";
 import "./index.css";
+import "./pages/Auth.css";
 
 // Lazy load route components for better code splitting
 const Landing = lazy(() => import("./pages/Landing.tsx"));
