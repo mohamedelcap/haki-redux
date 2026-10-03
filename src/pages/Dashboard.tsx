@@ -133,7 +133,7 @@ function DashboardInner() {
             <Link
               key={s.label}
               to={s.href}
-              className="rounded-2xl border bg-card p-5 transition-all card-shadow hover:card-shadow-hover"
+              className="rounded-2xl border bg-card/80 p-5 transition-all backdrop-blur-sm hover:bg-card/90"
             >
               <s.icon className="size-5 text-primary" />
               <p className="mt-3 text-2xl font-black tabular-nums">
@@ -159,7 +159,7 @@ function DashboardInner() {
               ))}
             </div>
           ) : continueList.length === 0 ? (
-            <div className="mt-4 rounded-2xl border bg-card p-10 text-center">
+            <div className="mt-4 rounded-2xl border bg-card/80 p-10 text-center backdrop-blur-sm">
               <Headphones className="mx-auto size-8 text-muted-foreground/50" />
               <p className="mt-3 font-bold">{L("لم تبدأ الاستماع بعد", "You haven't started listening yet")}</p>
               <p className="mt-1 text-sm text-muted-foreground">
@@ -177,7 +177,7 @@ function DashboardInner() {
               {continueList.map((row) => (
                 <div key={row._id} className="w-44 shrink-0">
                   <ContentCard item={row.content as any} />
-                  <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-muted">
+                  <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-background/70">
                     <div
                       className="h-full bg-primary"
                       style={{

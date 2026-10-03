@@ -568,9 +568,9 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                   {error && <p className="auth-error mt-1 text-sm text-red-500">{error}</p>}
                 </CardContent>
                 <CardFooter className="flex-col gap-2">
-                  <Button type="submit" className="mt-4 w-full py-3.5 text-base font-bold tracking-wide font-logo" disabled={isLoading}>
+                  <Button type="submit" className="mt-4 w-full py-3.5 text-base font-bold tracking-wide font-logo auth-primary" disabled={isLoading}>
                     {isLoading && <Loader2 className="ml-2 size-4 animate-spin" />}
-                    {mode === "signUp" ? "إنشاء الحساب الآن" : "دخول إلى حسابك"})
+                    {mode === "signUp" ? "إنشاء الحساب الآن" : "دخول إلى حسابك"}
                   </Button>
                   <p className="text-sm text-muted-foreground">
                     {mode === "signUp" ? "لديك حساب بالفعل؟" : "ليس لديك حساب؟"}{" "}
@@ -594,10 +594,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                         <span className="bg-background px-2 text-muted-foreground">أو</span>
                       </div>
                     </div>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="auth-google mt-4 w-full gap-2 py-3.5 border-input text-[#1f1f1f] hover:bg-gray-50"
+                    <Button type="button" variant="outline" className="auth-google mt-4 w-full gap-2 py-3.5 border-input"
                       onClick={handleGoogleLogin}
                       disabled={isLoading}
                       title={
@@ -749,20 +746,12 @@ function AuthFooter({ goHome }: { goHome: () => void }) {
       <span className="auth-pt">تبدأ هنا</span>
       <span className="mx-2 text-muted-foreground">—</span>
       <span className="auth-pt">وصول سريع</span>
-      <span className="auth-pt-2">إلى المحتوى</span>
-      <span className="auth-pt">العربي</span>
+      <span className="auth-pt">إلى المحتوى العربي</span>
       <span className="mx-2 text-muted-foreground">—</span>
       <button
         type="button"
         onClick={goHome}
         className="auth-link font-semibold text-primary transition-colors hover:underline"
-      >
-        حكي
-      </button>
-      <button
-        type="button"
-        onClick={goHome}
-        className="font-semibold text-primary transition-colors hover:underline"
       >
         حكي
       </button>

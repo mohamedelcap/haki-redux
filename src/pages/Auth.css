@@ -1,33 +1,64 @@
 .auth-bg {
-  background: radial-gradient(1200px 600px at 15% 20%, rgba(249, 115, 22, 0.10), transparent 60%),
-              radial-gradient(900px 500px at 85% 80%, rgba(236, 72, 153, 0.08), transparent 55%),
-              linear-gradient(160deg, #0f172a 0%, #1e293b 45%, #7c2d12 65%, #9a3412 85%, #7c2d12 100%);
+  /* Night background: dark navy-black, many times brighter and more vibrant.
+   * Warm orange + pale lime ambient glow — the two primary accent colors. */
+  background: radial-gradient(1200px 600px at 12% 18%, rgba(249, 115, 22, 0.14), transparent 60%),
+              radial-gradient(900px 600px at 88% 82%, rgba(132, 223, 149, 0.10), transparent 60%),
+              radial-gradient(800px 500px at 50% 100%, rgba(255, 255, 255, 0.04), transparent 65%),
+              linear-gradient(165deg, #0b0f1a 0%, #101628 38%, #0f1a12 72%, #0a0e14 100%);
+}
+
+/* Brand pulse field — reinforces the two accent colors. */
+.auth-bg::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  filter: blur(120px);
+  opacity: 0.35;
+  pointer-events: none;
+  background: radial-gradient(600px 300px at 88% 12%, #f59e0b, transparent 70%),
+              radial-gradient(420px 260px at 8% 88%, #8ef395, transparent 70%);
+}
+
+/* Subtle vignette to keep the edges dark and the center luminous. */
+.auth-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  filter: blur(6px);
+  background: radial-gradient(1200px 800px at 50% 45%, rgba(0, 0, 0, 0.55), transparent 70%);
+  pointer-events: none;
 }
 .auth-card {
   position: relative;
   z-index: 1;
 }
+
+/* Transparent night panels — white 8% fill, crisp glass ring, orange tint on top. */
 .auth-shot {
   position: relative;
   z-index: 2;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: linear-gradient(180deg, rgba(249, 115, 22, 0.10), rgba(249, 115, 22, 0.05)),
-              linear-gradient(180deg, rgba(249, 115, 22, 0.06), rgba(249, 115, 22, 0.03)),
-              rgba(15, 23, 42, 0.55);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.03)),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02)),
+    rgba(15, 23, 42, 0.40);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
 }
+
 .auth-card::before {
   content: "";
   position: absolute;
   inset: -1px;
   border-radius: inherit;
-  background: linear-gradient(120deg, #f97316, #f59e0b, #ef4444, #f97316);
+  background: linear-gradient(120deg, #f97316, #fbbf24, #84cc16, #f97316);
   background-size: 200% 200%;
   z-index: -1;
-  animation: auth-burst 5s ease-box infinite;
+  animation: auth-bright-glow 5s ease-box infinite;
 }
-@keyframes auth-burst {
+@keyframes auth-bright-glow {
   0% { background-position: 0% 50%; }
   50% { background-position: 100% 50%; }
   100% { background-position: 0% 50%; }
@@ -40,15 +71,15 @@
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  box-shadow: 0 0 80px rgba(249, 115, 22, 0.12), 0 0 180px rgba(249, 115, 22, 0.06);
+  box-shadow: 0 0 90px rgba(249, 115, 22, 0.14), 0 0 200px rgba(249, 115, 22, 0.07), 0 0 380px rgba(132, 223, 149, 0.05);
 }
 .hero-gradient::before {
   content: "";
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background: radial-gradient(1200px 500px at 85% 10%, rgba(249, 115, 22, 0.16), transparent 60%),
-              radial-gradient(800px 400px at 10% 90%, rgba(236, 72, 153, 0.12), transparent 55%);
+  background: radial-gradient(1200px 500px at 85% 8%, rgba(249, 115, 22, 0.18), transparent 60%),
+              radial-gradient(800px 400px at 8% 92%, rgba(132, 223, 149, 0.12), transparent 60%);
 }
 .auth-ott {
   position: relative;
@@ -66,6 +97,8 @@
 }
 .auth-error {
   animation: auth-slide-in 0.22s ease-out;
+  color: #ff6b35;
+  text-shadow: 0 0 14px rgba(249, 115, 22, 0.25);
 }
 @keyframes auth-slide-in {
   from { opacity: 0; transform: translateY(-6px); }
@@ -76,6 +109,13 @@
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
+}
+.auth-logo-darker {
+  background: linear-gradient(135deg, #ffffff 0%, #ffe0b3 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: brightness(0.92);
 }
 .auth-logo svg { -webkit-text-fill-color: transparent; background-clip: text; }
 .auth-logo-desc {
@@ -94,6 +134,13 @@
   background-clip: text;
   color: transparent;
 }
+.auth-logo-haki-darker {
+  background: linear-gradient(135deg, #ffffff 0%, #ffe0b3 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: brightness(0.90);
+}
 .auth-logo-haki svg { -webkit-text-fill-color: transparent; background-clip: text; }
 @keyframes auth-brand-park {
   0%, 100% { transform: translateY(0); }
@@ -102,9 +149,14 @@
 .auth-link:hover {
   text-decoration-thickness: 2px;
 }
+.auth-google {
+  background: rgba(15, 23, 42, 0.06);
+  border-color: rgba(66, 133, 244, 0.35);
+  color: #e8eaed;
+}
 .auth-google:hover {
   border-color: #4285f4;
-  background: rgba(66, 133, 244, 0.06);
+  background: rgba(66, 133, 244, 0.10);
 }
 .auth-google svg { animation: auth-pulse 2.6s ease-in-out infinite; }
 @keyframes auth-pulse {
@@ -115,19 +167,20 @@
   transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
 }
 .auth-primary {
-  background: linear-gradient(180deg, #fdba74 0%, #f59e0b 55%, #d97706 100%);
-  color: #0f0f0f;
+  background: linear-gradient(180deg, #fde68a 0%, #facc15 55%, #a3e635 100%);
+  color: #04180b;
   border: 1px solid rgba(255, 255, 255, 0.10);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.30), inset 0 1px 0 rgba(255, 255, 255, 0.35);
 }
 .auth-pt {
   animation: auth-float 6s ease-in-out infinite;
 }
 .auth-footer {
-  border-top: 1px dashed rgba(255, 255, 255, 0.18);
+  border-top: 1px dashed rgba(255, 255, 255, 0.16);
   padding-top: 14px;
   margin-top: 14px;
 }
+
 .auth-footer .auth-pt { animation-duration: 6s; }
 .auth-footer .auth-pt-2 { animation-duration: 6s; animation-direction: reverse; }
 .auth-footer .auth-link {
@@ -138,7 +191,7 @@
   -webkit-text-fill-color: inherit;
   background-clip: padding-box;
 }
-.auth-footer .auth-link:hover { background: rgba(15, 23, 42, 0.5); }
+
 @keyframes auth-float {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-8px); }
