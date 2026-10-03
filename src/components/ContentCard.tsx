@@ -70,6 +70,9 @@ export function ContentCard({ item, className, onPlay }: CardProps) {
     LOGO_COVER;
 
   const handlePlay = (e: React.MouseEvent) => {
+    // No real audio here (e-book, locked premium, or not uploaded yet):
+    // let the card navigate to the details page instead of silent playback.
+    if (!item.audioUrl) return;
     e.preventDefault();
     e.stopPropagation();
     if (onPlay) {

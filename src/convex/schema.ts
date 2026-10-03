@@ -371,6 +371,8 @@ const schema = defineSchema(
       embedUrl: v.optional(v.string()),
       scheduledStart: v.optional(v.string()),
       scheduledEnd: v.optional(v.string()),
+      /** Weekdays this program airs on: 0=Sunday … 6=Saturday. */
+      weekdays: v.optional(v.array(v.number())),
       isLive: v.boolean(),
       listeners: v.number(),
     }),
@@ -768,6 +770,16 @@ const schema = defineSchema(
       errorMessage: v.optional(v.string()),
       createdAt: v.number(),
     }).index("by_created", ["createdAt"]).index("by_user", ["userId"]).index("by_status", ["status"]),
+
+    /** Client-side runtime errors reported by src/lib/telemetry.ts. */
+    client_errors: defineTable({
+      message: v.string(),
+      stack: v.optional(v.string()),
+      source: v.optional(v.string()),
+      url: v.optional(v.string()),
+      componentStack: v.optional(v.string()),
+      createdAt: v.number(),
+    }).index("by_created", ["createdAt"]),
   },
   {
     schemaValidation: false,

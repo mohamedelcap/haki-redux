@@ -5,20 +5,35 @@ import { RequireAuth } from "@/components/RequireAuth";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useLang } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
-import { useQuery } from "convex/react";
-import { Bookmark, BookOpen, ListPlus } from "lucide-react";
+import { useMutation, useQuery } from "convex/react";
+import { Bookmark, BookOpen, ListPlus, X } from "lucide-react";
 import { Library as LibraryIcon } from "lucide-react";
 import { useState } from "react";
 import { useSearchParams } from "react-router";
+import { toast } from "sonner";
 
 function LibraryInner() {
   const { lang, t } = useLang();
   const [searchParams] = useSearchParams();
   const [tab, setTab] = useState<string>(searchParams.get("tab") ?? "mylist");
+  const [sort, setSort] = useState<"recent" | "title">("recent");
 
   const items = useQuery(api.library.myLibrary, {
     kind: tab as any,
   });
+  const toggle = useMutation(api.library.toggleLibrary);
+
+  const rows = (() => {
+    const arr = [...(items ?? [])];
+    if (sort === "title") {
+      arr.sort((a, b) =>
+        (a.content?.title ?? "").localeCompare(b.content?.title ?? "", "ar"),
+      );
+    } else {
+      arr.sort((a, b) => (b.addedAt ?? 0) - (a.addedAt ?? 0));
+    }
+    return arr;
+  })();
 
   const tabs = [
     { key: "mylist", label: t("myList"), icon: ListPlus },
@@ -49,6 +64,30 @@ function LibraryInner() {
               {tb.label}
             </button>
           ))}
+          <div className="ms-auto flex gap-1.5">
+            {(["recent", "title"] as const).map((s) => (
+              <button
+                key={s}
+                type="button"
+                aria-pressed={sort === s}
+                onClick={() => setSort(s)}
+                className={cn(
+                  "rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors",
+                  sort === s
+                    ? "border-primary bg-primary text-white"
+                    : "bg-background text-muted-foreground hover:bg-muted",
+                )}
+              >
+                {s === "recent"
+                  ? lang === "ar"
+                    ? "الأحدث"
+                    : "Newest"
+                  : lang === "ar"
+                    ? "أبجدي"
+                    : "A–Z"}
+              </button>
+            ))}
+          </div>
         </div>
 
         {items === undefined ? (
@@ -69,8 +108,28 @@ function LibraryInner() {
           </div>
         ) : (
           <div className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
-            {items.map((row) => (
-              <div key={row._id} className="relative">
+            {rows.map((row) => (
+              <div key={row._id} className="group relative">
+                <button
+                  type="button"
+                  aria-label={lang === "ar" ? "إزالة من قائمتي" : "Remove from my list"}
+                  onClick={async () => {
+                    try {
+                      await toggle({
+                        contentId: row.contentId,
+                        kind: tab as "mylist" | "saved" | "reading",
+                      });
+                      toast.success(
+                        lang === "ar" ? "أُزيل من قائمتك" : "Removed from your list",
+                      );
+                    } catch (e: any) {
+                      toast.error(e.message);
+                    }
+                  }}
+                  className="absolute end-2 top-2 z-10 hidden size-7 items-center justify-center rounded-full bg-background/90 text-muted-foreground shadow-sm transition-colors hover:text-destructive group-hover:flex"
+                >
+                  <X className="size-4" />
+                </button>
                 <ContentCard item={row.content as any} />
               </div>
             ))}

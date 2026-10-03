@@ -237,6 +237,21 @@ export const continueListening = query({
 
 // ---------------- Notifications ----------------
 
+/** Wipe the current user's listening history. */
+export const clearMyHistory = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("يجب تسجيل الدخول أولاً");
+    const rows = await ctx.db
+      .query("listening_history")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .collect();
+    for (const row of rows) await ctx.db.delete(row._id);
+    return { deleted: rows.length };
+  },
+});
+
 export const myNotifications = query({
   args: {},
   handler: async (ctx) => {

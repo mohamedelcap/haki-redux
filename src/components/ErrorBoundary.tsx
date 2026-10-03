@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
+import { reportClientError } from "@/lib/telemetry";
 
 type Props = { children: ReactNode };
 type State = { error: Error | null };
@@ -15,8 +16,10 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
-    // Keep a lightweight breadcrumb; a telemetry hook can be attached here.
+    // Keep a lightweight breadcrumb; the error is also recorded in Convex
+    // (`client_errors`) and shown in the admin dashboard.
     console.error("[HAKI] Uncaught render error:", error, info.componentStack);
+    reportClientError(error, "react.render", info.componentStack ?? undefined);
   }
 
   private reload = () => {

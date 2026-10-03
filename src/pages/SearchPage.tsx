@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useLang } from "@/lib/i18n";
+import { LOGO_COVER } from "@/lib/logoAsset";
 import { cn } from "@/lib/utils";
 import { useQuery } from "convex/react";
 import { SearchX, UserRound } from "lucide-react";
@@ -32,6 +33,31 @@ export default function SearchPage() {
   const [debounced, setDebounced] = useState(urlQuery);
   const [tab, setTab] = useState<string>("all");
   const [limit, setLimit] = useState(30);
+  const [showSuggest, setShowSuggest] = useState(false);
+  const [recent, setRecent] = useState<string[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem("haki_recent_searches") ?? "[]");
+    } catch {
+      return [];
+    }
+  });
+
+  const suggestions = useQuery(
+    api.content.suggest,
+    debounced.trim().length >= 2 ? { q: debounced.trim() } : "skip",
+  );
+
+  const pushRecent = (term: string) => {
+    const t = term.trim();
+    if (!t) return;
+    const next = [t, ...recent.filter((x) => x !== t)].slice(0, 8);
+    setRecent(next);
+    try {
+      localStorage.setItem("haki_recent_searches", JSON.stringify(next));
+    } catch {
+      /* storage unavailable */
+    }
+  };
 
   useEffect(() => {
     const id = setTimeout(() => setDebounced(input), 300);
@@ -67,7 +93,18 @@ export default function SearchPage() {
           <Input
             autoFocus
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={(e) => {
+              setInput(e.target.value);
+              setShowSuggest(true);
+            }}
+            onFocus={() => setShowSuggest(true)}
+            onBlur={() => window.setTimeout(() => setShowSuggest(false), 150)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                pushRecent(input);
+                setShowSuggest(false);
+              }
+            }}
             placeholder={
               lang === "ar"
                 ? "ابحث عن كتاب، مؤلف، راوٍ، بودكاست..."
@@ -76,14 +113,43 @@ export default function SearchPage() {
             className="h-14 text-lg"
             aria-label={t("search")}
           />
+          {showSuggest && suggestions !== undefined && suggestions.length > 0 && (
+            <div className="absolute inset-x-0 top-full z-30 mt-1 overflow-hidden rounded-xl border bg-popover shadow-lg">
+              <p className="border-b px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+                {t("suggestions")}
+              </p>
+              {suggestions.map((s) => (
+                <Link
+                  key={s._id}
+                  to={`/content/${s.slug}`}
+                  className="flex items-center gap-3 px-3 py-2 transition-colors hover:bg-accent"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => pushRecent(input)}
+                >
+                  <img
+                    src={s.coverImage || LOGO_COVER}
+                    alt=""
+                    loading="lazy"
+                    className="size-9 rounded-md object-cover"
+                  />
+                  <span className="min-w-0 flex-1 truncate text-sm font-semibold">{s.title}</span>
+                  <span className="shrink-0 text-[10px] font-bold uppercase text-muted-foreground">
+                    {TYPE_LABELS[s.contentType]?.[lang] ?? ""}
+                  </span>
+                </Link>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Type tabs */}
-        <div className="no-scrollbar mt-5 flex gap-2 overflow-x-auto pb-1">
+        <div className="no-scrollbar mt-5 flex gap-2 overflow-x-auto pb-1" role="tablist">
           {TABS.map((tb) => (
             <button
               key={tb.key}
               type="button"
+              role="tab"
+              aria-selected={tab === tb.key}
               onClick={() => setTab(tb.key)}
               className={cn(
                 "shrink-0 rounded-full border px-4 py-1.5 text-sm font-semibold transition-colors",
@@ -98,10 +164,45 @@ export default function SearchPage() {
         </div>
 
         {!hasQuery ? (
-          <div className="py-20 text-center text-muted-foreground">
+          <div className="py-16 text-center text-muted-foreground">
             <p className="text-lg font-semibold">
               {lang === "ar" ? "ابدأ بالكتابة للبحث في مكتبة حكي" : "Start typing to search the HAKI library"}
             </p>
+            {recent.length > 0 && (
+              <div className="mx-auto mt-6 flex max-w-2xl flex-wrap items-center justify-center gap-2">
+                <span className="text-xs font-bold uppercase tracking-wide">
+                  {lang === "ar" ? "عمليات بحث سابقة:" : "Recent:"}
+                </span>
+                {recent.map((term) => (
+                  <button
+                    key={term}
+                    type="button"
+                    onClick={() => {
+                      setInput(term);
+                      setDebounced(term);
+                      pushRecent(term);
+                    }}
+                    className="rounded-full border bg-background px-3 py-1.5 text-sm font-semibold transition-colors hover:bg-muted"
+                  >
+                    {term}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRecent([]);
+                    try {
+                      localStorage.removeItem("haki_recent_searches");
+                    } catch {
+                      /* storage unavailable */
+                    }
+                  }}
+                  className="text-xs font-semibold text-destructive hover:underline"
+                >
+                  {lang === "ar" ? "مسح الكل" : "Clear all"}
+                </button>
+              </div>
+            )}
           </div>
         ) : empty ? (
           <div className="flex flex-col items-center gap-3 py-24 text-center">

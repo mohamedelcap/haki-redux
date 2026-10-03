@@ -9,15 +9,13 @@ import { useQuery } from "convex/react";
 import { CalendarClock, Clock, Mic, Pause, Play, Radio, Users } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
-const SCHEDULE = [
-  { day: "السبت", name: "قهوة الصباح", host: "مصطفى سعد", start: "08:00", end: "09:00" },
-  { day: "الأحد", name: "حكي مسموع", host: "هالة عياد", start: "18:00", end: "19:30" },
-  { day: "الاثنين", name: "مساء حكي", host: "عمر الهاشمي", start: "20:00", end: "22:00" },
-  { day: "الثلاثاء", name: "سر الفراشة — دراما", host: "نورة الشامسي", start: "21:00", end: "22:00" },
-  { day: "الأربعاء", name: "البودكاست العكسي", host: "ياسر الشريف", start: "19:00", end: "20:30" },
-  { day: "الخميس", name: "حكايات ما أحلوها", host: "ليان المطيري", start: "17:00", end: "18:00" },
-  { day: "الجمعة", name: "قراءات مسائية", host: "سلمى الأيوبي", start: "21:00", end: "23:00" },
-];
+/** Weekday labels: index 0 = Sunday … 6 = Saturday. */
+const DAY_NAMES = {
+  ar: ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"],
+  en: ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
+};
+/** Saturday-first display order (Arabic week). */
+const DAY_ORDER = [6, 0, 1, 2, 3, 4, 5];
 
 function Countdown({ startHHMM }: { startHHMM?: string }) {
   const c = useNextSessionCountdown(startHHMM);
@@ -152,6 +150,21 @@ export default function Live() {
   const current = useQuery(api.engagement.getCurrentLive, {});
 
   const L = (ar: string, en: string) => (lang === "ar" ? ar : en);
+
+  // Weekly schedule derived from the database (admin: "البث المباشر").
+  const scheduleRows = useMemo(() => {
+    const withDays = (streams ?? []).filter((s) => (s.weekdays?.length ?? 0) > 0);
+    const rows: { day: string; stream: (typeof withDays)[number] }[] = [];
+    for (const d of DAY_ORDER) {
+      const dayStreams = withDays
+        .filter((s) => (s.weekdays ?? []).includes(d))
+        .sort((a, b) => (a.scheduledStart ?? "").localeCompare(b.scheduledStart ?? ""));
+      for (const stream of dayStreams) {
+        rows.push({ day: DAY_NAMES[lang === "ar" ? "ar" : "en"][d], stream });
+      }
+    }
+    return rows;
+  }, [streams, lang]);
 
   return (
     <div className="py-10">
@@ -294,15 +307,33 @@ export default function Live() {
                   </tr>
                 </thead>
                 <tbody>
-                  {SCHEDULE.map((row) => (
-                    <tr key={row.day} className="border-b last:border-0 transition-colors hover:bg-muted/50">
-                      <td className="p-3.5 font-bold">{row.day}</td>
-                      <td className="p-3.5">{row.name}</td>
-                      <td className="p-3.5 text-muted-foreground">{row.host}</td>
-                      <td className="p-3.5 tabular-nums" dir="ltr">{row.start}</td>
-                      <td className="p-3.5 tabular-nums" dir="ltr">{row.end}</td>
+                  {scheduleRows.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="p-6 text-center text-sm text-muted-foreground">
+                        {L(
+                          "لم يُحدَّد جدول أسبوعي بعد — تابع «برامج قادمة» أعلاه.",
+                          "No weekly schedule yet — see upcoming streams above.",
+                        )}
+                      </td>
                     </tr>
-                  ))}
+                  ) : (
+                    scheduleRows.map(({ day, stream }, i) => (
+                      <tr
+                        key={`${stream._id}-${i}`}
+                        className="border-b last:border-0 transition-colors hover:bg-muted/50"
+                      >
+                        <td className="p-3.5 font-bold">{day}</td>
+                        <td className="p-3.5">{stream.title}</td>
+                        <td className="p-3.5 text-muted-foreground">{stream.hostName}</td>
+                        <td className="p-3.5 tabular-nums" dir="ltr">
+                          {stream.scheduledStart ?? "—"}
+                        </td>
+                        <td className="p-3.5 tabular-nums" dir="ltr">
+                          {stream.scheduledEnd ?? "—"}
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>

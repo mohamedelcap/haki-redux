@@ -55,16 +55,25 @@ export function RatingsSection({ contentId }: { contentId: string }) {
   const removeMine = useMutation(api.ratings.remove);
   const reportReview = useMutation(api.moderation.report);
 
-  const handleReport = async (ratingId: string) => {
+  const [reportingId, setReportingId] = useState<string | null>(null);
+  const [reportReason, setReportReason] = useState("");
+
+  const openReport = (ratingId: string) => {
     if (!isAuthenticated) {
       toast.error(L("سجّل الدخول للإبلاغ عن مراجعة", "Sign in to report a review"));
       return;
     }
-    const reason = window.prompt(
-      L("سبب الإبلاغ (اختياري)", "Reason for reporting (optional)"),
-    ) ?? undefined;
+    setReportReason("");
+    setReportingId(ratingId);
+  };
+
+  const submitReport = async () => {
+    if (!reportingId) return;
     try {
-      const res = await reportReview({ ratingId: ratingId as never, reason });
+      const res = await reportReview({
+        ratingId: reportingId as never,
+        reason: reportReason.trim() || undefined,
+      });
       if ((res as { duplicate?: boolean }).duplicate) {
         toast.info(L("بلّغت عن هذه المراجعة مسبقًا", "You already reported this review"));
       } else {
@@ -72,6 +81,8 @@ export function RatingsSection({ contentId }: { contentId: string }) {
       }
     } catch (e: any) {
       toast.error(e.message);
+    } finally {
+      setReportingId(null);
     }
   };
 
@@ -224,7 +235,7 @@ export function RatingsSection({ contentId }: { contentId: string }) {
                     </span>
                     <button
                       type="button"
-                      onClick={() => handleReport(r._id)}
+                      onClick={() => openReport(r._id)}
                       className="ms-auto flex items-center gap-1 text-[10px] text-muted-foreground transition-colors hover:text-destructive"
                     >
                       <Flag className="size-3" />
@@ -239,7 +250,57 @@ export function RatingsSection({ contentId }: { contentId: string }) {
                 </p>
               )}
             </div>
-          ))}
+          )          )}
+        </div>
+      )}
+
+      {reportingId && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label={L("الإبلاغ عن مراجعة", "Report a review")}
+          onClick={() => setReportingId(null)}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl border bg-background p-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-black">
+              {L("الإبلاغ عن مراجعة", "Report a review")}
+            </h3>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {L(
+                "أخبرنا بسبب البلاغ — يُرسل لفريق الإشراف لمراجعته.",
+                "Tell us why — sent to the moderation team for review.",
+              )}
+            </p>
+            <textarea
+              value={reportReason}
+              onChange={(e) => setReportReason(e.target.value)}
+              rows={3}
+              maxLength={500}
+              autoFocus
+              placeholder={L("سبب الإبلاغ (اختياري)", "Reason (optional)")}
+              className="mt-3 w-full rounded-xl border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setReportingId(null)}
+                className="rounded-xl border px-4 py-2 text-sm font-semibold transition-colors hover:bg-muted"
+              >
+                {L("إلغاء", "Cancel")}
+              </button>
+              <button
+                type="button"
+                onClick={submitReport}
+                className="rounded-xl bg-destructive px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-destructive/90"
+              >
+                {L("إرسال البلاغ", "Send report")}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </section>

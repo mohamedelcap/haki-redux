@@ -7,6 +7,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useLang } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
+import { Lock } from "lucide-react";
 import {
   ArrowLeft,
   ArrowRight,
@@ -103,6 +104,8 @@ export default function EbookReader() {
   const isEbook = item?.contentType === "ebook";
   const fileUrl = useMemo(() => {
     if (!item) return undefined;
+    // Premium + no subscription: never resolve any file (incl. source fallbacks).
+    if (item.locked) return undefined;
     if (item.fileUrl) return item.fileUrl;
     // Gutenberg fallback: /ebooks/<id> redirects to the readable HTML edition.
     const g = /pg?(\d+)/.exec(item.externalId ?? "");
@@ -353,6 +356,35 @@ export default function EbookReader() {
           {L("هذا العمل ليس كتابًا إلكترونيًا", "This title is not an e-book")}
         </p>
         <Link to={item ? `/content/${item.slug}` : "/browse"} className="mt-3 inline-block text-sm font-semibold text-primary hover:underline">
+          {L("عودة إلى صفحة العمل", "Back to the title")}
+        </Link>
+      </div>
+    );
+  }
+
+  if (item.locked) {
+    return (
+      <div className="haki-container py-24 text-center">
+        <Lock className="mx-auto size-10 text-primary" />
+        <p className="mt-4 text-lg font-bold">
+          {L("هذا الكتاب متاح للمشتركين", "This book is for subscribers")}
+        </p>
+        <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
+          {L(
+            "اشترك في حكي لقراءة هذا العمل كاملًا داخل الموقع.",
+            "Subscribe to HAKI to read this work in full.",
+          )}
+        </p>
+        <Link
+          to={isAuthenticated ? "/subscriptions" : "/auth?returnTo=%2Fsubscriptions"}
+          className="mt-5 inline-block rounded-xl bg-primary px-6 py-2.5 text-sm font-bold text-white transition-colors hover:bg-primary/90"
+        >
+          {isAuthenticated ? L("اشترك الآن", "Subscribe now") : L("تسجيل الدخول والاشتراك", "Sign in & subscribe")}
+        </Link>
+        <Link
+          to={`/content/${item.slug}`}
+          className="mt-3 block text-sm font-semibold text-primary hover:underline"
+        >
           {L("عودة إلى صفحة العمل", "Back to the title")}
         </Link>
       </div>

@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import { SEO } from "@/components/SEO";
 import {
   Card,
   CardContent,
@@ -797,6 +798,10 @@ function FloatingIcons() {
 export default function AuthPage(props: AuthProps) {
   return (
     <Suspense>
+      <SEO
+        title="تسجيل الدخول | Sign in — حكي HAKI"
+        description="سجّل الدخول إلى حكي للمتابعة من حيث توقفت، الاشتراك، وتحديات الاستماع."
+      />
       <Auth {...props} />
     </Suspense>
   );

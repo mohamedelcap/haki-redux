@@ -8,6 +8,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { useAuth } from "@/hooks/use-auth";
+import { useLang } from "@/lib/i18n";
 import { Loader2, Lock } from "lucide-react";
 import type { ReactNode } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router";
@@ -20,8 +21,8 @@ import { Navigate, useLocation, useNavigate } from "react-router";
  */
 export function RequireAuth({
   children,
-  title = "سجّل الدخول للمتابعة",
-  description = "هذه الصفحة متاحة للمستخدمين المسجلين فقط.",
+  title,
+  description,
   redirectImmediately = false,
 }: {
   children: ReactNode;
@@ -35,6 +36,12 @@ export function RequireAuth({
   const { isLoading, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const { lang } = useLang();
+  const L = (ar: string, en: string) => (lang === "ar" ? ar : en);
+  const heading = title ?? L("سجّل الدخول للمتابعة", "Sign in to continue");
+  const desc =
+    description ??
+    L("هذه الصفحة متاحة للمستخدمين المسجلين فقط.", "This page is for signed-in users only.");
 
   if (isLoading) {
     return (
@@ -61,22 +68,25 @@ export function RequireAuth({
                 <Lock className="size-5 text-muted-foreground" />
               </div>
             </div>
-            <CardTitle className="text-xl">{title}</CardTitle>
-            <CardDescription>{description}</CardDescription>
+            <CardTitle className="text-xl">{heading}</CardTitle>
+            <CardDescription>{desc}</CardDescription>
           </CardHeader>
           <CardContent className="text-center text-sm text-muted-foreground">
-            ستعود مباشرة إلى هذه الصفحة بعد تسجيل الدخول.
+            {L(
+              "ستعود مباشرة إلى هذه الصفحة بعد تسجيل الدخول.",
+              "You'll come right back to this page after signing in.",
+            )}
           </CardContent>
           <CardFooter className="flex flex-col gap-2">
             <Button className="w-full" onClick={() => navigate(signInHref)}>
-              تسجيل الدخول
+              {L("تسجيل الدخول", "Sign in")}
             </Button>
             <Button
               variant="ghost"
               className="w-full"
               onClick={() => navigate("/")}
             >
-              العودة إلى الرئيسية
+              {L("العودة إلى الرئيسية", "Back to home")}
             </Button>
           </CardFooter>
         </Card>

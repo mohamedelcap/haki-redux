@@ -401,6 +401,7 @@ function Overview({
     isManager ? {} : "skip",
   );
   const sched = useQuery(api.scheduler.getStats, {});
+  const clientErrors = useQuery(api.telemetry.recentErrors, isManager ? {} : "skip");
 
   const cards = [
     { label: L("المستخدمون", "Users"), value: stats?.users, icon: Users },
@@ -529,6 +530,30 @@ function Overview({
               ))}
         </div>
       </section>
+
+      {clientErrors && clientErrors.last24h > 0 && (
+        <section className="mt-6 rounded-2xl border border-destructive/40 bg-destructive/5 p-4">
+          <h3 className="flex items-center gap-2 text-sm font-black text-destructive">
+            <AlertTriangle className="size-4" />
+            {L(
+              `أخطاء عميل خلال ٢٤ ساعة (${clientErrors.last24h})`,
+              `Client errors in the last 24h (${clientErrors.last24h})`,
+            )}
+          </h3>
+          <ul className="mt-2 space-y-1.5">
+            {clientErrors.recent.map((e) => (
+              <li
+                key={e._id}
+                className="truncate text-xs text-muted-foreground"
+                dir="ltr"
+                title={e.message}
+              >
+                {new Date(e.createdAt).toLocaleTimeString()} — {e.source ?? "app"}: {e.message}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {/* Welcome + quick access */}
       <section className="mt-8 rounded-3xl border bg-card p-6 card-shadow">
@@ -1491,6 +1516,7 @@ function EntityManager({ L, initialTable }: { L: (ar: string, en: string) => str
   const remove = useMutation(api.admin.deleteEntity);
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
+  const [editing, setEditing] = useState<any>(null);
 
   const labels = {
     authors: L("المؤلفون", "Authors"),
@@ -1551,19 +1577,99 @@ function EntityManager({ L, initialTable }: { L: (ar: string, en: string) => str
                 <p className="text-sm font-bold">{item.name}</p>
                 {item.slug && <p className="text-xs text-muted-foreground" dir="ltr">{item.slug}</p>}
               </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label="Delete"
-                onClick={async () => {
-                  await remove({ table, id: item._id } as any);
-                  toast.success(L("تم الحذف", "Deleted"));
-                }}
-              >
-                <Trash2 className="size-3.5 text-destructive" />
-              </Button>
+              <div className="flex gap-1">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label={L("تعديل", "Edit")}
+                  onClick={() => setEditing({ ...item })}
+                >
+                  <Pencil className="size-3.5" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Delete"
+                  onClick={async () => {
+                    await remove({ table, id: item._id } as any);
+                    toast.success(L("تم الحذف", "Deleted"));
+                  }}
+                >
+                  <Trash2 className="size-3.5 text-destructive" />
+                </Button>
+              </div>
             </div>
           ))}
+        </div>
+      )}
+      {editing && (
+        <div
+          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4"
+          role="dialog"
+          aria-modal="true"
+        >
+          <form
+            className="my-8 w-full max-w-lg space-y-4 rounded-3xl border bg-background p-6"
+            onSubmit={async (e) => {
+              e.preventDefault();
+              const form = new FormData(e.currentTarget);
+              try {
+                await upsert({
+                  table,
+                  id: editing._id,
+                  name: String(form.get("name")),
+                  nameEn: String(form.get("nameEn") ?? "") || undefined,
+                  bio: String(form.get("bio") ?? "") || undefined,
+                  image: String(form.get("image") ?? "") || undefined,
+                  slug: form.get("slug") ? String(form.get("slug")) : undefined,
+                } as any);
+                toast.success(L("تم الحفظ", "Saved"));
+                setEditing(null);
+              } catch (err: any) {
+                toast.error(err.message);
+              }
+            }}
+          >
+            <h3 className="text-lg font-black">{L("تعديل العنصر", "Edit item")}</h3>
+            <div className="space-y-1.5">
+              <Label>{L("الاسم (عربي)", "Name (Arabic)")}</Label>
+              <Input name="name" defaultValue={editing.name} required />
+            </div>
+            <div className="space-y-1.5">
+              <Label>{L("الاسم (إنجليزي)", "Name (English)")}</Label>
+              <Input name="nameEn" defaultValue={editing.nameEn} dir="ltr" />
+            </div>
+            {table === "categories" ? (
+              <div className="space-y-1.5">
+                <Label>Slug</Label>
+                <Input name="slug" defaultValue={editing.slug} dir="ltr" required />
+              </div>
+            ) : (
+              <>
+                <div className="space-y-1.5">
+                  <Label>{L("نبذة", "Bio")}</Label>
+                  <Textarea name="bio" defaultValue={editing.bio} rows={3} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>{L("رابط الصورة", "Image URL")}</Label>
+                  <Input
+                    name="image"
+                    defaultValue={editing.image}
+                    dir="ltr"
+                    placeholder="https://..."
+                  />
+                </div>
+              </>
+            )}
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="ghost" onClick={() => setEditing(null)}>
+                {L("إلغاء", "Cancel")}
+              </Button>
+              <Button type="submit" className="font-bold">
+                {L("حفظ", "Save")}
+              </Button>
+            </div>
+          </form>
         </div>
       )}
     </div>
@@ -2053,6 +2159,19 @@ function LiveManager({ L }: { L: (ar: string, en: string) => string }) {
             onSubmit={async (e) => {
               e.preventDefault();
               const form = new FormData(e.currentTarget);
+              const isLiveVal = form.get("isLive") === "on";
+              if (
+                isLiveVal &&
+                !editing.isLive &&
+                !window.confirm(
+                  L(
+                    "تأكيد: عرض هذا البث الآن على الهواء؟",
+                    "Confirm: put this stream ON AIR now?",
+                  ),
+                )
+              ) {
+                return;
+              }
               try {
                 await upsert({
                   id: editing._id,
@@ -2063,7 +2182,8 @@ function LiveManager({ L }: { L: (ar: string, en: string) => string }) {
                   embedUrl: String(form.get("embedUrl")) || undefined,
                   scheduledStart: String(form.get("scheduledStart")) || undefined,
                   scheduledEnd: String(form.get("scheduledEnd")) || undefined,
-                  isLive: form.get("isLive") === "on",
+                  isLive: isLiveVal,
+                  weekdays: Array.from(form.getAll("weekdays")).map(Number),
                 });
                 toast.success(L("تم الحفظ", "Saved"));
                 setEditing(null);
@@ -2094,6 +2214,39 @@ function LiveManager({ L }: { L: (ar: string, en: string) => string }) {
                 <Label>{L("نهاية البث", "End")}</Label>
                 <Input name="scheduledEnd" defaultValue={editing.scheduledEnd} placeholder="22:00" dir="ltr" />
               </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>{L("أيام البث الأسبوعية", "Weekly air days")}</Label>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { v: 6, ar: "السبت", en: "Sat" },
+                  { v: 0, ar: "الأحد", en: "Sun" },
+                  { v: 1, ar: "الاثنين", en: "Mon" },
+                  { v: 2, ar: "الثلاثاء", en: "Tue" },
+                  { v: 3, ar: "الأربعاء", en: "Wed" },
+                  { v: 4, ar: "الخميس", en: "Thu" },
+                  { v: 5, ar: "الجمعة", en: "Fri" },
+                ].map((d) => (
+                  <label
+                    key={d.v}
+                    className="flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold"
+                  >
+                    <input
+                      type="checkbox"
+                      name="weekdays"
+                      value={d.v}
+                      defaultChecked={(editing.weekdays ?? []).includes(d.v)}
+                    />
+                    {L(d.ar, d.en)}
+                  </label>
+                ))}
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                {L(
+                  "تظهر في جدول الصفحة العام للبث.",
+                  "Shown in the public weekly schedule.",
+                )}
+              </p>
             </div>
             <div className="space-y-1.5">
               <Label>{L("رابط البث (HLS/ICE)", "Stream URL (HLS/ICE)")}</Label>
@@ -2138,17 +2291,24 @@ function SubmissionsManager({ L }: { L: (ar: string, en: string) => string }) {
       setBusyId(null);
     }
   };
-  const doReject = async (id: string) => {
-    const reason = window.prompt(L("سبب الرفض (يُرسل للناشر)", "Rejection reason (sent to the publisher)")) ?? "";
-    if (!reason.trim()) return;
-    setBusyId(id);
+  const [rejectingId, setRejectingId] = useState<string | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
+  /** Opens the rejection-reason dialog (called from the card's Reject button). */
+  const doReject = (id: string) => {
+    setRejectReason("");
+    setRejectingId(id);
+  };
+  const confirmReject = async () => {
+    if (!rejectingId || !rejectReason.trim()) return;
+    setBusyId(rejectingId);
     try {
-      await rejectAuto({ id: id as any, reason });
+      await rejectAuto({ id: rejectingId as any, reason: rejectReason.trim() });
       toast.success(L("تم الرفض وإشعار الناشر", "Rejected, publisher notified"));
     } catch (e: any) {
       toast.error(e.message);
     } finally {
       setBusyId(null);
+      setRejectingId(null);
     }
   };
 
@@ -2162,6 +2322,52 @@ function SubmissionsManager({ L }: { L: (ar: string, en: string) => string }) {
   return (
     <div>
       <h2 className="text-xl font-black">{L("طلبات نشر المحتوى", "Publisher submissions")}</h2>
+      {rejectingId && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label={L("سبب الرفض", "Rejection reason")}
+          onClick={() => setRejectingId(null)}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl border bg-background p-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-black">
+              {L("رفض طلب النشر", "Reject submission")}
+            </h3>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {L(
+                "السبب يُرسل للناشر مع إشعار بالقرار.",
+                "The reason is sent to the publisher with the decision.",
+              )}
+            </p>
+            <Textarea
+              value={rejectReason}
+              onChange={(e) => setRejectReason(e.target.value)}
+              rows={3}
+              maxLength={500}
+              placeholder={L("سبب الرفض (يُرسل للناشر)", "Rejection reason (sent to the publisher)")}
+              className="mt-3"
+              autoFocus
+            />
+            <div className="mt-4 flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => setRejectingId(null)}>
+                {L("إلغاء", "Cancel")}
+              </Button>
+              <Button
+                variant="destructive"
+                className="font-bold"
+                disabled={!rejectReason.trim() || busyId === rejectingId}
+                onClick={confirmReject}
+              >
+                {L("رفض الطلب", "Reject")}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
       {items === undefined ? (
         <Skeleton className="mt-6 h-48 rounded-2xl" />
       ) : items.length === 0 ? (
@@ -2338,7 +2544,14 @@ function AccessManager({ L }: { L: (ar: string, en: string) => string }) {
 
 function UsersManager({ L }: { L: (ar: string, en: string) => string }) {
   const me = useQuery(api.adminUsers.me, {});
-  const users = useQuery(api.adminUsers.listUsers, {});
+  const [q, setQ] = useState("");
+  const [page, setPage] = useState(0);
+  const users = useQuery(api.adminUsers.listUsers, q.trim() ? { q: q.trim() } : {});
+  const PAGE_SIZE = 15;
+  const visible = users ?? [];
+  const pageCount = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
+  const current = Math.min(page, pageCount - 1);
+  const paged = visible.slice(current * PAGE_SIZE, (current + 1) * PAGE_SIZE);
   const setRole = useMutation(api.adminUsers.setUserRole);
   const canAssignSuper = me?.role === "super_admin";
 
@@ -2360,6 +2573,21 @@ function UsersManager({ L }: { L: (ar: string, en: string) => string }) {
           "Roles: Super Admin runs everything, Admin manages content & users, Publisher manages only their imprint, Author only their works.",
         )}
       </p>
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        <Input
+          value={q}
+          onChange={(e) => {
+            setQ(e.target.value);
+            setPage(0);
+          }}
+          placeholder={L("ابحث بالاسم أو البريد…", "Search by name or email…")}
+          className="h-9 w-full max-w-xs"
+          aria-label={L("بحث في المستخدمين", "Search users")}
+        />
+        <span className="text-xs font-semibold text-muted-foreground">
+          {L(`${visible.length} مستخدم`, `${visible.length} users`)}
+        </span>
+      </div>
       {users === undefined ? (
         <Skeleton className="mt-6 h-48 rounded-2xl" />
       ) : (
@@ -2373,7 +2601,7 @@ function UsersManager({ L }: { L: (ar: string, en: string) => string }) {
                 </TR>
               </THead>
               <TBody>
-                {users.map((u) => (
+                {paged.map((u) => (
                   <TR key={u._id}>
                     <TD>
                       <p className="text-sm font-bold">
@@ -2405,6 +2633,36 @@ function UsersManager({ L }: { L: (ar: string, en: string) => string }) {
               </TBody>
             </Table>
           </div>
+        </div>
+      )}
+      {visible.length > PAGE_SIZE && (
+        <div className="mt-3 flex items-center justify-between gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="font-bold"
+            disabled={current === 0}
+            onClick={() => setPage(current - 1)}
+          >
+            {L("السابق", "Prev")}
+          </Button>
+          <span className="text-xs font-semibold text-muted-foreground">
+            {L(
+              `صفحة ${current + 1} من ${pageCount}`,
+              `Page ${current + 1} of ${pageCount}`,
+            )}
+          </span>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="font-bold"
+            disabled={current >= pageCount - 1}
+            onClick={() => setPage(current + 1)}
+          >
+            {L("التالي", "Next")}
+          </Button>
         </div>
       )}
     </div>
@@ -2450,15 +2708,46 @@ function SettingsManager({ L }: { L: (ar: string, en: string) => string }) {
         className="mt-6 flex gap-2"
         onSubmit={async (e) => {
           e.preventDefault();
-          if (!key.trim()) return;
-          await setSetting({ key, value });
-          toast.success(L("تم الحفظ", "Saved"));
-          setKey("");
-          setValue("");
+          if (!/^[a-z0-9][a-z0-9_.-]{0,63}$/.test(key)) {
+            toast.error(
+              L(
+                "المفتاح غير صالح (أحرف صغيرة وأرقام و - _ . فقط)",
+                "Invalid key (lowercase letters, digits and - _ . only)",
+              ),
+            );
+            return;
+          }
+          if (value.length > 2000) {
+            toast.error(
+              L("القيمة طويلة جدًا (2000 حرف كحد أقصى)", "Value too long (max 2000 characters)"),
+            );
+            return;
+          }
+          try {
+            await setSetting({ key, value });
+            toast.success(L("تم الحفظ", "Saved"));
+            setKey("");
+            setValue("");
+          } catch (err: any) {
+            toast.error(err.message);
+          }
         }}
       >
-        <Input value={key} onChange={(e) => setKey(e.target.value)} placeholder="key" dir="ltr" />
-        <Input value={value} onChange={(e) => setValue(e.target.value)} placeholder={L("القيمة", "value")} />
+        <Input
+          value={key}
+          onChange={(e) => setKey(e.target.value)}
+          placeholder="key"
+          dir="ltr"
+          maxLength={64}
+          pattern="[a-z0-9][a-z0-9_.-]{0,63}"
+          title={L("أحرف صغيرة وأرقام و - _ . فقط", "Lowercase letters, digits and - _ . only")}
+        />
+        <Input
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          placeholder={L("القيمة", "value")}
+          maxLength={2000}
+        />
         <Button type="submit" className="shrink-0 font-bold">{L("حفظ", "Save")}</Button>
       </form>
       <SeedPanel L={L} />

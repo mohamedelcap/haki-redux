@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
 import { HakiLogo } from "@/components/HakiLogo";
+import { SEO } from "@/components/SEO";
 import { Home } from "lucide-react";
 import { Link } from "react-router";
 
@@ -11,6 +12,10 @@ export default function NotFound() {
       transition={{ duration: 0.5 }}
       className="hero-gradient flex min-h-screen flex-col"
     >
+      <SEO
+        title="الصفحة غير موجودة (404) | حكي"
+        description="الصفحة التي تبحث عنها غير موجودة — تصفح مكتبة حكي من الصفحة الرئيسية."
+      />
       <div className="flex flex-1 flex-col items-center justify-center px-4 py-20 text-center">
         <HakiLogo variant="colored" size={72} />
         <h1 className="mt-8 text-6xl font-black text-foreground">404</h1>

@@ -57,7 +57,7 @@ function DashboardInner() {
     },
     { label: L("في مكتبتي", "In my library"), value: libCount, icon: Library, href: "/library" },
     { label: L("سجل الاستماع", "History items"), value: historyCount, icon: History, href: "/history" },
-    { label: L("إشعارات جديدة", "Unread alerts"), value: unread, icon: Sparkles, href: "/" },
+    { label: L("إشعارات جديدة", "Unread alerts"), value: unread, icon: Sparkles, href: "/notifications" },
   ];
 
   const quickLinks = [

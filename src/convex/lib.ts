@@ -4,6 +4,7 @@ import type { Doc, Id } from "./_generated/dataModel";
 import type { QueryCtx, MutationCtx } from "./_generated/server";
 import { api } from "./_generated/api";
 import { CONTENT_TYPES } from "./schema";
+import { isLockedFor, stripMedia, type AccessFlags } from "./accessLogic";
 
 /** Get the current user doc or null. */
 export async function getCurrentUser(ctx: QueryCtx | MutationCtx) {
@@ -114,7 +115,16 @@ export async function requireContentAccess(
 
 export type PublicContent = Doc<"content">;
 
-export type EnrichedContent = Omit<Doc<"content">, "authorId" | "narratorId" | "publisherId"> & {
+export type EnrichedContent = Omit<
+  Doc<"content">,
+  "authorId" | "narratorId" | "publisherId" | "audioUrl" | "fileUrl" | "importFiles"
+> & {
+  /** Present only when the viewer may not consume this work (no media shipped). */
+  audioUrl?: string;
+  fileUrl?: string;
+  importFiles?: Doc<"content">["importFiles"];
+  /** True when audio/files are hidden for the current viewer (premium + no sub). */
+  locked: boolean;
   authorName: string | null;
   authorId: Id<"authors"> | null;
   authorImage: string | null;
@@ -128,13 +138,43 @@ export type EnrichedContent = Omit<Doc<"content">, "authorId" | "narratorId" | "
   episodeCount: number;
 };
 
+/**
+ * Current viewer's media-access flags (role + active subscription), resolved
+ * ONCE per enrichContent call rather than per row.
+ */
+export async function mediaAccess(ctx: QueryCtx): Promise<AccessFlags> {
+  const user = await getCurrentUser(ctx);
+  if (!user) return { isStaff: false, hasActiveSubscription: false };
+  if (isStaff(user.role)) return { isStaff: true, hasActiveSubscription: false };
+  const subs = await ctx.db
+    .query("subscriptions")
+    .withIndex("by_user", (q) => q.eq("userId", user._id))
+    .collect();
+  const hasActiveSubscription = subs.some(
+    (s) => s.status === "active" && s.expiresAt > Date.now(),
+  );
+  return { isStaff: false, hasActiveSubscription };
+}
+
+/** True when the current viewer may consume the media of this work. */
+export async function canConsumeContent(
+  ctx: QueryCtx,
+  content: { rightsStatus?: Doc<"content">["rightsStatus"] },
+): Promise<boolean> {
+  const access = await mediaAccess(ctx);
+  return !isLockedFor(content.rightsStatus, access);
+}
+
 /** Attach author/narrator/publisher/category names to content rows. */
 export async function enrichContent(
   ctx: QueryCtx,
   rows: Doc<"content">[],
 ): Promise<EnrichedContent[]> {
+  const access = await mediaAccess(ctx);
   const out: EnrichedContent[] = [];
-  for (const row of rows) {
+  for (const rawRow of rows) {
+    const locked = isLockedFor(rawRow.rightsStatus, access);
+    const row = locked ? stripMedia(rawRow) : rawRow;
     const [author, narrator, publisher, cats, chapters, episodes] =
       await Promise.all([
         row.authorId ? ctx.db.get(row.authorId) : null,
@@ -152,6 +192,7 @@ export async function enrichContent(
       ]);
     out.push({
       ...row,
+      locked,
       authorId: row.authorId ?? null,
       narratorId: row.narratorId ?? null,
       authorName: author?.name ?? null,

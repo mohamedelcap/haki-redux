@@ -10,6 +10,7 @@ import { BrowserRouter, Route, Routes, useLocation } from "react-router";
 import { LangProvider } from "@/lib/i18n";
 import { PlayerProvider } from "@/lib/player";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { initErrorTelemetry, reportClientError } from "@/lib/telemetry";
 import { ThemeProvider } from "@/lib/theme";
 import "./index.css";
 
@@ -40,6 +41,7 @@ const Settings = lazy(() => import("./pages/Settings.tsx"));
 const Legal = lazy(() => import("./pages/Legal.tsx"));
 const EbookReader = lazy(() => import("./pages/EbookReader.tsx"));
 const PlaylistPage = lazy(() => import("./pages/Playlist.tsx"));
+const NotificationsPage = lazy(() => import("./pages/Notifications.tsx"));
 const Studio = lazy(() => import("./pages/Studio.tsx"));
 const AdminDashboard = lazy(() => import("./pages/admin/AdminDashboard.tsx"));
 
@@ -64,6 +66,7 @@ class ToolbarErrorBoundary extends React.Component<
   }
   componentDidCatch(err: Error) {
     console.warn("[VlyToolbar] Caught error, toolbar disabled:", err.message);
+    reportClientError(err, "vly-toolbar");
   }
   render() {
     return this.state.hasError ? null : this.props.children;
@@ -71,6 +74,9 @@ class ToolbarErrorBoundary extends React.Component<
 }
 
 const convex = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL as string);
+
+// Record uncaught runtime errors + unhandled rejections in Convex (`client_errors`).
+initErrorTelemetry();
 
 
 
@@ -144,6 +150,7 @@ function SiteRoutes() {
         />
         <Route path="/library" element={<Library />} />
         <Route path="/history" element={<HistoryPage />} />
+        <Route path="/notifications" element={<NotificationsPage />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/terms" element={<Legal />} />
         <Route path="/privacy" element={<Legal />} />

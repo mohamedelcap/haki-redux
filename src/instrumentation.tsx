@@ -164,7 +164,7 @@ function ErrorDialog({
           <a
             href={`https://freebuff.com/project/${import.meta.env.VITE_VLY_APP_ID}`}
             target="_blank"
-            rel="noreferrer"
+            rel="noopener noreferrer"
           >
             <Button className="bg-zinc-100 text-zinc-900 hover:bg-white">
               <ExternalLink className="h-4 w-4" /> Open editor

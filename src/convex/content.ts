@@ -1,7 +1,8 @@
 import { v } from "convex/values";
 import { query, internalQuery } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
-import { enrichContent, requireStaff, isAdminRole, type EnrichedContent } from "./lib";
+import { enrichContent, requireStaff, isAdminRole, canConsumeContent, type EnrichedContent } from "./lib";
+import { stripMedia } from "./accessLogic";
 import { CONTENT_TYPES, contentTypeValidator, contentStatusValidator } from "./schema";
 
 /**
@@ -104,7 +105,10 @@ export const listChapters = query({
       .withIndex("by_content", (q) => q.eq("contentId", args.contentId))
       .collect();
     rows.sort((a, b) => a.number - b.number);
-    return rows;
+    // Never ship track media for premium works the viewer can't consume.
+    const content = await ctx.db.get(args.contentId);
+    const allowed = content ? await canConsumeContent(ctx, content) : false;
+    return allowed ? rows : rows.map((r) => stripMedia(r));
   },
 });
 
@@ -116,7 +120,9 @@ export const listEpisodes = query({
       .withIndex("by_content", (q) => q.eq("contentId", args.contentId))
       .collect();
     rows.sort((a, b) => a.number - b.number);
-    return rows;
+    const content = await ctx.db.get(args.contentId);
+    const allowed = content ? await canConsumeContent(ctx, content) : false;
+    return allowed ? rows : rows.map((r) => stripMedia(r));
   },
 });
 

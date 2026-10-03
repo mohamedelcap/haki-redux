@@ -99,22 +99,18 @@ export function Footer() {
               : "All rights reserved to HAKI © 2026"}
           </p>
           <div className="flex items-center gap-2">
-            <a
-              href="https://apps.apple.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="rounded-lg border bg-background px-3 py-1.5 text-xs font-semibold transition-colors hover:bg-muted"
+            <span
+              className="rounded-lg border bg-background px-3 py-1.5 text-xs font-semibold text-muted-foreground"
+              aria-disabled="true"
             >
-               App Store
-            </a>
-            <a
-              href="https://play.google.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="rounded-lg border bg-background px-3 py-1.5 text-xs font-semibold transition-colors hover:bg-muted"
+              {lang === "ar" ? "App Store — قريبًا" : "App Store — soon"}
+            </span>
+            <span
+              className="rounded-lg border bg-background px-3 py-1.5 text-xs font-semibold text-muted-foreground"
+              aria-disabled="true"
             >
-              ▶ Google Play
-            </a>
+              {lang === "ar" ? "Google Play — قريبًا" : "Google Play — soon"}
+            </span>
           </div>
         </div>
       </div>

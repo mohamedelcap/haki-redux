@@ -284,11 +284,16 @@ export const upsertLiveStream = mutation({
     embedUrl: v.optional(v.string()),
     scheduledStart: v.optional(v.string()),
     scheduledEnd: v.optional(v.string()),
+    weekdays: v.optional(v.array(v.number())),
     isLive: v.boolean(),
   },
   handler: async (ctx, args) => {
     await requireSuperAdmin(ctx);
-    const { id, embedUrl, ...data } = args;
+    const { id, embedUrl, weekdays, ...data } = args;
+    // 0=Sunday … 6=Saturday, deduped + sorted; empty = no weekly schedule.
+    const safeWeekdays = [
+      ...new Set((weekdays ?? []).filter((d) => Number.isInteger(d) && d >= 0 && d <= 6)),
+    ].sort((a, b) => a - b);
     // Sanitize embed URL: only YouTube / Twitch embed hosts are allowed.
     let safeEmbed: string | undefined;
     if (embedUrl) {
@@ -307,10 +312,15 @@ export const upsertLiveStream = mutation({
       }
     }
     if (id) {
-      await ctx.db.patch(id, { ...data, embedUrl: safeEmbed });
+      await ctx.db.patch(id, { ...data, embedUrl: safeEmbed, weekdays: safeWeekdays });
       return id;
     }
-    return await ctx.db.insert("live_streams", { ...data, embedUrl: safeEmbed, listeners: 0 });
+    return await ctx.db.insert("live_streams", {
+      ...data,
+      embedUrl: safeEmbed,
+      weekdays: safeWeekdays,
+      listeners: 0,
+    });
   },
 });
 
@@ -336,6 +346,14 @@ export const setSetting = mutation({
   args: { key: v.string(), value: v.string() },
   handler: async (ctx, args) => {
     await requireSuperAdmin(ctx);
+    if (!/^[a-z0-9][a-z0-9_.-]{0,63}$/.test(args.key)) {
+      throw new Error(
+        "المفتاح يجب أن يبدأ بحرف إنجليزي صغير أو رقم ويحتوي فقط على أحرف صغيرة وأرقام وـ - _ . (64 حرفًا كحد أقصى)",
+      );
+    }
+    if (args.value.length > 2000) {
+      throw new Error("قيمة الإعداد طويلة جدًا (2000 حرف كحد أقصى)");
+    }
     const existing = await ctx.db
       .query("settings")
       .withIndex("by_key", (q) => q.eq("key", args.key))

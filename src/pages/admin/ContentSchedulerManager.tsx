@@ -1812,7 +1812,7 @@ export function ContentSchedulerManager({ L }: { L: LFn }) {
                               </Button>
                             )}
                             {s.content && (
-                              <Link to={`/content/${s.content.slug}`} target="_blank">
+                              <Link to={`/content/${s.content.slug}`} target="_blank" rel="noopener noreferrer">
                                 <Button
                                   variant="ghost"
                                   size="icon"

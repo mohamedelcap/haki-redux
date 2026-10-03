@@ -157,6 +157,7 @@ export default function ContentDetails() {
   const resumePosition = progress?.position ?? 0;
 
   const startPlayback = (opts?: { chapterId?: string; fromStart?: boolean }) => {
+    if (item.locked) return; // premium + no subscription → CTA shown instead
     if (hasChapters || hasEpisodes) {
       const list = (trackList ?? []) as { _id: string; title: string; duration: number; audioUrl?: string | null }[];
       let target = list[0];
@@ -367,6 +368,12 @@ export default function ContentDetails() {
                 <Clock className="size-3.5" />
                 {formatDuration(item.duration, lang)}
               </span>
+              {item.locked && (
+                <span className="flex items-center gap-1.5 font-semibold text-primary">
+                  <Lock className="size-3.5" />
+                  {lang === "ar" ? "محتوى اشتراكي" : "Premium"}
+                </span>
+              )}
               {hasChapters && (
                 <span className="flex items-center gap-1.5">
                   <Headphones className="size-3.5" />
@@ -391,14 +398,29 @@ export default function ContentDetails() {
                   </Link>
                 </Button>
               )}
-              <Button size="lg" className="font-bold" onClick={() => startPlayback()}>
-                <Play className="size-4 fill-current" />
-                {resumePosition > 30
-                  ? lang === "ar"
-                    ? `متابعة من ${formatTime(resumePosition)}`
-                    : `Resume ${formatTime(resumePosition)}`
-                  : t("listenNow")}
-              </Button>
+              {item.locked ? (
+                <Button size="lg" className="font-bold" asChild>
+                  <Link
+                    to={
+                      isAuthenticated
+                        ? "/subscriptions"
+                        : "/auth?returnTo=%2Fsubscriptions"
+                    }
+                  >
+                    <Lock className="size-4" />
+                    {lang === "ar" ? "اشترك للمشاهدة والاستماع" : "Subscribe to listen"}
+                  </Link>
+                </Button>
+              ) : (
+                <Button size="lg" className="font-bold" onClick={() => startPlayback()}>
+                  <Play className="size-4 fill-current" />
+                  {resumePosition > 30
+                    ? lang === "ar"
+                      ? `متابعة من ${formatTime(resumePosition)}`
+                      : `Resume ${formatTime(resumePosition)}`
+                    : t("listenNow")}
+                </Button>
+              )}
               <Button size="lg" variant="outline" className="bg-background font-semibold" onClick={toggleList}>
                 {inList ? <BookmarkCheck className="size-4 text-primary" /> : <Bookmark className="size-4" />}
                 {t("addToMyList")}
