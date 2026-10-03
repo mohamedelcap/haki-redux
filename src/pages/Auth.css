@@ -1,68 +1,28 @@
 .auth-bg {
-  /* Night background: dark navy-black, many times brighter and more vibrant.
-   * Warm orange + pale lime ambient glow — the two primary accent colors. */
-  background: radial-gradient(1200px 600px at 12% 18%, rgba(249, 115, 22, 0.14), transparent 60%),
-              radial-gradient(900px 600px at 88% 82%, rgba(132, 223, 149, 0.10), transparent 60%),
-              radial-gradient(800px 500px at 50% 100%, rgba(255, 255, 255, 0.04), transparent 65%),
-              linear-gradient(165deg, #0b0f1a 0%, #101628 38%, #0f1a12 72%, #0a0e14 100%);
+  background:
+    linear-gradient(135deg, #f97316 0%, #fbbf24 35%, #ca8a04 60%, #eab308 100%);
 }
 
-/* Brand pulse field — reinforces the two accent colors. */
-.auth-bg::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  filter: blur(120px);
-  opacity: 0.35;
-  pointer-events: none;
-  background: radial-gradient(600px 300px at 88% 12%, #f59e0b, transparent 70%),
-              radial-gradient(420px 260px at 8% 88%, #8ef395, transparent 70%);
-}
-
-/* Subtle vignette to keep the edges dark and the center luminous. */
-.auth-bg::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  filter: blur(6px);
-  background: radial-gradient(1200px 800px at 50% 45%, rgba(0, 0, 0, 0.55), transparent 70%);
-  pointer-events: none;
-}
+/* VIBRANT DAY LOGIN PANELS — transparent glass over the orange/lime background. */
 .auth-card {
   position: relative;
   z-index: 1;
 }
 
-/* Transparent night panels — white 8% fill, crisp glass ring, orange tint on top. */
 .auth-shot {
   position: relative;
   z-index: 2;
-  border: 1px solid rgba(255, 255, 255, 0.10);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.03)),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02)),
-    rgba(15, 23, 42, 0.40);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02));
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
 }
 
-.auth-card::before {
-  content: "";
-  position: absolute;
-  inset: -1px;
-  border-radius: inherit;
-  background: linear-gradient(120deg, #f97316, #fbbf24, #84cc16, #f97316);
-  background-size: 200% 200%;
-  z-index: -1;
-  animation: auth-bright-glow 5s ease-box infinite;
+@keyframes auth-card-glow {
+  0% { box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.35); }
+  to { box-shadow: 0 0 0 10px rgba(249, 115, 22, 0); }
 }
-@keyframes auth-bright-glow {
-  0% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
-  100% { background-position: 0% 50%; }
-}
+
 .hero-gradient {
   position: relative;
 }
@@ -71,15 +31,15 @@
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  box-shadow: 0 0 90px rgba(249, 115, 22, 0.14), 0 0 200px rgba(249, 115, 22, 0.07), 0 0 380px rgba(132, 223, 149, 0.05);
+  box-shadow: 0 0 80px rgba(249, 115, 22, 0.10), 0 0 180px rgba(249, 115, 22, 0.05);
 }
 .hero-gradient::before {
   content: "";
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background: radial-gradient(1200px 500px at 85% 8%, rgba(249, 115, 22, 0.18), transparent 60%),
-              radial-gradient(800px 400px at 8% 92%, rgba(132, 223, 149, 0.12), transparent 60%);
+  background: radial-gradient(1200px 500px at 85% 8%, rgba(249, 115, 22, 0.14), transparent 60%),
+              radial-gradient(800px 400px at 10% 92%, rgba(234, 88, 12, 0.10), transparent 60%);
 }
 .auth-ott {
   position: relative;
@@ -97,8 +57,8 @@
 }
 .auth-error {
   animation: auth-slide-in 0.22s ease-out;
-  color: #ff6b35;
-  text-shadow: 0 0 14px rgba(249, 115, 22, 0.25);
+  color: #b91c1c;
+  text-shadow: 0 0 10px rgba(249, 115, 22, 0.20);
 }
 @keyframes auth-slide-in {
   from { opacity: 0; transform: translateY(-6px); }
@@ -110,13 +70,7 @@
   background-clip: text;
   color: transparent;
 }
-.auth-logo-darker {
-  background: linear-gradient(135deg, #ffffff 0%, #ffe0b3 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  filter: brightness(0.92);
-}
+
 .auth-logo svg { -webkit-text-fill-color: transparent; background-clip: text; }
 .auth-logo-desc {
   background: linear-gradient(135deg, #ffffff 0%, #ffe0b3 100%);
@@ -134,13 +88,7 @@
   background-clip: text;
   color: transparent;
 }
-.auth-logo-haki-darker {
-  background: linear-gradient(135deg, #ffffff 0%, #ffe0b3 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  filter: brightness(0.90);
-}
+
 .auth-logo-haki svg { -webkit-text-fill-color: transparent; background-clip: text; }
 @keyframes auth-brand-park {
   0%, 100% { transform: translateY(0); }
@@ -150,13 +98,13 @@
   text-decoration-thickness: 2px;
 }
 .auth-google {
-  background: rgba(15, 23, 42, 0.06);
-  border-color: rgba(66, 133, 244, 0.35);
-  color: #e8eaed;
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(66, 133, 244, 0.30);
+  color: #1f2937;
 }
 .auth-google:hover {
   border-color: #4285f4;
-  background: rgba(66, 133, 244, 0.10);
+  background: rgba(255, 255, 255, 0.09);
 }
 .auth-google svg { animation: auth-pulse 2.6s ease-in-out infinite; }
 @keyframes auth-pulse {
@@ -166,11 +114,15 @@
 .auth-btn-outline {
   transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
 }
+.auth-btn-outline:hover {
+  border-color: rgba(249, 115, 22, 0.55);
+  background: rgba(249, 115, 22, 0.05);
+}
 .auth-primary {
-  background: linear-gradient(180deg, #fde68a 0%, #facc15 55%, #a3e635 100%);
-  color: #04180b;
-  border: 1px solid rgba(255, 255, 255, 0.10);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.30), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  background: linear-gradient(180deg, #fde68a 0%, #facc15 55%, #ca8a04 100%);
+  color: #052e07;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.20), inset 0 1px 0 rgba(255, 255, 255, 0.35);
 }
 .auth-pt {
   animation: auth-float 6s ease-in-out infinite;
@@ -180,18 +132,29 @@
   padding-top: 14px;
   margin-top: 14px;
 }
-
-.auth-footer .auth-pt { animation-duration: 6s; }
-.auth-footer .auth-pt-2 { animation-duration: 6s; animation-direction: reverse; }
-.auth-footer .auth-link {
-  background: rgba(15, 23, 42, 0.35);
-  border: 1px solid rgba(255, 255, 255, 0.10);
-  padding: 2px 8px;
+.auth-footer .auth-pt {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 6px 12px;
   border-radius: 999px;
   -webkit-text-fill-color: inherit;
   background-clip: padding-box;
 }
+.auth-footer .auth-pt-2 {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 6px 12px;
+  border-radius: 999px;
+  -webkit-text-fill-color: inherit;
+  background-clip: padding-box;
+}
+.auth-footer .auth-pt:hover,
+.auth-footer .auth-pt-2:hover {
+  background: rgba(255, 255, 255, 0.10);
+}
 
+.auth-footer .auth-pt { animation-duration: 6s; }
+.auth-footer .auth-pt-2 { animation-duration: 6s; animation-direction: reverse; }
 @keyframes auth-float {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-8px); }
