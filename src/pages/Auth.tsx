@@ -632,10 +632,10 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                     >
                       <UserX className="ml-2 h-4 w-4" />
                       المتابعة كضيف
-                    </Button>
-                    <OtpRequestInline disabled={isLoading} onRequested={(email) => setOtpStep({ email })} />
-                  </div>
-                </CardFooter>
+                    </Button>              <OtpRequestInline disabled={isLoading} onRequested={(email) => setOtpStep({ email })} />
+                    </div>
+                  </CardFooter>
+                  <AuthFooterBanner goHome={goHome} />
               </form>
               <AuthFooter goHome={goHome} />
             </>
@@ -755,6 +755,36 @@ function AuthFooter({ goHome }: { goHome: () => void }) {
       >
         حكي
       </button>
+    </div>
+  );
+}
+
+/** Day-mode footer banner — dark-text banner over the orange/lime background.
+ *  Matches: "مع رحلتك تبدأ العربي المحتوى مع — تبدأ هنا — وصول سريع إلى المحتوى العربي —".
+ */
+function AuthFooterBanner({ goHome }: { goHome: () => void }) {
+  return (
+    <div className="auth-footer-banner">
+      <div className="auth-banner-inner">
+        <span className="auth-banner-text">
+          <span className="auth-banner-segment">مع رحلتك</span>
+          <span className="auth-banner-sep">—</span>
+          <span className="auth-banner-segment">تبدأ العربي المحتوى مع</span>
+          <span className="auth-banner-sep">—</span>
+          <span className="auth-banner-segment">تبدأ هنا</span>
+          <span className="auth-banner-sep">—</span>
+          <span className="auth-banner-segment">وصول سريع</span>
+          <span className="auth-banner-sep">إلى المحتوى العربي</span>
+          <span className="auth-banner-sep">—</span>
+        </span>
+        <button
+          type="button"
+          onClick={goHome}
+          className="auth-banner-go font-semibold text-primary transition-colors hover:underline"
+        >
+          حكي
+        </button>
+      </div>
     </div>
   );
 }

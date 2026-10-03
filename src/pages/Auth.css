@@ -127,11 +127,58 @@
 .auth-pt {
   animation: auth-float 6s ease-in-out infinite;
 }
-.auth-footer {
+.auth-footer-banner {
   border-top: 1px dashed rgba(255, 255, 255, 0.16);
-  padding-top: 14px;
-  margin-top: 14px;
+  padding-top: 12px;
+  margin-top: 4px;
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.85), rgba(15, 23, 42, 0.75));
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
+.auth-footer-banner .auth-banner-inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  max-width: 100%;
+}
+.auth-footer-banner .auth-banner-text {
+  flex: 1 1 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.auth-footer-banner .auth-banner-segment {
+  color: #ffffff;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.55);
+}
+.auth-footer-banner .auth-banner-sep {
+  color: rgba(255, 255, 255, 0.55);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
+  font-weight: 500;
+}
+.auth-footer-banner .auth-banner-sep:not(:last-child) {
+  margin-right: 2px;
+}
+.auth-footer-banner .auth-banner-go {
+  margin-left: 4px;
+  background: rgba(255, 255, 255, 0.10);
+  border: 1px solid rgba(255, 255, 255, 0.20);
+  padding: 2px 9px;
+  border-radius: 999px;
+  color: #ffffff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
+}
+.auth-footer-banner .auth-banner-go:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
 .auth-footer .auth-pt {
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.12);
