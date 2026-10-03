@@ -302,9 +302,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
               >
                 استخدام بريد مختلف
               </Button>
-            </CardFooter>
-            <AuthFooter goHome={goHome} />
-          </Card>
+            </CardFooter>          </Card>
         </div>
       </div>
     );
@@ -344,126 +342,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                     رجوع
                   </Button>
                 </CardContent>
-                <AuthFooter goHome={goHome} />
-              </>
-            ) : (
-              <>
-                <CardHeader className="mt-4 text-center">
-                  <CardTitle className="flex items-center justify-center gap-2">
-                    <KeyRound className="size-5 text-primary" />
-                    تعيين كلمة مرور جديدة
-                  </CardTitle>
-                  <CardDescription>
-                    اختر كلمة مرور جديدة لحساب {resetStep.email}
-                  </CardDescription>
-                </CardHeader>
-                <form onSubmit={handleNewPasswordSubmit}>
-                  <CardContent className="space-y-3 pb-4">
-                    <input type="hidden" name="code" value={resetStep.code} />
-                    <div className="space-y-1.5">
-                      <Label htmlFor="new-password">كلمة المرور الجديدة</Label>
-                      <Input
-                        id="new-password"
-                        name="password"
-                        type="password"
-                        dir="ltr"
-                        minLength={8}
-                        required
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label htmlFor="confirm-password">تأكيد كلمة المرور</Label>
-                      <Input
-                        id="confirm-password"
-                        name="confirmPassword"
-                        type={showConfirm ? "text" : "password"}
-                        dir="ltr"
-                        minLength={8}
-                        required
-                        placeholder="تأكيد كلمة المرور"
-                      />
-                      <button
-                        type="button"
-                        aria-label={showConfirm ? "إخفاء تأكيد كلمة المرور" : "إظهار تأكيد كلمة المرور"}
-                        className="absolute end-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                        onClick={() => setShowConfirm((v) => !v)}
-                      >
-                        {showConfirm ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-                      </button>
-                    </div>
-                    {error && <p className="auth-error mt-1 text-sm text-red-500">{error}</p>}
-                  </CardContent>
-                  <CardFooter className="flex-col gap-2 pb-6">
-                    <Button type="submit" className="w-full" disabled={isLoading}>
-                      {isLoading && <Loader2 className="ml-2 size-4 animate-spin" />}
-                      حفظ كلمة المرور والدخول
-                    </Button>
-                  </CardFooter>
-                </form>
-                <AuthFooter goHome={goHome} />
-              </>
-            )}
-          </Card>
-        </div>
-      </div>
-    );
-  }
-
-  // ================= Sign in / Sign up / Forgot =================
-  return (
-    <div className="hero-gradient relative flex min-h-screen flex-col overflow-hidden auth-bg">
-      <FloatingIcons />
-      <div className="relative flex flex-1 items-center justify-center px-4 py-12">
-        <Card className="auth-card auth-shot">
-          {mode === "forgot" ? (
-            <>
-              <CardHeader className="text-center">
-                <div className="flex justify-center">
-                  <div className="mb-4 mt-4 flex size-12 items-center justify-center rounded-full bg-accent">
-                    <KeyRound className="size-5 text-accent-foreground" />
-                  </div>
-                </div>
-                <CardTitle>استعادة كلمة المرور</CardTitle>
-                <CardDescription>
-                  أدخل بريدك وسنرسل لك رمزًا لتعيين كلمة مرور جديدة
-                </CardDescription>
-              </CardHeader>
-              <form onSubmit={handleForgotSubmit}>
-                <CardContent className="pb-4">
-                  <div className="relative">
-                    <Mail className="absolute start-3 top-3 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      name="email"
-                      placeholder="name@example.com"
-                      type="email"
-                      className="ps-9"
-                      dir="ltr"
-                      disabled={isLoading}
-                      required
-                    />
-                  </div>
-                  {error && <p className="mt-2 text-sm text-red-500">{error}</p>}
-                </CardContent>
-                <CardFooter className="flex-col gap-2 pb-6">
-                  <Button type="submit" className="w-full" disabled={isLoading}>
-                    {isLoading && <Loader2 className="ml-2 size-4 animate-spin" />}
-                    إرسال رمز الاستعادة
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    className="w-full"
-                    onClick={() => {
-                      setMode("signIn");
-                      setError(null);
-                    }}
-                  >
-                    رجوع لتسجيل الدخول
-                  </Button>
-                </CardFooter>
-              </form>
-              <AuthFooter goHome={goHome} />
-            </>
+                </>
           ) : (
             <>
               <CardHeader className="text-center">
@@ -632,12 +511,11 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                     >
                       <UserX className="ml-2 h-4 w-4" />
                       المتابعة كضيف
-                    </Button>              <OtpRequestInline disabled={isLoading} onRequested={(email) => setOtpStep({ email })} />
+                    </Button>                    <OtpRequestInline disabled={isLoading} onRequested={(email) => setOtpStep({ email })} />
                     </div>
                   </CardFooter>
                   <AuthFooterBanner goHome={goHome} />
               </form>
-              <AuthFooter goHome={goHome} />
             </>
           )}
         </Card>
@@ -736,27 +614,6 @@ function OtpInput({
 function isLoadingGate(otp: string) {
   void otp;
   return false;
-}
-
-function AuthFooter({ goHome }: { goHome: () => void }) {
-  return (
-    <div className="auth-footer">
-      <span className="auth-pt auth-pt-2">رحلتك</span>
-      <span className="auth-pt">مع المحتوى العربي</span>
-      <span className="auth-pt">تبدأ هنا</span>
-      <span className="mx-2 text-muted-foreground">—</span>
-      <span className="auth-pt">وصول سريع</span>
-      <span className="auth-pt">إلى المحتوى العربي</span>
-      <span className="mx-2 text-muted-foreground">—</span>
-      <button
-        type="button"
-        onClick={goHome}
-        className="auth-link font-semibold text-primary transition-colors hover:underline"
-      >
-        حكي
-      </button>
-    </div>
-  );
 }
 
 /** Day-mode footer banner — dark-text banner over the orange/lime background.
