@@ -1,0 +1,19 @@
+{
+  "name": "حكي | HAKI — منصة المحتوى الصوتي والرقمي",
+  "short_name": "حكي",
+  "description": "كتب صوتية، دراما، بودكاست، مجلات، وبث مباشر — كل ما تحب في مكان واحد.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#F97316",
+  "dir": "rtl",
+  "lang": "ar",
+  "icons": [
+    {
+      "src": "/logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
