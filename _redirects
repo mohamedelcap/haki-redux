@@ -1,0 +1,3 @@
+# Static host agnostic fallback redirects.
+# Used by Cloudflare Pages and GitHub Pages. Netlify already uses netlify.toml.
+/*    /index.html   200

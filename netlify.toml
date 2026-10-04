@@ -1,0 +1,17 @@
+/**
+ * Static-host agnostic deploy config.
+ *
+ * Copy this file to:
+ *   - netlify.toml
+ *   - _redirects            (for Cloudflare Pages / GitHub Pages)
+ *   - vercel.json           (skip; your existing vercel.json already covers Vercel)
+ *
+ * All three targets run the same `npm run build` (which calls `vite build`
+ * defined in package.json) and serve the generated `dist/` folder. No
+ * platform-specific output paths, functions config, or headers are needed.
+ */
+output = "dist"
+
+[build]
+  command = "npm run build"
+  publish = "dist"
