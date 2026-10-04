@@ -215,6 +215,18 @@ const DICT = {
   retry: { ar: "إعادة المحاولة", en: "Retry" },
   minutesOf: { ar: "من", en: "of" },
   minutesUnitShort: { ar: "د", en: "min" },
+
+  // ---------- multi-select (library) ----------
+  selectAll: { ar: "تحديد الكل", en: "Select all" },
+  editSelected: { ar: "تعديل المحدد", en: "Edit selected" },
+  deleteSelected: { ar: "حذف المحدد", en: "Delete selected" },
+  item: { ar: "عنصر", en: "item" },
+  items: { ar: "عناصر", en: "items" },
+  selectionNotification: { ar: "تم تحديد محتوى", en: "Selection" },
+  deleteSelectedConfirmTitle: { ar: "تأكيد الحذف", en: "Confirm delete" },
+  deleteSelectedConfirmBody: { ar: "هل أنت متأكد من حذف المحتوى المحدد؟ لا يمكن التراجع عن هذا الإجراء.", en: "Are you sure you want to delete the selected content? This cannot be undone." },
+  confirmDelete: { ar: "حذف", en: "Delete" },
+  cancel: { ar: "إلغاء", en: "Cancel" },
 } as const;
 
 export type TKey = keyof typeof DICT;

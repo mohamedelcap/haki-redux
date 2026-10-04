@@ -91,6 +91,31 @@ export const removeFromLibrary = mutation({
   },
 });
 
+/** Delete library items from the current user's library by their content ids. */
+export const deleteContentByIds = mutation({
+  args: { ids: v.array(v.id("content")) },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("يجب تسجيل الدخول أولاً");
+    if (args.ids.length === 0) return { deleted: 0 };
+
+    // Fetch the user's whole library and drop the requested rows from the
+    // client-side list. This keeps the mutation simple and avoids the
+    // FilterBuilder API surface, while staying bounded to the user's own rows.
+    const rows = await ctx.db
+      .query("user_library")
+      .withIndex("by_user_content", (q) => q.eq("userId", userId))
+      .collect();
+    const toDelete = rows.filter((row) => args.ids.includes(row.contentId));
+
+    const deleted = toDelete.length;
+    for (const row of toDelete) {
+      await ctx.db.delete(row._id);
+    }
+    return { deleted };
+  },
+});
+
 // ---------------- Listening history & progress ----------------
 
 export const recordListen = mutation({
